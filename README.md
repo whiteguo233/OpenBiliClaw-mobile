@@ -1,21 +1,41 @@
-# OpenBiliClaw Mobile
+# OpenBiliClaw — Flutter 移动客户端（网络优化前版）
 
-OpenBiliClaw 的官方移动客户端仓库。客户端连接用户自己运行的
-[OpenBiliClaw](https://github.com/whiteguo233/OpenBiliClaw) 后端。
+OpenBiliClaw 的 Flutter 移动客户端（B 站第三方客户端），连接自建的
+[OpenBiliClaw](https://github.com/whiteguo233/OpenBiliClaw) 后端服务（提供 B 站数据 + AI 能力）。
 
-仓库现已开放社区贡献。首个 Flutter 客户端导入请通过 Pull Request
-提交，方便维护者检查 API 兼容性、鉴权、构建配置和发布流程。
+## 使用逻辑
 
-## 提交现有 Flutter 客户端
+App 采用「客户端 + 后端」架构，使用流程：
 
-1. Fork 本仓库。
-2. 从 fork 的 `main` 创建功能分支，例如 `feat/import-flutter-client`。
-3. 将现有 Flutter 项目文件复制到该分支，但不要复制原项目的 `.git/`、
-   `.dart_tool/`、`build/`、签名文件、密钥或本地配置。
-4. 本地确认 `flutter analyze` 和 `flutter test` 可以运行。
-5. 推送分支并向本仓库的 `main` 提交 Pull Request。
+1. **配置后端连接**：右上角 ⚙️ 进入连接设置，填后端 IP/端口
+   （默认 `127.0.0.1:8420` 本机后端；远程部署填服务器 IP，后端开启密码门禁）。
+   保存后重启应用生效，可点「测试连接」验证。
+2. **推荐页**：从后端拉取「为你推荐」视频流，支持下拉刷新；
+   离线时提示「无法连接后端」。
+3. **对话页**：与 AI 对话，告诉它你喜欢的 UP 主/内容类型，AI 据此调整推荐。
+4. **画像页**：展示 AI 建立的用户兴趣画像；用得越多、画像越准、推荐越精准
+   （初期提示「画像还在慢慢攒，先多看一阵」）。
+5. **收藏页**：管理「稍后再看」和「我的收藏」。
 
-详细要求见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+> 一句话：连上后端 → 浏览积累数据 → AI 建立画像 → 对话微调偏好 → 获得越来越精准的推荐。
+
+## 特性
+
+- 推荐 / 稍后再看 / 收藏浏览 + AI 对话 / 用户画像
+- 封面图统一走 OpenBiliClaw **后端图片代理**（含 Cookie 会话请求头）
+- 支持 Android / iOS / Web
+- CI 构建 release APK 并发布 GitHub Release
+
+## 版本状态
+
+⭐ **生产在用版本**：作者日常实际使用的稳定版本。
+对应 `taskmemz/openbiliclaw-app` @ `33189aa`，封面图均经服务端代理加载。
+
+## 环境与后端配置
+
+- Flutter 3.x
+- 自建 OpenBiliClaw 后端
+- 默认连接 `127.0.0.1:8420`（本机后端），远程部署在设置页改为服务器地址。
 
 ## License
 
