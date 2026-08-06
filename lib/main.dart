@@ -37,7 +37,6 @@ class OpenBiliClawApp extends StatelessWidget {
           useMaterial3: true,
           colorSchemeSeed: const Color(0xFFFB7299),
           brightness: Brightness.light,
-          fontFamily: '-apple-system, "PingFang SC", "Microsoft YaHei", sans-serif',
           scaffoldBackgroundColor: const Color(0xFFFFFAFC),
           cardTheme: CardThemeData(
             elevation: 0,

@@ -116,7 +116,7 @@ class ProfileView extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(colors: [const Color(0xFF30B980).withValues(alpha: 0.08), const Color(0xFF5AA9FF).withValues(alpha: 0.08)]),
         borderRadius: BorderRadius.circular(12)),
-      child: Text(n['message'] ?? n['reason'] ?? '', style: theme.textTheme.bodySmall));
+      child: Text(n['title'] ?? n['reason'] ?? '', style: theme.textTheme.bodySmall));
   }
 
   Widget _smallChip(String label, VoidCallback? onTap) {

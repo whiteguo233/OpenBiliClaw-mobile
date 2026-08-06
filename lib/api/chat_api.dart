@@ -21,6 +21,6 @@ class ChatApi {
   Future<List<ChatTurn>> fetchTurns({String session = 'mobile', String scope = '', int limit = 50}) async {
     final qs = '?session=${Uri.encodeComponent(session)}${scope.isNotEmpty ? '&scope=${Uri.encodeComponent(scope)}' : ''}&limit=$limit';
     final data = await _client.get('/chat/turns$qs');
-    return (data['turns'] as List?)?.map((e) => ChatTurn.fromJson(e)).toList() ?? [];
+    return (data['items'] as List?)?.map((e) => ChatTurn.fromJson(e)).toList() ?? [];
   }
 }

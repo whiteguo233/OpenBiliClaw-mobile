@@ -1,4 +1,4 @@
-# OpenBiliClaw — Flutter 移动客户端（网络优化前版）
+# OpenBiliClaw — Flutter 移动客户端（全量版）
 
 OpenBiliClaw 的 Flutter 移动客户端（B 站第三方客户端），连接自建的
 [OpenBiliClaw](https://github.com/whiteguo233/OpenBiliClaw) 后端服务（提供 B 站数据 + AI 能力）。
@@ -22,14 +22,16 @@ App 采用「客户端 + 后端」架构，使用流程：
 ## 特性
 
 - 推荐 / 稍后再看 / 收藏浏览 + AI 对话 / 用户画像
-- 封面图统一走 OpenBiliClaw **后端图片代理**（含 Cookie 会话请求头）
-- 支持 Android / iOS / Web
+- 🖼️ **封面图 B 站 CDN 直连**（原生端跳过服务端代理，省两跳；web 端因 CORS 限制仍走代理）
+- 封面图 / 已保存视图请求头会话管理优化
+- API 返回数据处理调整
+- 支持 Android / iOS / Web / Linux / macOS / Windows
 - CI 构建 release APK 并发布 GitHub Release
 
 ## 版本状态
 
-⭐ **生产在用版本**：作者日常实际使用的稳定版本。
-对应 `taskmemz/openbiliclaw-app` @ `33189aa`，封面图均经服务端代理加载。
+🧪 **新特性版（未经长期实测）**：在此前网络优化前版之上新增 B 站封面直连等改动，
+作者尚未长期实测。建议合并前重点验证弱网 / 防盗链场景下的图片加载表现。
 
 ## 环境与后端配置
 

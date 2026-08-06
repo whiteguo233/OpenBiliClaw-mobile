@@ -12,7 +12,8 @@ class ProfileApi {
 
   Future<List<Map<String, dynamic>>> fetchPendingNotifications() async {
     final data = await _client.get('/notifications/pending');
-    return (data['notifications'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final item = data['item'];
+    return item is Map<String, dynamic> ? [item] : [];
   }
 
   Future<List<Map<String, dynamic>>> fetchPendingProbes() async {
