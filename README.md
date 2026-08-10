@@ -27,7 +27,15 @@ App 采用「客户端 + 后端」架构，使用流程：
 - 封面图 / 已保存视图请求头会话管理优化
 - API 返回数据处理调整
 - 支持 Android / iOS / Web / Linux / macOS / Windows
-- CI 构建 release APK 并发布 GitHub Release
+- GitHub Actions 双端 CI 与 Release：签名 APK/AAB、签名 IPA、符号文件、校验和和构建来源证明
+
+## 构建与发版
+
+- Pull Request 和 `main` 会自动执行格式检查、静态分析、测试及 Android/iOS 构建验证。
+- 推送与 `pubspec.yaml` 版本一致的 `vX.Y.Z` 标签，会并行构建 Android 和 iOS 正式产物并创建 GitHub Release。
+- 正式发版需要在 GitHub Actions 中配置 Android keystore 和 Apple Distribution 签名材料；仓库不会保存证书或密码。
+
+完整配置和发版步骤见 [双端 Release 发版指南](.github/RELEASE.md)。
 
 ## 版本状态
 

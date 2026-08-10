@@ -1,77 +1,448 @@
-name: OpenBiliClaw 构建与发布
+name: Release Android and iOS
+run-name: Release ${{ inputs.release_tag || github.ref_name }}
 
 on:
+  push:
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release 标签；留空时使用 pubspec.yaml 中的版本'
+        required: false
+        type: string
+      prerelease:
+        description: '标记为预发布版本'
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  FLUTTER_VERSION: '3.41.9'
+  JAVA_VERSION: '17'
+  IOS_BUNDLE_ID: com.openbiliclaw.openbiliclawApp
 
 jobs:
-  build-android:
-    name: Android 构建
+  prepare:
+    name: Validate release metadata
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    outputs:
+      version_name: ${{ steps.version.outputs.version_name }}
+      build_number: ${{ steps.version.outputs.build_number }}
+      release_tag: ${{ steps.version.outputs.release_tag }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: 配置 Java 17
-        uses: actions/setup-java@v4
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          distribution: temurin
-          java-version: '17'
+          fetch-depth: 0
 
-      - name: 配置 Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Validate version and source branch
+        id: version
+        shell: bash
+        env:
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
 
-      - name: 配置 Flutter
-        uses: subosito/flutter-action@v2
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "Manual releases must run from the main branch." >&2
+            exit 1
+          fi
+
+          VERSION_FULL="$(awk '/^version:/{print $2; exit}' pubspec.yaml)"
+          if [[ "$VERSION_FULL" =~ ^([0-9]+\.[0-9]+\.[0-9]+)\+([0-9]+)$ ]]; then
+            VERSION_NAME="${BASH_REMATCH[1]}"
+            BUILD_NUMBER="${BASH_REMATCH[2]}"
+          else
+            echo "pubspec.yaml version must use X.Y.Z+BUILD format; got: $VERSION_FULL" >&2
+            exit 1
+          fi
+
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            RELEASE_TAG="$GITHUB_REF_NAME"
+          else
+            RELEASE_TAG="${INPUT_RELEASE_TAG:-v$VERSION_NAME}"
+          fi
+
+          if [[ "$RELEASE_TAG" != "v$VERSION_NAME" ]]; then
+            echo "Release tag $RELEASE_TAG does not match pubspec version v$VERSION_NAME." >&2
+            exit 1
+          fi
+
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "Release commit must be contained in origin/main." >&2
+            exit 1
+          fi
+
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Release metadata"
+            echo "- Tag: \`$RELEASE_TAG\`"
+            echo "- App version: \`$VERSION_NAME+$BUILD_NUMBER\`"
+            echo "- Commit: \`$GITHUB_SHA\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  quality:
+    name: Analyze and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
-      - name: 获取依赖
+      - name: Resolve dependencies
         run: flutter pub get
 
-      - name: 构建并混淆
-        run: |
-          flutter build apk --release \
-            --split-per-abi \
-            --obfuscate \
-            --split-debug-info=build/app/outputs/symbols \
-            --target-platform android-arm64,android-arm
+      - name: Verify locked dependencies
+        run: git diff --exit-code -- pubspec.lock
 
-      - name: 上传构建产物
-        uses: actions/upload-artifact@v4
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+  android:
+    name: Build signed Android artifacts
+    needs: [prepare, quality]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+      OPENBILICLAW_REQUIRE_RELEASE_SIGNING: 'true'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configure Android signing path
+        shell: bash
+        run: echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/openbiliclaw-release.jks" >> "$GITHUB_ENV"
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
-          name: openbiliclaw-android
-          path: build/app/outputs/flutter-apk/*.apk
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: gradle
 
-      - name: 打印产物
-        run: ls -lh build/app/outputs/flutter-apk/
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Validate Android signing secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          for variable in ANDROID_KEYSTORE_BASE64 ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD ANDROID_STORE_PASSWORD; do
+            if [[ -z "${!variable:-}" ]]; then
+              missing+=("$variable")
+            fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            echo "Missing Android release secrets: ${missing[*]}" >&2
+            exit 1
+          fi
+
+      - name: Install and verify Android signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | openssl base64 -d -A -out "$ANDROID_KEYSTORE_PATH"
+          keytool -list \
+            -keystore "$ANDROID_KEYSTORE_PATH" \
+            -storepass "$ANDROID_STORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" >/dev/null
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Build signed split APKs
+        run: >-
+          flutter build apk --release --split-per-abi
+          --target-platform android-arm,android-arm64
+          --obfuscate
+          --split-debug-info=build/symbols/android/apk
+          --build-name=${{ needs.prepare.outputs.version_name }}
+          --build-number=${{ needs.prepare.outputs.build_number }}
+
+      - name: Build signed App Bundle
+        run: >-
+          flutter build appbundle --release
+          --obfuscate
+          --split-debug-info=build/symbols/android/aab
+          --build-name=${{ needs.prepare.outputs.version_name }}
+          --build-number=${{ needs.prepare.outputs.build_number }}
+
+      - name: Package Android artifacts
+        shell: bash
+        env:
+          VERSION_NAME: ${{ needs.prepare.outputs.version_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist/android
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk \
+            "dist/android/OpenBiliClaw-Android-armeabi-v7a-v$VERSION_NAME.apk"
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
+            "dist/android/OpenBiliClaw-Android-arm64-v8a-v$VERSION_NAME.apk"
+          cp build/app/outputs/bundle/release/app-release.aab \
+            "dist/android/OpenBiliClaw-Android-v$VERSION_NAME.aab"
+          (
+            cd build/symbols/android
+            zip -qry "$GITHUB_WORKSPACE/dist/android/OpenBiliClaw-Android-symbols-v$VERSION_NAME.zip" .
+          )
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: openbiliclaw-android-v${{ needs.prepare.outputs.version_name }}
+          path: dist/android/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove Android signing key
+        if: always()
+        run: rm -f "$ANDROID_KEYSTORE_PATH"
+
+  ios:
+    name: Build signed iOS IPA
+    needs: [prepare, quality]
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
+      IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+      IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+      IOS_TEAM_ID: ${{ vars.IOS_TEAM_ID }}
+      IOS_EXPORT_METHOD: ${{ vars.IOS_EXPORT_METHOD || 'release-testing' }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Validate iOS signing configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          for variable in IOS_CERTIFICATE_P12_BASE64 IOS_CERTIFICATE_PASSWORD IOS_PROVISIONING_PROFILE_BASE64 IOS_TEAM_ID; do
+            if [[ -z "${!variable:-}" ]]; then
+              missing+=("$variable")
+            fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            echo "Missing iOS release secrets or variables: ${missing[*]}" >&2
+            exit 1
+          fi
+          case "$IOS_EXPORT_METHOD" in
+            release-testing|app-store-connect|enterprise) ;;
+            *)
+              echo "Unsupported IOS_EXPORT_METHOD: $IOS_EXPORT_METHOD" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Import Apple distribution certificate
+        uses: apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466 # v7.0.0
+        with:
+          p12-file-base64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
+          p12-password: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+
+      - name: Install and validate provisioning profile
+        id: profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROFILE_SOURCE="$RUNNER_TEMP/openbiliclaw.mobileprovision"
+          PROFILE_PLIST="$RUNNER_TEMP/openbiliclaw-profile.plist"
+          printf '%s' "$IOS_PROVISIONING_PROFILE_BASE64" | openssl base64 -d -A -out "$PROFILE_SOURCE"
+          security cms -D -i "$PROFILE_SOURCE" > "$PROFILE_PLIST"
+
+          PROFILE_UUID="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$PROFILE_PLIST")"
+          PROFILE_NAME="$(/usr/libexec/PlistBuddy -c 'Print :Name' "$PROFILE_PLIST")"
+          PROFILE_TEAM_ID="$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$PROFILE_PLIST")"
+          PROFILE_APP_ID="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$PROFILE_PLIST")"
+          PROFILE_BUNDLE_ID="${PROFILE_APP_ID#*.}"
+
+          if [[ "$PROFILE_TEAM_ID" != "$IOS_TEAM_ID" ]]; then
+            echo "Provisioning profile team $PROFILE_TEAM_ID does not match IOS_TEAM_ID." >&2
+            exit 1
+          fi
+          if [[ "$PROFILE_BUNDLE_ID" != "$IOS_BUNDLE_ID" ]]; then
+            echo "Provisioning profile bundle ID $PROFILE_BUNDLE_ID does not match $IOS_BUNDLE_ID." >&2
+            exit 1
+          fi
+
+          PROFILE_DIRECTORY="$HOME/Library/MobileDevice/Provisioning Profiles"
+          PROFILE_PATH="$PROFILE_DIRECTORY/$PROFILE_UUID.mobileprovision"
+          mkdir -p "$PROFILE_DIRECTORY"
+          cp "$PROFILE_SOURCE" "$PROFILE_PATH"
+
+          {
+            echo "DEVELOPMENT_TEAM=$IOS_TEAM_ID"
+            echo "CODE_SIGN_STYLE=Manual"
+            echo "CODE_SIGN_IDENTITY=Apple Distribution"
+            echo "PROVISIONING_PROFILE_SPECIFIER=$PROFILE_UUID"
+          } > ios/Flutter/ReleaseSigning.xcconfig
+
+          echo "profile_uuid=$PROFILE_UUID" >> "$GITHUB_OUTPUT"
+          echo "profile_name=$PROFILE_NAME" >> "$GITHUB_OUTPUT"
+          echo "IOS_PROFILE_PATH=$PROFILE_PATH" >> "$GITHUB_ENV"
+
+      - name: Create export options
+        shell: bash
+        env:
+          PROFILE_UUID: ${{ steps.profile.outputs.profile_uuid }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>$IOS_EXPORT_METHOD</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>signingCertificate</key>
+            <string>Apple Distribution</string>
+            <key>teamID</key>
+            <string>$IOS_TEAM_ID</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>$IOS_BUNDLE_ID</key>
+              <string>$PROFILE_UUID</string>
+            </dict>
+            <key>stripSwiftSymbols</key>
+            <true/>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Build signed IPA
+        run: >-
+          flutter build ipa --release
+          --obfuscate
+          --split-debug-info=build/symbols/ios
+          --build-name=${{ needs.prepare.outputs.version_name }}
+          --build-number=${{ needs.prepare.outputs.build_number }}
+          --export-options-plist="$RUNNER_TEMP/ExportOptions.plist"
+
+      - name: Package iOS artifacts
+        shell: bash
+        env:
+          VERSION_NAME: ${{ needs.prepare.outputs.version_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist/ios
+          IPA_PATH="$(find build/ios/ipa -maxdepth 1 -name '*.ipa' -print -quit)"
+          if [[ -z "$IPA_PATH" ]]; then
+            echo "No IPA was produced." >&2
+            exit 1
+          fi
+          cp "$IPA_PATH" "dist/ios/OpenBiliClaw-iOS-v$VERSION_NAME.ipa"
+          ditto -c -k --sequesterRsrc --keepParent \
+            build/ios/archive/Runner.xcarchive/dSYMs \
+            "dist/ios/OpenBiliClaw-iOS-dSYMs-v$VERSION_NAME.zip"
+          ditto -c -k --keepParent \
+            build/symbols/ios \
+            "dist/ios/OpenBiliClaw-iOS-Flutter-symbols-v$VERSION_NAME.zip"
+
+      - name: Upload iOS artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: openbiliclaw-ios-v${{ needs.prepare.outputs.version_name }}
+          path: dist/ios/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove provisioning profile
+        if: always()
+        shell: bash
+        run: |
+          rm -f "${IOS_PROFILE_PATH:-}"
+          rm -f ios/Flutter/ReleaseSigning.xcconfig
 
   release:
-    name: 发布到 GitHub Release
-    needs: build-android
+    name: Publish GitHub Release
+    needs: [prepare, android, ios]
     runs-on: ubuntu-latest
+    environment: github-release
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/checkout@v4
-
-      - name: 下载构建产物
-        uses: actions/download-artifact@v4
+      - name: Download release artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: openbiliclaw-android
+          pattern: openbiliclaw-*-v${{ needs.prepare.outputs.version_name }}
           path: artifacts
+          merge-multiple: true
 
-      - name: 读取版本号
-        id: version
+      - name: Generate SHA-256 checksums
+        shell: bash
+        env:
+          VERSION_NAME: ${{ needs.prepare.outputs.version_name }}
         run: |
-          VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: *//' | cut -d'+' -f1)
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          cd artifacts
+          find . -maxdepth 1 -type f ! -name '*-SHA256SUMS.txt' -printf '%f\0' \
+            | sort -z \
+            | xargs -0 sha256sum \
+            > "OpenBiliClaw-v$VERSION_NAME-SHA256SUMS.txt"
 
-      - name: 创建 Release 并上传 APK
-        uses: softprops/action-gh-release@v2
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: OpenBiliC v${{ steps.version.outputs.version }}
+          subject-path: artifacts/*
+
+      - name: Publish release
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with:
+          tag_name: ${{ needs.prepare.outputs.release_tag }}
+          target_commitish: ${{ github.sha }}
+          name: OpenBiliClaw ${{ needs.prepare.outputs.release_tag }}
           generate_release_notes: true
-          files: artifacts/*.apk
+          prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease }}
+          fail_on_unmatched_files: true
+          make_latest: true
+          files: artifacts/*
