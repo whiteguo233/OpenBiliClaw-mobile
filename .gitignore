@@ -50,4 +50,3 @@ app.*.map.json
 *.keystore
 *.p12
 *.mobileprovision
-/ios/Flutter/ReleaseSigning.xcconfig

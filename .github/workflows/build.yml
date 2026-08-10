@@ -16,6 +16,11 @@ on:
         required: true
         default: false
         type: boolean
+      publish_release:
+        description: '创建 GitHub Release；关闭时只构建并上传 Actions Artifacts'
+        required: true
+        default: false
+        type: boolean
 
 concurrency:
   group: release-${{ github.ref }}
@@ -27,7 +32,6 @@ permissions:
 env:
   FLUTTER_VERSION: '3.41.9'
   JAVA_VERSION: '17'
-  IOS_BUNDLE_ID: com.openbiliclaw.openbiliclawApp
 
 jobs:
   prepare:
@@ -234,16 +238,10 @@ jobs:
         run: rm -f "$ANDROID_KEYSTORE_PATH"
 
   ios:
-    name: Build signed iOS IPA
+    name: Build unsigned iOS IPA
     needs: [prepare, quality]
     runs-on: macos-latest
-    timeout-minutes: 60
-    env:
-      IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
-      IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
-      IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
-      IOS_TEAM_ID: ${{ vars.IOS_TEAM_ID }}
-      IOS_EXPORT_METHOD: ${{ vars.IOS_EXPORT_METHOD || 'release-testing' }}
+    timeout-minutes: 45
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -255,136 +253,74 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Validate iOS signing configuration
-        shell: bash
-        run: |
-          set -euo pipefail
-          missing=()
-          for variable in IOS_CERTIFICATE_P12_BASE64 IOS_CERTIFICATE_PASSWORD IOS_PROVISIONING_PROFILE_BASE64 IOS_TEAM_ID; do
-            if [[ -z "${!variable:-}" ]]; then
-              missing+=("$variable")
-            fi
-          done
-          if (( ${#missing[@]} > 0 )); then
-            echo "Missing iOS release secrets or variables: ${missing[*]}" >&2
-            exit 1
-          fi
-          case "$IOS_EXPORT_METHOD" in
-            release-testing|app-store-connect|enterprise) ;;
-            *)
-              echo "Unsupported IOS_EXPORT_METHOD: $IOS_EXPORT_METHOD" >&2
-              exit 1
-              ;;
-          esac
-
-      - name: Import Apple distribution certificate
-        uses: apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466 # v7.0.0
-        with:
-          p12-file-base64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
-          p12-password: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
-
-      - name: Install and validate provisioning profile
-        id: profile
-        shell: bash
-        run: |
-          set -euo pipefail
-          PROFILE_SOURCE="$RUNNER_TEMP/openbiliclaw.mobileprovision"
-          PROFILE_PLIST="$RUNNER_TEMP/openbiliclaw-profile.plist"
-          printf '%s' "$IOS_PROVISIONING_PROFILE_BASE64" | openssl base64 -d -A -out "$PROFILE_SOURCE"
-          security cms -D -i "$PROFILE_SOURCE" > "$PROFILE_PLIST"
-
-          PROFILE_UUID="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$PROFILE_PLIST")"
-          PROFILE_NAME="$(/usr/libexec/PlistBuddy -c 'Print :Name' "$PROFILE_PLIST")"
-          PROFILE_TEAM_ID="$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$PROFILE_PLIST")"
-          PROFILE_APP_ID="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$PROFILE_PLIST")"
-          PROFILE_BUNDLE_ID="${PROFILE_APP_ID#*.}"
-
-          if [[ "$PROFILE_TEAM_ID" != "$IOS_TEAM_ID" ]]; then
-            echo "Provisioning profile team $PROFILE_TEAM_ID does not match IOS_TEAM_ID." >&2
-            exit 1
-          fi
-          if [[ "$PROFILE_BUNDLE_ID" != "$IOS_BUNDLE_ID" ]]; then
-            echo "Provisioning profile bundle ID $PROFILE_BUNDLE_ID does not match $IOS_BUNDLE_ID." >&2
-            exit 1
-          fi
-
-          PROFILE_DIRECTORY="$HOME/Library/MobileDevice/Provisioning Profiles"
-          PROFILE_PATH="$PROFILE_DIRECTORY/$PROFILE_UUID.mobileprovision"
-          mkdir -p "$PROFILE_DIRECTORY"
-          cp "$PROFILE_SOURCE" "$PROFILE_PATH"
-
-          {
-            echo "DEVELOPMENT_TEAM=$IOS_TEAM_ID"
-            echo "CODE_SIGN_STYLE=Manual"
-            echo "CODE_SIGN_IDENTITY=Apple Distribution"
-            echo "PROVISIONING_PROFILE_SPECIFIER=$PROFILE_UUID"
-          } > ios/Flutter/ReleaseSigning.xcconfig
-
-          echo "profile_uuid=$PROFILE_UUID" >> "$GITHUB_OUTPUT"
-          echo "profile_name=$PROFILE_NAME" >> "$GITHUB_OUTPUT"
-          echo "IOS_PROFILE_PATH=$PROFILE_PATH" >> "$GITHUB_ENV"
-
-      - name: Create export options
-        shell: bash
-        env:
-          PROFILE_UUID: ${{ steps.profile.outputs.profile_uuid }}
-        run: |
-          set -euo pipefail
-          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>$IOS_EXPORT_METHOD</string>
-            <key>signingStyle</key>
-            <string>manual</string>
-            <key>signingCertificate</key>
-            <string>Apple Distribution</string>
-            <key>teamID</key>
-            <string>$IOS_TEAM_ID</string>
-            <key>provisioningProfiles</key>
-            <dict>
-              <key>$IOS_BUNDLE_ID</key>
-              <string>$PROFILE_UUID</string>
-            </dict>
-            <key>stripSwiftSymbols</key>
-            <true/>
-          </dict>
-          </plist>
-          EOF
-
       - name: Resolve dependencies
         run: flutter pub get
 
-      - name: Build signed IPA
+      - name: Build unsigned iOS app
         run: >-
-          flutter build ipa --release
+          flutter build ios --release --no-codesign
           --obfuscate
           --split-debug-info=build/symbols/ios
           --build-name=${{ needs.prepare.outputs.version_name }}
           --build-number=${{ needs.prepare.outputs.build_number }}
-          --export-options-plist="$RUNNER_TEMP/ExportOptions.plist"
 
-      - name: Package iOS artifacts
+      - name: Package unsigned IPA and symbols
         shell: bash
         env:
           VERSION_NAME: ${{ needs.prepare.outputs.version_name }}
         run: |
           set -euo pipefail
-          mkdir -p dist/ios
-          IPA_PATH="$(find build/ios/ipa -maxdepth 1 -name '*.ipa' -print -quit)"
-          if [[ -z "$IPA_PATH" ]]; then
-            echo "No IPA was produced." >&2
+          APP_PATH="build/ios/iphoneos/Runner.app"
+          IPA_ROOT="$RUNNER_TEMP/openbiliclaw-unsigned-ipa"
+          IPA_PATH="$GITHUB_WORKSPACE/dist/ios/OpenBiliClaw-iOS-unsigned-v$VERSION_NAME.ipa"
+
+          if [[ ! -d "$APP_PATH" ]]; then
+            echo "Unsigned Runner.app was not produced." >&2
             exit 1
           fi
-          cp "$IPA_PATH" "dist/ios/OpenBiliClaw-iOS-v$VERSION_NAME.ipa"
-          ditto -c -k --sequesterRsrc --keepParent \
-            build/ios/archive/Runner.xcarchive/dSYMs \
-            "dist/ios/OpenBiliClaw-iOS-dSYMs-v$VERSION_NAME.zip"
+          if codesign --verify "$APP_PATH" >/dev/null 2>&1; then
+            echo "Expected an unsigned iOS app, but a valid signature was found." >&2
+            exit 1
+          fi
+
+          mkdir -p dist/ios
+          mkdir -p "$IPA_ROOT/Payload"
+          ditto --noextattr --norsrc "$APP_PATH" "$IPA_ROOT/Payload/Runner.app"
+
+          SIGNATURE_INDEX=0
+          while IFS= read -r -d '' SIGNATURE_PATH; do
+            SIGNATURE_INDEX=$((SIGNATURE_INDEX + 1))
+            mv "$SIGNATURE_PATH" "$RUNNER_TEMP/openbiliclaw-stripped-signature-$SIGNATURE_INDEX"
+          done < <(find "$IPA_ROOT/Payload/Runner.app" -type d -name _CodeSignature -prune -print0)
+          if [[ -f "$IPA_ROOT/Payload/Runner.app/embedded.mobileprovision" ]]; then
+            mv "$IPA_ROOT/Payload/Runner.app/embedded.mobileprovision" \
+              "$RUNNER_TEMP/openbiliclaw-stripped.mobileprovision"
+          fi
+
+          ditto -c -k --keepParent "$IPA_ROOT/Payload" "$IPA_PATH"
+          IPA_LISTING="$(unzip -Z1 "$IPA_PATH")"
+          if ! grep -Fxq 'Payload/Runner.app/Info.plist' <<< "$IPA_LISTING"; then
+            echo "Unsigned IPA does not contain Payload/Runner.app/Info.plist." >&2
+            exit 1
+          fi
+          if grep -q '_CodeSignature' <<< "$IPA_LISTING"; then
+            echo "Unsigned IPA unexpectedly contains _CodeSignature." >&2
+            exit 1
+          fi
+          if grep -q '^__MACOSX/' <<< "$IPA_LISTING"; then
+            echo "Unsigned IPA unexpectedly contains __MACOSX metadata." >&2
+            exit 1
+          fi
+
+          if [[ -d build/ios/Release-iphoneos/Runner.app.dSYM ]]; then
+            ditto -c -k --sequesterRsrc --keepParent \
+              build/ios/Release-iphoneos/Runner.app.dSYM \
+              "dist/ios/OpenBiliClaw-iOS-dSYM-v$VERSION_NAME.zip"
+          fi
           ditto -c -k --keepParent \
             build/symbols/ios \
             "dist/ios/OpenBiliClaw-iOS-Flutter-symbols-v$VERSION_NAME.zip"
+          cp .github/IOS_SELF_SIGNING.md dist/ios/OpenBiliClaw-iOS-SELF-SIGNING.md
 
       - name: Upload iOS artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -394,16 +330,10 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Remove provisioning profile
-        if: always()
-        shell: bash
-        run: |
-          rm -f "${IOS_PROFILE_PATH:-}"
-          rm -f ios/Flutter/ReleaseSigning.xcconfig
-
   release:
     name: Publish GitHub Release
     needs: [prepare, android, ios]
+    if: github.event_name == 'push' || inputs.publish_release
     runs-on: ubuntu-latest
     environment: github-release
     permissions:
