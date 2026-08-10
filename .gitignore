@@ -43,3 +43,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local signing material (never commit credentials or generated profiles)
+/android/key.properties
+*.jks
+*.keystore
+*.p12
+*.mobileprovision
+/ios/Flutter/ReleaseSigning.xcconfig
