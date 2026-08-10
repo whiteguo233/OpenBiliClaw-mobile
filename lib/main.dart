@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'api/client.dart';
 import 'providers/auth_provider.dart';
@@ -6,11 +7,22 @@ import 'providers/recommend_provider.dart';
 import 'providers/chat_provider.dart';
 import 'providers/profile_provider.dart';
 import 'providers/saved_provider.dart';
+import 'theme/app_theme.dart';
 import 'views/login_view.dart';
 import 'views/home_view.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      systemNavigationBarColor: AppColors.surface,
+      systemNavigationBarIconBrightness: Brightness.dark,
+      systemNavigationBarDividerColor: AppColors.surface,
+    ),
+  );
   runApp(const OpenBiliClawApp());
 }
 
@@ -33,22 +45,7 @@ class OpenBiliClawApp extends StatelessWidget {
       child: MaterialApp(
         title: 'OpenBiliClaw',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          colorSchemeSeed: const Color(0xFFFB7299),
-          brightness: Brightness.light,
-          scaffoldBackgroundColor: const Color(0xFFFFFAFC),
-          cardTheme: CardThemeData(
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            color: Colors.white,
-          ),
-          appBarTheme: const AppBarTheme(
-            centerTitle: true,
-            elevation: 0,
-            backgroundColor: Color(0xFFFFFAFC),
-          ),
-        ),
+        theme: AppTheme.light(),
         home: const AppEntry(),
       ),
     );
@@ -73,18 +70,29 @@ class _AppEntryState extends State<AppEntry> {
 
   Future<void> _init() async {
     final client = context.read<ApiClient>();
+    final auth = context.read<AuthProvider>();
     await client.loadSettings();
-    await context.read<AuthProvider>().checkStatus();
-    if (mounted) setState(() => _ready = true);
+    if (!mounted) return;
+    await auth.checkStatus();
+    if (!mounted) return;
+    setState(() => _ready = true);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_ready) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    return Consumer<AuthProvider>(builder: (context, auth, _) {
-      if (auth.loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-      if (auth.needsLogin) return const LoginView();
-      return const HomeView();
-    });
+    if (!_ready) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    return Consumer<AuthProvider>(
+      builder: (context, auth, _) {
+        if (auth.loading) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (auth.needsLogin) return const LoginView();
+        return const HomeView();
+      },
+    );
   }
 }

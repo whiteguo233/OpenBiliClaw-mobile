@@ -6,7 +6,8 @@ class AuthApi {
 
   Future<Map<String, dynamic>> status() => _client.get('/auth/status');
 
-  Future<Map<String, dynamic>> login(String password) => _client.post('/auth/login', body: {'password': password});
+  Future<Map<String, dynamic>> login(String password) =>
+      _client.post('/auth/login', body: {'password': password});
 
   Future<void> logout() async {
     try {

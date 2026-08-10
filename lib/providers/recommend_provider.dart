@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
-// ponytail: dart:io WebSocket 仅原生平台（移动/桌面）；web 平台跑不了就退化轮询，需要 web 支持时换 web_socket_channel
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
+
 import '../api/client.dart';
 import '../api/recommend_api.dart';
-import '../models/recommendation.dart';
 import '../models/delight.dart';
+import '../models/recommendation.dart';
+import '../models/runtime_status.dart';
 
 class RecommendProvider extends ChangeNotifier {
   final RecommendApi _api;
@@ -16,99 +18,254 @@ class RecommendProvider extends ChangeNotifier {
   List<Delight> _delights = [];
   int _delightIndex = 0;
   bool _loading = false;
+  bool _loadingMore = false;
+  bool _reshuffling = false;
   bool _online = false;
+  bool _polling = false;
+  String _error = '';
+  RuntimeStatus _runtimeStatus = const RuntimeStatus();
+  ActivityFeed _activityFeed = const ActivityFeed();
   Timer? _pollTimer;
   WebSocket? _ws;
   Timer? _reconnectTimer;
   bool _wsConnecting = false;
+  bool _running = false;
+  int _pollGeneration = 0;
 
   RecommendProvider(ApiClient client)
-      : _client = client,
-        _api = RecommendApi(client);
+    : _client = client,
+      _api = RecommendApi(client);
 
-  List<Recommendation> get recommendations => _recommendations;
-  List<Delight> get delights => _delights;
+  List<Recommendation> get recommendations =>
+      List.unmodifiable(_recommendations);
+  List<Delight> get delights => List.unmodifiable(_delights);
   int get delightIndex => _delightIndex;
   bool get loading => _loading;
+  bool get loadingMore => _loadingMore;
+  bool get reshuffling => _reshuffling;
   bool get online => _online;
+  String get error => _error;
+  RuntimeStatus get runtimeStatus => _runtimeStatus;
+  ActivityFeed get activityFeed => _activityFeed;
 
   void nextDelight() {
-    if (_delights.isNotEmpty) _delightIndex = (_delightIndex + 1) % _delights.length;
-    notifyListeners();
+    if (_delights.isNotEmpty) {
+      _delightIndex = (_delightIndex + 1) % _delights.length;
+      notifyListeners();
+    }
   }
 
   void prevDelight() {
-    if (_delights.isNotEmpty) _delightIndex = (_delightIndex - 1 + _delights.length) % _delights.length;
-    notifyListeners();
+    if (_delights.isNotEmpty) {
+      _delightIndex = (_delightIndex - 1 + _delights.length) % _delights.length;
+      notifyListeners();
+    }
   }
 
   String? contentUrlFor(Recommendation rec) {
     if (rec.contentUrl.isNotEmpty) return rec.contentUrl;
-    if (rec.bvid.isNotEmpty) return 'https://www.bilibili.com/video/${rec.bvid}';
-    return null;
+    final contentId = rec.contentId.isNotEmpty
+        ? rec.contentId
+        : (rec.bvid.contains(':')
+              ? rec.bvid.split(':').skip(1).join(':')
+              : rec.bvid);
+    if (contentId.isEmpty) return null;
+    switch (rec.sourcePlatform) {
+      case 'youtube':
+        return 'https://www.youtube.com/watch?v=$contentId';
+      case 'twitter':
+        return 'https://x.com/i/status/$contentId';
+      case 'douyin':
+        return 'https://www.douyin.com/video/$contentId';
+      case 'xiaohongshu':
+        return 'https://www.xiaohongshu.com/explore/$contentId';
+      case 'bangumi':
+        return 'https://bgm.tv/subject/$contentId';
+      case 'bilibili':
+        return 'https://www.bilibili.com/video/$contentId';
+      default:
+        return null;
+    }
   }
 
   Future<void> load() async {
+    if (_loading) return;
     _loading = true;
+    _error = '';
     notifyListeners();
     try {
       final recs = await _api.fetch();
       _recommendations = recs;
-      _delights = await _api.fetchDelights(limit: 10);
-      _delightIndex = 0;
       _online = true;
-    } catch (_) {
+    } catch (error) {
       _online = false;
+      _error = _message(error, '推荐加载失败');
+    } finally {
+      _loading = false;
+      notifyListeners();
     }
-    _loading = false;
-    notifyListeners();
+    unawaited(_loadSideChannels());
   }
 
-  Future<void> append() async {    if (_loading) return;
-    _loading = true;
+  Future<void> _loadSideChannels() async {
+    await Future.wait([
+      _loadRuntimeStatus(),
+      _loadActivityFeed(),
+      _loadDelights(),
+    ]);
+  }
+
+  Future<void> _loadRuntimeStatus() async {
+    try {
+      _runtimeStatus = await _api.fetchRuntimeStatus();
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> _loadActivityFeed() async {
+    try {
+      _activityFeed = await _api.fetchActivity();
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> _loadDelights() async {
+    try {
+      final delights = await _api.fetchDelights(limit: 10);
+      _delights = delights;
+      _delightIndex = _delightIndex.clamp(
+        0,
+        (_delights.length - 1).clamp(0, _delights.length),
+      );
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> reshuffle() async {
+    if (_reshuffling || _loading) return;
+    _reshuffling = true;
+    _error = '';
     notifyListeners();
     try {
-      final excluded = _recommendations.map((r) => r.bvid).toList();
-      final data = await _api.append(excluded);
-      final newItems = (data['items'] as List?)?.map((e) => Recommendation.fromJson(e)).toList() ?? [];
-      final existingBvids = _recommendations.map((r) => r.bvid).toSet();
-      for (final item in newItems) {
-        if (!existingBvids.contains(item.bvid)) {
-          _recommendations.add(item);
-          existingBvids.add(item.bvid);
-        }
-      }
-    } catch (_) {}
-    _loading = false;
-    notifyListeners();
-  }
-
-  Future<void> submitFeedback(Recommendation rec, String type, {String? note}) async {
-    await _api.submitFeedback(rec.id, rec.bvid, type, note: note);
-    for (var r in _recommendations) {
-      if (r.bvid == rec.bvid) r.feedbackType = type;
+      final excluded = _recommendations.map((item) => item.bvid).toList();
+      final next = await _api.reshuffle(excluded);
+      if (next.isNotEmpty) _recommendations = next;
+      _online = true;
+      unawaited(_loadRuntimeStatus());
+    } catch (error) {
+      _error = _message(error, '换一批失败');
+    } finally {
+      _reshuffling = false;
+      notifyListeners();
     }
-    notifyListeners();
   }
 
-  Future<void> respondToDelight(String bvid, String response, {String message = ''}) async {
-    await _api.respondToDelight(bvid, response, message: message);
-    _delights.removeWhere((d) => d.bvid == bvid);
-    _delightIndex = _delightIndex.clamp(0, (_delights.length - 1).clamp(0, _delights.length));
+  Future<void> append() async {
+    if (_loadingMore || _loading || _reshuffling) return;
+    _loadingMore = true;
+    _error = '';
     notifyListeners();
+    try {
+      final excluded = _recommendations.map((item) => item.bvid).toList();
+      final newItems = await _api.append(excluded);
+      final identities = _recommendations
+          .map((item) => item.savedIdentity)
+          .toSet();
+      for (final item in newItems) {
+        if (identities.add(item.savedIdentity)) _recommendations.add(item);
+      }
+      _online = true;
+    } catch (error) {
+      _error = _message(error, '加载更多失败');
+    } finally {
+      _loadingMore = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> submitFeedback(
+    Recommendation rec,
+    String type, {
+    String? note,
+  }) async {
+    _error = '';
+    try {
+      await _api.submitFeedback(rec.id, type, note: note);
+      for (final item in _recommendations) {
+        if (item.id == rec.id) item.feedbackType = type;
+      }
+      notifyListeners();
+      return true;
+    } catch (error) {
+      _error = _message(error, '反馈提交失败');
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> respondToDelight(
+    Delight delight,
+    String response, {
+    String message = '',
+  }) async {
+    _error = '';
+    try {
+      await _api.respondToDelight(
+        delight.bvid,
+        response,
+        title: delight.title,
+        message: message,
+      );
+      if (response == 'like' || response == 'view') {
+        final nextState = response == 'like' ? 'liked' : 'viewed';
+        _delights = _delights
+            .map(
+              (item) => item.bvid == delight.bvid
+                  ? item.copyWith(state: nextState)
+                  : item,
+            )
+            .toList();
+      } else {
+        _delights.removeWhere((item) => item.bvid == delight.bvid);
+        unawaited(_api.markDelightSent(delight.bvid));
+      }
+      _delightIndex = _delightIndex.clamp(
+        0,
+        (_delights.length - 1).clamp(0, _delights.length),
+      );
+      notifyListeners();
+      return true;
+    } catch (error) {
+      _error = _message(error, '惊喜推荐操作失败');
+      notifyListeners();
+      return false;
+    }
   }
 
   Future<void> reportClick(Recommendation rec) async {
-    await _api.reportClick({'recommendation_id': rec.id, 'bvid': rec.bvid, 'title': rec.title, 'up_name': rec.upName, 'source_platform': rec.sourcePlatform, 'content_url': rec.contentUrl});
+    await _api.reportClick({
+      'recommendation_id': rec.id,
+      'bvid': rec.bvid,
+      'content_id': rec.contentId,
+      'title': rec.title,
+      'up_name': rec.upName,
+      'topic_label': rec.topicLabel,
+      'source_platform': rec.sourcePlatform,
+      'content_url': contentUrlFor(rec) ?? rec.contentUrl,
+    });
   }
 
   void startPolling() {
+    _running = true;
+    final generation = ++_pollGeneration;
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) => _poll());
-    _connectStream();
+    unawaited(_runPollLoop(generation));
+    unawaited(_connectStream());
   }
 
   void stopPolling() {
+    _running = false;
+    _pollGeneration += 1;
     _pollTimer?.cancel();
     _pollTimer = null;
     _reconnectTimer?.cancel();
@@ -117,43 +274,75 @@ class RecommendProvider extends ChangeNotifier {
     _ws = null;
   }
 
+  Future<void> _runPollLoop(int generation) async {
+    await _poll();
+    if (!_running || generation != _pollGeneration) return;
+    _pollTimer = Timer(
+      Duration(seconds: _online ? 30 : 3),
+      () => unawaited(_runPollLoop(generation)),
+    );
+  }
+
   Future<void> _poll() async {
+    if (_polling) return;
+    _polling = true;
     try {
-      final status = await _api.fetch(timeout: 5);
-      _online = true;
-      if (_delights.isEmpty) {
-        final delights = await _api.fetchDelights(limit: 10);
-        if (delights.isNotEmpty) {
-          _delights = delights;
-          _delightIndex = 0;
-          notifyListeners();
-        }
+      final recs = await _api.fetch(timeout: 8);
+      if (_recommendations.isEmpty && recs.isNotEmpty) {
+        _recommendations = recs;
       }
-    } catch (_) {
-      _online = false;
+      _online = true;
+      _error = '';
+      if (_delights.isEmpty) await _loadDelights();
+      if (_activityFeed.items.isEmpty &&
+          _activityFeed.headline.isEmpty &&
+          _activityFeed.liveSummary.isEmpty) {
+        await _loadActivityFeed();
+      }
+      await _loadRuntimeStatus();
       notifyListeners();
+    } catch (_) {
+      if (_online) {
+        _online = false;
+        notifyListeners();
+      }
+    } finally {
+      _polling = false;
     }
   }
 
   Future<void> _connectStream() async {
-    if (_wsConnecting || _ws != null) return;
+    if (kIsWeb || !_running || _wsConnecting || _ws != null) return;
     _wsConnecting = true;
     try {
-      final ws = await WebSocket.connect(_client.wsUrl, headers: _client.wsHeaders);
+      final ws = await WebSocket.connect(
+        _client.wsUrl,
+        headers: _client.wsHeaders,
+      );
       _ws = ws;
-      ws.listen((raw) {
-        try {
-          final event = jsonDecode(raw as String) as Map<String, dynamic>;
-          final type = event['type'] as String? ?? '';
-          if (type.isNotEmpty && type != 'runtime.heartbeat') _poll();
-        } catch (_) {}
-      }, onDone: () {
-        _ws = null;
-        _scheduleReconnect();
-      }, onError: (_) {
-        _ws = null;
-        _scheduleReconnect();
-      });
+      ws.listen(
+        (raw) {
+          try {
+            final event = jsonDecode(raw as String) as Map<String, dynamic>;
+            final type = event['type']?.toString() ?? '';
+            if (type == 'runtime.heartbeat') return;
+            if (type == 'delight.candidate' || type == 'delight.liked') {
+              unawaited(_loadDelights());
+            }
+            if (type == 'refresh.pool_updated' || type.isNotEmpty) {
+              unawaited(_poll());
+            }
+          } catch (_) {}
+        },
+        onDone: () {
+          _ws = null;
+          _scheduleReconnect();
+        },
+        onError: (_) {
+          _ws = null;
+          _scheduleReconnect();
+        },
+      );
     } catch (_) {
       _scheduleReconnect();
     } finally {
@@ -162,11 +351,27 @@ class RecommendProvider extends ChangeNotifier {
   }
 
   void _scheduleReconnect() {
-    if (_reconnectTimer != null) return;
+    if (!_running || _reconnectTimer != null) return;
     _reconnectTimer = Timer(const Duration(seconds: 10), () {
       _reconnectTimer = null;
-      _connectStream();
+      unawaited(_connectStream());
     });
+  }
+
+  String _message(Object error, String fallback) {
+    if (error is ApiException) return error.message;
+    final text = error.toString().trim();
+    final lower = text.toLowerCase();
+    if (lower.contains('socketexception') ||
+        lower.contains('connection failed') ||
+        lower.contains('network is unreachable') ||
+        lower.contains('connection refused')) {
+      return '$fallback：暂时连不上后端，将自动重试。';
+    }
+    if (lower.contains('timeoutexception') || lower.contains('timed out')) {
+      return '$fallback：连接超时，将自动重试。';
+    }
+    return text.isEmpty ? fallback : text;
   }
 
   @override

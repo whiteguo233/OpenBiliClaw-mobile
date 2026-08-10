@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../theme/app_theme.dart';
+import '../widgets/app_chrome.dart';
 
 class LoginView extends StatefulWidget {
   const LoginView({super.key});
@@ -23,39 +25,99 @@ class _LoginViewState extends State<LoginView> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(body: Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: [const Color(0xFFFB7299).withValues(alpha:  0.08), const Color(0xFF5AA9FF).withValues(alpha:  0.04)])),
-      child: Center(child: SingleChildScrollView(padding: const EdgeInsets.all(32), child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(width: 64, height: 64, decoration: BoxDecoration(
-          color: const Color(0xFFFB7299), borderRadius: BorderRadius.circular(20)),
-          child: const Center(child: Text('B', style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)))),
-        const SizedBox(height: 16),
-        Text('OpenBiliClaw', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        Text('请登录以访问后端服务', style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-        const SizedBox(height: 32),
-        TextField(controller: _passwordController, obscureText: true,
-          decoration: InputDecoration(labelText: '密码', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            filled: true, fillColor: theme.colorScheme.surface),
-          onSubmitted: (_) => _login()),
-        const SizedBox(height: 16),
-        if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 16),
-          child: Text(_error!, style: const TextStyle(color: Color(0xFFEF7A86), fontSize: 13))),
-        SizedBox(width: double.infinity, child: ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFB7299), foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(vertical: 14)),
-          onPressed: _submitting ? null : _login,
-          child: _submitting ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : const Text('登录', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)))),
-      ])))));
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(gradient: AppGradients.background),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface.withValues(alpha: 0.94),
+                    borderRadius: BorderRadius.circular(AppRadius.hero),
+                    border: Border.all(color: AppColors.line),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const AppBrandMark(size: 64),
+                      const SizedBox(height: 18),
+                      Text(
+                        'OpenBiliClaw',
+                        style: theme.textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '登录后连接你的私人推荐后端',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      TextField(
+                        controller: _passwordController,
+                        obscureText: true,
+                        decoration: const InputDecoration(
+                          labelText: '密码',
+                          prefixIcon: Icon(Icons.lock_outline_rounded),
+                        ),
+                        onSubmitted: (_) => _login(),
+                      ),
+                      const SizedBox(height: 16),
+                      if (_error != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Text(
+                            _error!,
+                            style: const TextStyle(
+                              color: AppColors.danger,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: _submitting ? null : _login,
+                          child: _submitting
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text('登录'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _login() async {
-    setState(() { _submitting = true; _error = null; });
-    final ok = await context.read<AuthProvider>().login(_passwordController.text);
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+    final ok = await context.read<AuthProvider>().login(
+      _passwordController.text,
+    );
     if (!mounted) return;
-    setState(() { _submitting = false; if (!ok) _error = '密码错误或无法连接后端。'; });
+    setState(() {
+      _submitting = false;
+      if (!ok) _error = '密码错误或无法连接后端。';
+    });
   }
 }
