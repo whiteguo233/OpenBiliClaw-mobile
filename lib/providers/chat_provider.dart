@@ -25,8 +25,19 @@ class ChatProvider extends ChangeNotifier {
   Timer? _historyTimer;
   DialogueContext? _dialogueContext;
   ChatComposeContext _composeContext = const ChatComposeContext();
+  bool _disposed = false;
 
   ChatProvider(ApiClient client) : _api = ChatApi(client);
+
+  /// Notifies listeners unless the provider has already been disposed.
+  ///
+  /// In-flight async work (e.g. the periodic history sync) can complete after
+  /// the owning widget tree is torn down; calling [ChangeNotifier.notifyListeners]
+  /// on a disposed notifier throws, so all notifications go through here.
+  void _safeNotify() {
+    if (_disposed) return;
+    notifyListeners();
+  }
 
   List<ChatTurn> get turns {
     const mainScopes = {
@@ -59,7 +70,7 @@ class ChatProvider extends ChangeNotifier {
   void clearError() {
     if (_error.isEmpty) return;
     _error = '';
-    notifyListeners();
+    _safeNotify();
   }
 
   Future<void> loadTurns({bool showLoading = true}) async {
@@ -68,7 +79,7 @@ class ChatProvider extends ChangeNotifier {
     var changed = false;
     if (showLoading) {
       _loading = true;
-      notifyListeners();
+      _safeNotify();
     }
     try {
       final fetched = await _api.fetchTurns(session: 'popup', limit: 100);
@@ -103,13 +114,13 @@ class ChatProvider extends ChangeNotifier {
       _syncingHistory = false;
       final wasLoading = _loading;
       _loading = false;
-      if (changed || wasLoading) notifyListeners();
+      if (changed || wasLoading) _safeNotify();
     }
   }
 
   Future<void> loadPendingConfirmations({bool notify = true}) async {
     final changed = await _loadPendingConfirmations();
-    if (changed && notify) notifyListeners();
+    if (changed && notify) _safeNotify();
   }
 
   Future<bool> _loadPendingConfirmations() async {
@@ -153,17 +164,17 @@ class ChatProvider extends ChangeNotifier {
       subjectId: subjectId,
       subjectTitle: subjectTitle,
     );
-    notifyListeners();
+    _safeNotify();
   }
 
   void clearComposeContext() {
     _composeContext = const ChatComposeContext();
-    notifyListeners();
+    _safeNotify();
   }
 
   void clearDialogueContext() {
     _dialogueContext = null;
-    notifyListeners();
+    _safeNotify();
   }
 
   Future<bool> sendMessage(String message) async {
@@ -189,7 +200,7 @@ class ChatProvider extends ChangeNotifier {
       createdAt: DateTime.now().toIso8601String(),
     );
     _turns.add(optimistic);
-    notifyListeners();
+    _safeNotify();
 
     try {
       final started = await _api.startTurn(
@@ -202,7 +213,7 @@ class ChatProvider extends ChangeNotifier {
         message: value,
       );
       _upsertTurn(started);
-      notifyListeners();
+      _safeNotify();
       if (started.isPending) {
         await _pollForResponse(started.turnId, generation);
       }
@@ -219,7 +230,7 @@ class ChatProvider extends ChangeNotifier {
       if (generation == _responseGeneration) {
         _responding = false;
       }
-      notifyListeners();
+      _safeNotify();
     }
   }
 
@@ -227,7 +238,7 @@ class ChatProvider extends ChangeNotifier {
     if (!_responding) return;
     _responseGeneration += 1;
     _responding = false;
-    notifyListeners();
+    _safeNotify();
   }
 
   Future<void> _pollForResponse(String turnId, int generation) async {
@@ -239,7 +250,7 @@ class ChatProvider extends ChangeNotifier {
       try {
         final turn = await _api.fetchTurn(turnId);
         _upsertTurn(turn);
-        notifyListeners();
+        _safeNotify();
         if (turn.isDone || turn.hasError) return;
       } catch (_) {
         // A transient read failure is retried inside the fixed 30s window.
@@ -252,7 +263,7 @@ class ChatProvider extends ChangeNotifier {
     if (_busyConfirmationRefs.contains(item.ref)) return false;
     _busyConfirmationRefs.add(item.ref);
     _error = '';
-    notifyListeners();
+    _safeNotify();
     try {
       final turn = await _api.openPendingConfirmation(item.ref);
       _upsertTurn(turn);
@@ -264,7 +275,7 @@ class ChatProvider extends ChangeNotifier {
       return false;
     } finally {
       _busyConfirmationRefs.remove(item.ref);
-      notifyListeners();
+      _safeNotify();
     }
   }
 
@@ -274,11 +285,11 @@ class ChatProvider extends ChangeNotifier {
       if (!context.valid) throw const FormatException('invalid context');
       _composeContext = const ChatComposeContext();
       _dialogueContext = context;
-      notifyListeners();
+      _safeNotify();
       return true;
     } catch (error) {
       _error = _message(error, '无法进入这条对话上下文');
-      notifyListeners();
+      _safeNotify();
       return false;
     }
   }
@@ -287,7 +298,7 @@ class ChatProvider extends ChangeNotifier {
     if (_busyCardIds.contains(turn.turnId)) return false;
     _busyCardIds.add(turn.turnId);
     _error = '';
-    notifyListeners();
+    _safeNotify();
     try {
       final response = await _api.actOnCard(turn.turnId, action);
       final outcome = response['outcome']?.toString() ?? '';
@@ -317,7 +328,7 @@ class ChatProvider extends ChangeNotifier {
       return false;
     } finally {
       _busyCardIds.remove(turn.turnId);
-      notifyListeners();
+      _safeNotify();
     }
   }
 
@@ -327,7 +338,7 @@ class ChatProvider extends ChangeNotifier {
       await Future<void>.delayed(Duration(seconds: delay));
       final turn = await _api.fetchTurn(turnId);
       _upsertTurn(turn);
-      notifyListeners();
+      _safeNotify();
       if (turn.cardTerminal || turn.hasError) return;
     }
     throw TimeoutException('卡片仍在后台处理中');
@@ -387,6 +398,8 @@ class ChatProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    _responseGeneration += 1; // Stop any in-flight response polling.
     stopHistorySync();
     super.dispose();
   }

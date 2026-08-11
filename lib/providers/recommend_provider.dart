@@ -31,10 +31,21 @@ class RecommendProvider extends ChangeNotifier {
   bool _wsConnecting = false;
   bool _running = false;
   int _pollGeneration = 0;
+  bool _disposed = false;
 
   RecommendProvider(ApiClient client)
     : _client = client,
       _api = RecommendApi(client);
+
+  /// Notifies listeners unless the provider has already been disposed.
+  ///
+  /// The poll loop and WebSocket callbacks can complete after the owning
+  /// widget tree is torn down; calling [ChangeNotifier.notifyListeners] on a
+  /// disposed notifier throws, so all notifications go through here.
+  void _safeNotify() {
+    if (_disposed) return;
+    notifyListeners();
+  }
 
   List<Recommendation> get recommendations =>
       List.unmodifiable(_recommendations);
@@ -51,14 +62,14 @@ class RecommendProvider extends ChangeNotifier {
   void nextDelight() {
     if (_delights.isNotEmpty) {
       _delightIndex = (_delightIndex + 1) % _delights.length;
-      notifyListeners();
+      _safeNotify();
     }
   }
 
   void prevDelight() {
     if (_delights.isNotEmpty) {
       _delightIndex = (_delightIndex - 1 + _delights.length) % _delights.length;
-      notifyListeners();
+      _safeNotify();
     }
   }
 
@@ -92,7 +103,7 @@ class RecommendProvider extends ChangeNotifier {
     if (_loading) return;
     _loading = true;
     _error = '';
-    notifyListeners();
+    _safeNotify();
     try {
       final recs = await _api.fetch();
       _recommendations = recs;
@@ -102,7 +113,7 @@ class RecommendProvider extends ChangeNotifier {
       _error = _message(error, '推荐加载失败');
     } finally {
       _loading = false;
-      notifyListeners();
+      _safeNotify();
     }
     unawaited(_loadSideChannels());
   }
@@ -118,14 +129,14 @@ class RecommendProvider extends ChangeNotifier {
   Future<void> _loadRuntimeStatus() async {
     try {
       _runtimeStatus = await _api.fetchRuntimeStatus();
-      notifyListeners();
+      _safeNotify();
     } catch (_) {}
   }
 
   Future<void> _loadActivityFeed() async {
     try {
       _activityFeed = await _api.fetchActivity();
-      notifyListeners();
+      _safeNotify();
     } catch (_) {}
   }
 
@@ -137,7 +148,7 @@ class RecommendProvider extends ChangeNotifier {
         0,
         (_delights.length - 1).clamp(0, _delights.length),
       );
-      notifyListeners();
+      _safeNotify();
     } catch (_) {}
   }
 
@@ -145,7 +156,7 @@ class RecommendProvider extends ChangeNotifier {
     if (_reshuffling || _loading) return;
     _reshuffling = true;
     _error = '';
-    notifyListeners();
+    _safeNotify();
     try {
       final excluded = _recommendations.map((item) => item.bvid).toList();
       final next = await _api.reshuffle(excluded);
@@ -156,7 +167,7 @@ class RecommendProvider extends ChangeNotifier {
       _error = _message(error, '换一批失败');
     } finally {
       _reshuffling = false;
-      notifyListeners();
+      _safeNotify();
     }
   }
 
@@ -164,7 +175,7 @@ class RecommendProvider extends ChangeNotifier {
     if (_loadingMore || _loading || _reshuffling) return;
     _loadingMore = true;
     _error = '';
-    notifyListeners();
+    _safeNotify();
     try {
       final excluded = _recommendations.map((item) => item.bvid).toList();
       final newItems = await _api.append(excluded);
@@ -179,7 +190,7 @@ class RecommendProvider extends ChangeNotifier {
       _error = _message(error, '加载更多失败');
     } finally {
       _loadingMore = false;
-      notifyListeners();
+      _safeNotify();
     }
   }
 
@@ -194,11 +205,11 @@ class RecommendProvider extends ChangeNotifier {
       for (final item in _recommendations) {
         if (item.id == rec.id) item.feedbackType = type;
       }
-      notifyListeners();
+      _safeNotify();
       return true;
     } catch (error) {
       _error = _message(error, '反馈提交失败');
-      notifyListeners();
+      _safeNotify();
       return false;
     }
   }
@@ -233,11 +244,11 @@ class RecommendProvider extends ChangeNotifier {
         0,
         (_delights.length - 1).clamp(0, _delights.length),
       );
-      notifyListeners();
+      _safeNotify();
       return true;
     } catch (error) {
       _error = _message(error, '惊喜推荐操作失败');
-      notifyListeners();
+      _safeNotify();
       return false;
     }
   }
@@ -300,11 +311,11 @@ class RecommendProvider extends ChangeNotifier {
         await _loadActivityFeed();
       }
       await _loadRuntimeStatus();
-      notifyListeners();
+      _safeNotify();
     } catch (_) {
       if (_online) {
         _online = false;
-        notifyListeners();
+        _safeNotify();
       }
     } finally {
       _polling = false;
@@ -376,6 +387,8 @@ class RecommendProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    _pollGeneration += 1; // Stop any in-flight poll/WS work.
     stopPolling();
     super.dispose();
   }
