@@ -10,137 +10,166 @@ import '../providers/recommend_provider.dart';
 import '../providers/saved_provider.dart';
 import '../services/content_launcher.dart';
 import '../theme/app_theme.dart';
+import '../widgets/back_to_top_fab.dart';
 import '../widgets/delight_banner.dart';
 import '../widgets/recommendation_card.dart';
 
-class RecommendView extends StatelessWidget {
+class RecommendView extends StatefulWidget {
   const RecommendView({super.key, this.onStartChat});
 
   final void Function(String scope, String subjectId, String subjectTitle)?
   onStartChat;
 
   @override
+  State<RecommendView> createState() => _RecommendViewState();
+}
+
+class _RecommendViewState extends State<RecommendView> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Consumer2<RecommendProvider, SavedProvider>(
       builder: (context, rp, sp, _) {
         final delightsCount = rp.delights.length;
-        return NotificationListener<ScrollNotification>(
-          onNotification: (notification) {
-            if (notification.metrics.extentAfter < 520 &&
-                rp.recommendations.isNotEmpty) {
-              unawaited(rp.append());
-            }
-            return false;
-          },
-          child: RefreshIndicator(
-            onRefresh: rp.load,
-            child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                SliverToBoxAdapter(child: _buildHeader(context, rp)),
-                if (rp.error.isNotEmpty)
-                  SliverToBoxAdapter(
-                    child: _statusBanner(
-                      context,
-                      rp.error,
-                      Icons.error_outline,
-                      Colors.red,
-                    ),
-                  )
-                else if (!rp.online && !rp.loading)
-                  SliverToBoxAdapter(
-                    child: _statusBanner(
-                      context,
-                      '无法连接后端，下拉可重试',
-                      Icons.wifi_off,
-                      Colors.orange,
-                    ),
-                  ),
-                if (rp.activityFeed.headline.isNotEmpty ||
-                    rp.activityFeed.liveSummary.isNotEmpty)
-                  SliverToBoxAdapter(child: _buildActivity(context, rp)),
-                if (delightsCount > 0)
-                  SliverToBoxAdapter(
-                    child: _buildDelight(context, rp, delightsCount),
-                  ),
-                if (rp.loading && rp.recommendations.isEmpty)
-                  const SliverFillRemaining(
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else if (rp.recommendations.isEmpty)
-                  SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: _emptyState(context, rp),
-                  )
-                else
-                  SliverList.builder(
-                    itemCount: rp.recommendations.length,
-                    itemBuilder: (context, index) {
-                      final rec = rp.recommendations[index];
-                      final watchLaterActive = sp.contains(
-                        SavedListKind.watchLater,
-                        rec,
-                      );
-                      final favoriteActive = sp.contains(
-                        SavedListKind.favorite,
-                        rec,
-                      );
-                      return RecommendationCard(
-                        rec: rec,
-                        watchLaterActive: watchLaterActive,
-                        favoriteActive: favoriteActive,
-                        onTap: () async {
-                          unawaited(rp.reportClick(rec));
-                          final opened =
-                              await ContentLauncher.openRecommendation(rec);
-                          if (context.mounted && !opened) {
-                            _showMessage(context, '没有可打开的内容链接', error: true);
-                          }
-                        },
-                        onLike: () => _feedback(context, rp, rec, 'like'),
-                        onDislike: () => _feedback(context, rp, rec, 'dislike'),
-                        onComment: () => _comment(context, rp, rec),
-                        onWatchLater: () => _toggleSaved(
+        return Stack(
+          children: [
+            NotificationListener<ScrollNotification>(
+              onNotification: (notification) {
+                if (notification.metrics.extentAfter < 520 &&
+                    rp.recommendations.isNotEmpty) {
+                  unawaited(rp.append());
+                }
+                return false;
+              },
+              child: RefreshIndicator(
+                onRefresh: rp.load,
+                child: CustomScrollView(
+                  controller: _scrollController,
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: [
+                    SliverToBoxAdapter(child: _buildHeader(context, rp)),
+                    if (rp.error.isNotEmpty)
+                      SliverToBoxAdapter(
+                        child: _statusBanner(
                           context,
-                          sp,
-                          SavedListKind.watchLater,
-                          rec,
-                          !watchLaterActive,
+                          rp.error,
+                          Icons.error_outline,
+                          Colors.red,
                         ),
-                        onFavorite: () => _toggleSaved(
+                      )
+                    else if (!rp.online && !rp.loading)
+                      SliverToBoxAdapter(
+                        child: _statusBanner(
                           context,
-                          sp,
-                          SavedListKind.favorite,
-                          rec,
-                          !favoriteActive,
+                          '无法连接后端，下拉可重试',
+                          Icons.wifi_off,
+                          Colors.orange,
                         ),
-                      );
-                    },
-                  ),
-                if (rp.recommendations.isNotEmpty)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Center(
-                        child: rp.loadingMore
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : TextButton.icon(
-                                onPressed: rp.append,
-                                icon: const Icon(Icons.expand_more),
-                                label: const Text('加载更多推荐'),
-                              ),
                       ),
-                    ),
-                  ),
-              ],
+                    if (rp.activityFeed.headline.isNotEmpty ||
+                        rp.activityFeed.liveSummary.isNotEmpty)
+                      SliverToBoxAdapter(child: _buildActivity(context, rp)),
+                    if (delightsCount > 0)
+                      SliverToBoxAdapter(
+                        child: _buildDelight(context, rp, delightsCount),
+                      ),
+                    if (rp.loading && rp.recommendations.isEmpty)
+                      const SliverFillRemaining(
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (rp.recommendations.isEmpty)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: _emptyState(context, rp),
+                      )
+                    else
+                      SliverList.builder(
+                        itemCount: rp.recommendations.length,
+                        itemBuilder: (context, index) {
+                          final rec = rp.recommendations[index];
+                          final watchLaterActive = sp.contains(
+                            SavedListKind.watchLater,
+                            rec,
+                          );
+                          final favoriteActive = sp.contains(
+                            SavedListKind.favorite,
+                            rec,
+                          );
+                          return RecommendationCard(
+                            rec: rec,
+                            watchLaterActive: watchLaterActive,
+                            favoriteActive: favoriteActive,
+                            onTap: () async {
+                              unawaited(rp.reportClick(rec));
+                              final opened =
+                                  await ContentLauncher.openRecommendation(rec);
+                              if (context.mounted && !opened) {
+                                _showMessage(
+                                  context,
+                                  '没有可打开的内容链接',
+                                  error: true,
+                                );
+                              }
+                            },
+                            onLike: () => _feedback(context, rp, rec, 'like'),
+                            onDislike: () =>
+                                _feedback(context, rp, rec, 'dislike'),
+                            onComment: () => _comment(context, rp, rec),
+                            onWatchLater: () => _toggleSaved(
+                              context,
+                              sp,
+                              SavedListKind.watchLater,
+                              rec,
+                              !watchLaterActive,
+                            ),
+                            onFavorite: () => _toggleSaved(
+                              context,
+                              sp,
+                              SavedListKind.favorite,
+                              rec,
+                              !favoriteActive,
+                            ),
+                          );
+                        },
+                      ),
+                    if (rp.recommendations.isNotEmpty)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Center(
+                            child: rp.loadingMore
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : TextButton.icon(
+                                    onPressed: rp.append,
+                                    icon: const Icon(Icons.expand_more),
+                                    label: const Text('加载更多推荐'),
+                                  ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
-          ),
+            Positioned(
+              right: 14,
+              bottom: 14,
+              child: BackToTopFab(controller: _scrollController),
+            ),
+          ],
         );
       },
     );
@@ -342,6 +371,10 @@ class RecommendView extends StatelessWidget {
   ) {
     final index = rp.delightIndex.clamp(0, delightsCount - 1);
     final delight = rp.delights[index];
+    final sp = context.read<SavedProvider>();
+    final projection = delight.toRecommendation();
+    final watchLaterActive = sp.contains(SavedListKind.watchLater, projection);
+    final favoriteActive = sp.contains(SavedListKind.favorite, projection);
     return DelightBanner(
       delight: delight,
       currentIndex: index,
@@ -358,9 +391,23 @@ class RecommendView extends StatelessWidget {
       onLike: () => _delightAction(context, rp, delight, 'like'),
       onDislike: () => _delightAction(context, rp, delight, 'dislike'),
       onDismiss: () => _delightAction(context, rp, delight, 'dismiss'),
-      onChat: onStartChat == null
+      onWatchLater: () => _toggleSaved(
+        context,
+        sp,
+        SavedListKind.watchLater,
+        projection,
+        !watchLaterActive,
+      ),
+      onFavorite: () => _toggleSaved(
+        context,
+        sp,
+        SavedListKind.favorite,
+        projection,
+        !favoriteActive,
+      ),
+      onChat: widget.onStartChat == null
           ? null
-          : () => onStartChat!(
+          : () => widget.onStartChat!(
               'delight',
               delight.contentId.isNotEmpty ? delight.contentId : delight.bvid,
               delight.title,

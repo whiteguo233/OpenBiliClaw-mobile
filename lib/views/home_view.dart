@@ -11,6 +11,7 @@ import '../providers/recommend_provider.dart';
 import '../providers/saved_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_chrome.dart';
+import '../widgets/message_inbox.dart';
 import 'chat_view.dart';
 import 'profile_view.dart';
 import 'recommend_view.dart';
@@ -78,6 +79,8 @@ class _HomeViewState extends State<HomeView> {
         return;
       case 1:
         await _savedProvider.loadAll();
+        if (_disposed || !mounted) return;
+        await _savedProvider.loadAllHistory();
         return;
       case 2:
         await _profileProvider.load();
@@ -164,7 +167,16 @@ class _HomeViewState extends State<HomeView> {
               const SizedBox(width: 2),
               IconButton(
                 tooltip: inboxCount > 0 ? '$inboxCount 条待处理消息' : '暂无待处理消息',
-                onPressed: () => _selectTab(profilePending > 0 ? 2 : 3),
+                onPressed: () async {
+                  await MessageInbox.show(context);
+                  if (!_disposed && mounted && context.mounted) {
+                    // A probe "多聊聊" may have started a contextual chat.
+                    final chat = context.read<ChatProvider>();
+                    if (chat.composeContext.active) {
+                      _selectTab(3);
+                    }
+                  }
+                },
                 icon: inboxCount > 0
                     ? Badge.count(
                         count: inboxCount,

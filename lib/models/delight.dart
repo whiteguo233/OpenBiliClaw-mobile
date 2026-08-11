@@ -1,4 +1,5 @@
 import '../api/utils.dart';
+import 'recommendation.dart';
 
 class Delight {
   final String bvid;
@@ -63,5 +64,20 @@ class Delight {
     contentType: contentType,
     bodyText: bodyText,
     state: state ?? this.state,
+  );
+
+  /// Project this delight onto the shared recommendation shape so saved-list
+  /// toggles (watch later / favorite) can reuse the same flow as cards.
+  Recommendation toRecommendation() => Recommendation(
+    id: 0,
+    bvid: bvid,
+    itemKey: itemKey,
+    contentId: contentId,
+    title: title,
+    coverUrl: coverUrl,
+    contentUrl: contentUrl,
+    sourcePlatform: sourcePlatform,
+    contentType: contentType,
+    bodyText: bodyText,
   );
 }

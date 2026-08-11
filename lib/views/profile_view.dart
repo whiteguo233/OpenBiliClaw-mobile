@@ -5,9 +5,23 @@ import '../models/profile.dart';
 import '../providers/profile_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_chrome.dart';
+import '../widgets/back_to_top_fab.dart';
 
-class ProfileView extends StatelessWidget {
+class ProfileView extends StatefulWidget {
   const ProfileView({super.key});
+
+  @override
+  State<ProfileView> createState() => _ProfileViewState();
+}
+
+class _ProfileViewState extends State<ProfileView> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,47 +49,63 @@ class ProfileView extends StatelessWidget {
                   ? const Center(child: CircularProgressIndicator())
                   : summary == null || !summary.hasContent
                   ? _emptyState(context, summary)
-                  : RefreshIndicator(
-                      onRefresh: () async {
-                        await provider.load();
-                        await provider.loadNotifications();
-                      },
-                      child: ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 28),
-                        children: [
-                          if (provider.error.isNotEmpty)
-                            _errorBanner(context, provider),
-                          if (provider.cognitionNotification != null)
-                            _cognitionNotice(context, provider),
-                          _portrait(context, summary),
-                          _coreSection(context, summary),
-                          _valuesSection(context, summary),
-                          _interestSection(context, summary),
-                          _roleSection(context, summary),
-                          _surfaceSection(context, summary),
-                          if (summary.speculativeInterests.isNotEmpty)
-                            _speculationSection(
-                              context,
-                              provider,
-                              summary.speculativeInterests,
-                              avoidance: false,
-                            ),
-                          if (summary.speculativeAvoidances.isNotEmpty)
-                            _speculationSection(
-                              context,
-                              provider,
-                              summary.speculativeAvoidances,
-                              avoidance: true,
-                            ),
-                          if (provider.cognitionUpdates.isNotEmpty)
-                            _cognitionSection(context, provider),
-                          if (summary.activeInsights.isNotEmpty)
-                            _insightsSection(context, summary.activeInsights),
-                          if (summary.recentAwareness.isNotEmpty)
-                            _awarenessSection(context, summary.recentAwareness),
-                        ],
-                      ),
+                  : Stack(
+                      children: [
+                        RefreshIndicator(
+                          onRefresh: () async {
+                            await provider.load();
+                            await provider.loadNotifications();
+                          },
+                          child: ListView(
+                            controller: _scrollController,
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 28),
+                            children: [
+                              if (provider.error.isNotEmpty)
+                                _errorBanner(context, provider),
+                              if (provider.cognitionNotification != null)
+                                _cognitionNotice(context, provider),
+                              _portrait(context, summary),
+                              _coreSection(context, summary),
+                              _valuesSection(context, summary),
+                              _interestSection(context, summary),
+                              _roleSection(context, summary),
+                              _surfaceSection(context, summary),
+                              if (summary.speculativeInterests.isNotEmpty)
+                                _speculationSection(
+                                  context,
+                                  provider,
+                                  summary.speculativeInterests,
+                                  avoidance: false,
+                                ),
+                              if (summary.speculativeAvoidances.isNotEmpty)
+                                _speculationSection(
+                                  context,
+                                  provider,
+                                  summary.speculativeAvoidances,
+                                  avoidance: true,
+                                ),
+                              if (provider.cognitionUpdates.isNotEmpty)
+                                _cognitionSection(context, provider),
+                              if (summary.activeInsights.isNotEmpty)
+                                _insightsSection(
+                                  context,
+                                  summary.activeInsights,
+                                ),
+                              if (summary.recentAwareness.isNotEmpty)
+                                _awarenessSection(
+                                  context,
+                                  summary.recentAwareness,
+                                ),
+                            ],
+                          ),
+                        ),
+                        Positioned(
+                          right: 14,
+                          bottom: 14,
+                          child: BackToTopFab(controller: _scrollController),
+                        ),
+                      ],
                     ),
             ),
           ],

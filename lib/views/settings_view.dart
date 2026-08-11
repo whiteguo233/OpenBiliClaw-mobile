@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api/client.dart';
+import '../api/config_api.dart';
 import '../theme/app_theme.dart';
 
 class SettingsView extends StatefulWidget {
@@ -19,6 +20,11 @@ class _SettingsViewState extends State<SettingsView> {
   bool? _testOk;
   String _scheme = 'http';
 
+  bool _autoSync = false;
+  bool _autoSyncLoading = true;
+  bool _autoSyncSaving = false;
+  ConfigApi? _configApi;
+
   @override
   void initState() {
     super.initState();
@@ -26,6 +32,45 @@ class _SettingsViewState extends State<SettingsView> {
     _scheme = client.scheme;
     _hostController.text = client.host;
     _portController.text = client.port.toString();
+    _configApi = ConfigApi(client);
+    _loadAutoSync();
+  }
+
+  Future<void> _loadAutoSync() async {
+    final api = _configApi;
+    if (api == null) return;
+    final enabled = await api.savedAutoSyncEnabled();
+    if (!mounted) return;
+    setState(() {
+      _autoSync = enabled;
+      _autoSyncLoading = false;
+    });
+  }
+
+  Future<void> _toggleAutoSync(bool enabled) async {
+    final api = _configApi;
+    if (api == null || _autoSyncSaving) return;
+    setState(() {
+      _autoSyncSaving = true;
+      _autoSync = enabled;
+    });
+    final ok = await api.setSavedAutoSync(enabled);
+    if (!mounted) return;
+    setState(() {
+      _autoSyncSaving = false;
+      if (!ok) _autoSync = !enabled;
+    });
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            ok ? (enabled ? '已开启：保存时自动同步到对应平台' : '已关闭自动同步') : '设置保存失败，请稍后重试',
+          ),
+          backgroundColor: ok ? null : Colors.red[700],
+        ),
+      );
   }
 
   @override
@@ -275,6 +320,61 @@ class _SettingsViewState extends State<SettingsView> {
             ),
           ],
           const SizedBox(height: 32),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.large),
+              border: Border.all(color: AppColors.line),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '保存与同步',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '保存时自动同步到对应平台',
+                            style: TextStyle(fontSize: 14),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '默认关闭。收藏和稍后再看始终先保存在本地；关闭时仍可在内容库手动同步。',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (_autoSyncLoading)
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else
+                      Switch(
+                        value: _autoSync,
+                        onChanged: _autoSyncSaving ? null : _toggleAutoSync,
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(

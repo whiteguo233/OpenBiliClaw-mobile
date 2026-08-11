@@ -14,6 +14,8 @@ class DelightBanner extends StatelessWidget {
   final VoidCallback? onDislike;
   final VoidCallback? onChat;
   final VoidCallback? onDismiss;
+  final VoidCallback? onWatchLater;
+  final VoidCallback? onFavorite;
 
   const DelightBanner({
     super.key,
@@ -27,6 +29,8 @@ class DelightBanner extends StatelessWidget {
     this.onDislike,
     this.onChat,
     this.onDismiss,
+    this.onWatchLater,
+    this.onFavorite,
   });
 
   @override
@@ -187,6 +191,18 @@ class DelightBanner extends StatelessWidget {
                       : Icons.thumb_up_outlined,
                   delight.state == 'liked' ? null : () => onLike?.call(),
                 ),
+                if (onWatchLater != null)
+                  _actionChip(
+                    '稍后再看',
+                    Icons.bookmark_border_rounded,
+                    () => onWatchLater?.call(),
+                  ),
+                if (onFavorite != null)
+                  _actionChip(
+                    '收藏',
+                    Icons.star_border_rounded,
+                    () => onFavorite?.call(),
+                  ),
                 _actionChip(
                   '不感兴趣',
                   Icons.thumb_down_outlined,
