@@ -1,7 +1,7 @@
 name: openbiliclaw_app
 description: "OpenBiliClaw mobile app — personalized content discovery agent"
 publish_to: 'none'
-version: 0.3.147+1
+version: 0.3.148+2
 
 environment:
   sdk: ^3.11.5
