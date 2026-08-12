@@ -101,7 +101,7 @@ void main() {
         .element(find.byType(ProfileView))
         .read<ProfileProvider>();
     expect(profile.summary, isNotNull, reason: '画像应加载成功');
-    expect(find.text('我的画像'), findsOneWidget);
+    expect(find.text('编辑画像'), findsOneWidget, reason: '画像页应展示编辑入口');
     // LLM 生成的人格素描应渲染出来（真实文本，非占位）。
     expect(
       profile.summary!.portrait.length,
@@ -122,7 +122,14 @@ void main() {
       final chat = tester.element(find.byType(ChatView)).read<ChatProvider>();
       return !chat.loading;
     }, timeout: const Duration(seconds: 15));
-    expect(find.textContaining('和阿B聊聊'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(ChatView),
+        matching: find.byType(TextField),
+      ),
+      findsOneWidget,
+      reason: '对话页应展示消息输入框',
+    );
 
     // 发送一条真实消息，等待商汤 LLM 生成回复（端到端 AI 链路）。
     final chatProvider = tester
