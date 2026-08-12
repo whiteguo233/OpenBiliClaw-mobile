@@ -73,6 +73,32 @@ class _SettingsViewState extends State<SettingsView> {
       );
   }
 
+  Future<void> _requestAutoSync(bool enabled) async {
+    if (enabled && !_autoSync) {
+      final confirmed = await showAdaptiveDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog.adaptive(
+          title: const Text('开启自动同步？'),
+          content: const Text(
+            '开启后，在 OpenBiliClaw 点击收藏或稍后再看，会修改对应平台账号中的收藏、书签、播放列表或稍后观看。',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('确认开启'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+    await _toggleAutoSync(enabled);
+  }
+
   @override
   void dispose() {
     _hostController.dispose();
@@ -136,279 +162,294 @@ class _SettingsViewState extends State<SettingsView> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('连接设置'),
-        centerTitle: true,
-        backgroundColor: AppColors.background,
+        centerTitle: theme.platform == TargetPlatform.iOS,
+        backgroundColor: context.appColors.background,
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: AppGradients.brandSoft(),
-              borderRadius: BorderRadius.circular(AppRadius.large),
-              border: Border.all(
-                color: AppColors.brand.withValues(alpha: 0.12),
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: AppColors.brandStrong,
-                    borderRadius: BorderRadius.circular(AppRadius.medium),
-                  ),
-                  child: const Icon(Icons.link, color: Colors.white, size: 20),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        '后端地址',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '设置 OpenBiliClaw 后端的 IP 和端口',
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          DropdownButtonFormField<String>(
-            initialValue: _scheme,
-            decoration: InputDecoration(
-              labelText: '协议',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              filled: true,
-              fillColor: Colors.white,
-              prefixIcon: const Icon(Icons.security_outlined),
-            ),
-            items: const [
-              DropdownMenuItem(value: 'http', child: Text('HTTP（局域网）')),
-              DropdownMenuItem(value: 'https', child: Text('HTTPS')),
-            ],
-            onChanged: (value) => setState(() => _scheme = value ?? 'http'),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _hostController,
-            decoration: InputDecoration(
-              labelText: '主机地址',
-              hintText: '例如 192.168.1.100',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              filled: true,
-              fillColor: Colors.white,
-              prefixIcon: const Icon(Icons.computer),
-            ),
-            keyboardType: TextInputType.url,
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _portController,
-            decoration: InputDecoration(
-              labelText: '端口',
-              hintText: '8420',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              filled: true,
-              fillColor: Colors.white,
-              prefixIcon: const Icon(Icons.numbers),
-            ),
-            keyboardType: TextInputType.number,
-          ),
-          const SizedBox(height: 24),
-          Row(
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
             children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _saving ? null : _save,
-                  icon: _saving
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.save, size: 20),
-                  label: Text(
-                    _saving ? '保存中…' : '保存',
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: AppGradients.brandSoft(context),
+                  borderRadius: BorderRadius.circular(AppRadius.large),
+                  border: Border.all(
+                    color: AppColors.brand.withValues(alpha: 0.12),
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.lavender,
-                    side: const BorderSide(color: AppColors.lavender),
-                  ),
-                  onPressed: _testing ? null : _testConnection,
-                  icon: _testing
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.wifi_find, size: 20),
-                  label: Text(
-                    _testing ? '测试中…' : '测试连接',
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (_testResult != null) ...[
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: _testOk == true
-                    ? const Color(0xFF30B980).withValues(alpha: 0.1)
-                    : const Color(0xFFEF7A86).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    _testOk == true ? Icons.check_circle : Icons.error,
-                    color: _testOk == true
-                        ? const Color(0xFF30B980)
-                        : const Color(0xFFEF7A86),
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _testResult!,
-                      style: TextStyle(
-                        color: _testOk == true
-                            ? const Color(0xFF30B980)
-                            : const Color(0xFFEF7A86),
-                        fontSize: 13,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppColors.brandStrong,
+                        borderRadius: BorderRadius.circular(AppRadius.medium),
+                      ),
+                      child: const Icon(
+                        Icons.link,
+                        color: Colors.white,
+                        size: 20,
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          const SizedBox(height: 32),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(AppRadius.large),
-              border: Border.all(color: AppColors.line),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '保存与同步',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            '保存时自动同步到对应平台',
-                            style: TextStyle(fontSize: 14),
+                            '后端地址',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                            ),
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '默认关闭。收藏和稍后再看始终先保存在本地；关闭时仍可在内容库手动同步。',
+                            '设置 OpenBiliClaw 后端的 IP 和端口',
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey[600],
+                              color: context.appColors.inkMuted,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    if (_autoSyncLoading)
-                      const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    else
-                      Switch(
-                        value: _autoSync,
-                        onChanged: _autoSyncSaving ? null : _toggleAutoSync,
-                      ),
                   ],
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(AppRadius.large),
-              border: Border.all(color: AppColors.line),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '使用说明',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
+              ),
+              const SizedBox(height: 24),
+              DropdownButtonFormField<String>(
+                initialValue: _scheme,
+                decoration: InputDecoration(
+                  labelText: '协议',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  filled: true,
+                  fillColor: context.appColors.surface,
+                  prefixIcon: const Icon(Icons.security_outlined),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'http', child: Text('HTTP（局域网）')),
+                  DropdownMenuItem(value: 'https', child: Text('HTTPS')),
+                ],
+                onChanged: (value) => setState(() => _scheme = value ?? 'http'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _hostController,
+                decoration: InputDecoration(
+                  labelText: '主机地址',
+                  hintText: '例如 192.168.1.100',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  filled: true,
+                  fillColor: context.appColors.surface,
+                  prefixIcon: const Icon(Icons.computer),
+                ),
+                keyboardType: TextInputType.url,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _portController,
+                decoration: InputDecoration(
+                  labelText: '端口',
+                  hintText: '8420',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  filled: true,
+                  fillColor: context.appColors.surface,
+                  prefixIcon: const Icon(Icons.numbers),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _saving ? null : _save,
+                      icon: _saving
+                          ? SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: theme.colorScheme.onPrimary,
+                              ),
+                            )
+                          : const Icon(Icons.save, size: 20),
+                      label: Text(
+                        _saving ? '保存中…' : '保存',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: theme.colorScheme.secondary,
+                        side: BorderSide(color: theme.colorScheme.secondary),
+                      ),
+                      onPressed: _testing ? null : _testConnection,
+                      icon: _testing
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.wifi_find, size: 20),
+                      label: Text(
+                        _testing ? '测试中…' : '测试连接',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (_testResult != null) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: _testOk == true
+                        ? context.appPositive.withValues(alpha: 0.1)
+                        : theme.colorScheme.error.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _testOk == true ? Icons.check_circle : Icons.error,
+                        color: _testOk == true
+                            ? context.appPositive
+                            : theme.colorScheme.error,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _testResult!,
+                          style: TextStyle(
+                            color: _testOk == true
+                                ? context.appPositive
+                                : theme.colorScheme.error,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  '• Web、iOS、macOS 默认连接 127.0.0.1:8420\n'
-                  '• Android 模拟器默认使用 10.0.2.2:8420\n'
-                  '• Android 真机请填电脑的局域网 IP 和端口\n'
-                  '• 有反向代理时可选择 HTTPS\n'
-                  '• 后端开启密码门禁时，应用会自动进入登录页\n'
-                  '• 保存后会立即按新地址重新连接',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey[600],
-                    height: 1.8,
-                  ),
-                ),
               ],
-            ),
+              const SizedBox(height: 32),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: context.appColors.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.large),
+                  border: Border.all(color: context.appColors.line),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '保存与同步',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                '保存时自动同步到对应平台',
+                                style: TextStyle(fontSize: 14),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '默认关闭。收藏和稍后再看始终先保存在本地；关闭时仍可在内容库手动同步。',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: context.appColors.inkMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (_autoSyncLoading)
+                          const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        else
+                          Switch.adaptive(
+                            value: _autoSync,
+                            onChanged: _autoSyncSaving
+                                ? null
+                                : _requestAutoSync,
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: context.appColors.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.large),
+                  border: Border.all(color: context.appColors.line),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '使用说明',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '• Web、iOS、macOS 默认连接 127.0.0.1:8420\n'
+                      '• Android 模拟器默认使用 10.0.2.2:8420\n'
+                      '• Android 真机请填电脑的局域网 IP 和端口\n'
+                      '• 有反向代理时可选择 HTTPS\n'
+                      '• 后端开启密码门禁时，应用会自动进入登录页\n'
+                      '• 保存后会立即按新地址重新连接',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: context.appColors.inkMuted,
+                        height: 1.8,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

@@ -169,35 +169,78 @@ String normalizeSourcePlatform(
     'bilibili': 'bilibili',
     'xhs': 'xiaohongshu',
     'xiaohongshu': 'xiaohongshu',
+    'rednote': 'xiaohongshu',
     'dy': 'douyin',
     'douyin': 'douyin',
+    'tiktok': 'douyin',
+    'wb': 'weibo',
+    'weibo': 'weibo',
     'yt': 'youtube',
     'youtube': 'youtube',
     'x': 'twitter',
     'twitter': 'twitter',
+    'zh': 'zhihu',
     'zhihu': 'zhihu',
+    'rd': 'reddit',
     'reddit': 'reddit',
+    'bgm': 'bangumi',
     'bangumi': 'bangumi',
+    'linuxdo': 'linuxdo',
+    'linux.do': 'linuxdo',
+    'v2': 'v2ex',
+    'v2ex': 'v2ex',
     'web': 'web',
   };
   if (aliases.containsKey(source)) return aliases[source]!;
-  final url = contentUrl.toLowerCase();
-  if (url.contains('bilibili.com') || url.contains('b23.tv')) {
+  if (source.isEmpty && bvid.contains(':')) {
+    final namespace = bvid.split(':').first.trim().toLowerCase();
+    if (aliases.containsKey(namespace)) return aliases[namespace]!;
+  }
+  final rawUrl = contentUrl.trim();
+  final parsedUrl = Uri.tryParse(
+    rawUrl.contains('://') ? rawUrl : 'https://$rawUrl',
+  );
+  final host = parsedUrl?.host.toLowerCase() ?? '';
+  bool hostMatches(String domain) =>
+      host == domain || host.endsWith('.$domain');
+  if (hostMatches('bilibili.com') || hostMatches('b23.tv')) {
     return 'bilibili';
   }
-  if (url.contains('xiaohongshu.com') || url.contains('xhslink.com')) {
+  if (hostMatches('xiaohongshu.com') || hostMatches('xhslink.com')) {
     return 'xiaohongshu';
   }
-  if (url.contains('douyin.com')) return 'douyin';
-  if (url.contains('youtube.com') || url.contains('youtu.be')) {
+  if (hostMatches('douyin.com')) return 'douyin';
+  if (hostMatches('weibo.com') || hostMatches('weibo.cn')) return 'weibo';
+  if (hostMatches('youtube.com') || hostMatches('youtu.be')) {
     return 'youtube';
   }
-  if (url.contains('x.com') || url.contains('twitter.com')) return 'twitter';
-  if (url.contains('zhihu.com')) return 'zhihu';
-  if (url.contains('reddit.com') || url.contains('redd.it')) return 'reddit';
-  if (url.contains('bgm.tv') || url.contains('bangumi.tv')) return 'bangumi';
+  if (hostMatches('x.com') || hostMatches('twitter.com')) return 'twitter';
+  if (hostMatches('zhihu.com')) return 'zhihu';
+  if (hostMatches('reddit.com') || hostMatches('redd.it')) return 'reddit';
+  if (hostMatches('bgm.tv') || hostMatches('bangumi.tv')) return 'bangumi';
+  if (hostMatches('linux.do')) return 'linuxdo';
+  if (hostMatches('v2ex.com')) return 'v2ex';
   if (bvid.isNotEmpty && !bvid.contains(':')) return 'bilibili';
   return source.isEmpty ? 'web' : source;
+}
+
+String sourcePlatformLabel(String source) {
+  final normalized = normalizeSourcePlatform(source);
+  return switch (normalized) {
+    'bilibili' => 'B站',
+    'xiaohongshu' => '小红书',
+    'douyin' => '抖音',
+    'weibo' => '微博',
+    'youtube' => 'YouTube',
+    'twitter' => 'X',
+    'zhihu' => '知乎',
+    'reddit' => 'Reddit',
+    'bangumi' => 'Bangumi',
+    'linuxdo' => 'Linux.do',
+    'v2ex' => 'V2EX',
+    'web' => '网页',
+    _ => normalized.trim().isEmpty ? '内容' : normalized.trim(),
+  };
 }
 
 String formatCount(int value) {

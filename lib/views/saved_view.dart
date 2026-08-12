@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/content_history.dart';
+import '../models/recommendation.dart';
 import '../models/saved_item.dart';
 import '../providers/saved_provider.dart';
 import '../services/content_launcher.dart';
@@ -34,21 +35,24 @@ class SavedView extends StatelessWidget {
                 margin: const EdgeInsets.fromLTRB(12, 0, 12, 6),
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: AppColors.surface.withValues(alpha: 0.88),
+                  color: context.appColors.surface.withValues(alpha: 0.88),
                   borderRadius: BorderRadius.circular(AppRadius.medium),
-                  border: Border.all(color: AppColors.line),
+                  border: Border.all(color: context.appColors.line),
                 ),
-                child: TabBar(
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  indicator: BoxDecoration(
-                    color: AppColors.brandSoft,
-                    borderRadius: BorderRadius.circular(10),
+                child: MediaQuery.withClampedTextScaling(
+                  maxScaleFactor: 1.25,
+                  child: TabBar(
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    indicator: BoxDecoration(
+                      color: context.appColors.brandSoft,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    tabs: const [
+                      Tab(text: '稍后再看'),
+                      Tab(text: '我的收藏'),
+                      Tab(text: '历史记录'),
+                    ],
                   ),
-                  tabs: const [
-                    Tab(text: '稍后再看'),
-                    Tab(text: '我的收藏'),
-                    Tab(text: '历史记录'),
-                  ],
                 ),
               ),
               Expanded(
@@ -90,8 +94,9 @@ class _SavedList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pendingCount = items.where((item) => item.canSync).length;
+    final accessibilityLayout = MediaQuery.textScalerOf(context).scale(1) > 1.3;
     if (provider.loading && items.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CircularProgressIndicator.adaptive());
     }
 
     return RefreshIndicator(
@@ -106,51 +111,48 @@ class _SavedList extends StatelessWidget {
               margin: const EdgeInsets.fromLTRB(12, 2, 12, 6),
               padding: const EdgeInsets.all(13),
               decoration: BoxDecoration(
-                color: AppColors.surface.withValues(alpha: 0.82),
+                color: context.appColors.surface.withValues(alpha: 0.82),
                 borderRadius: BorderRadius.circular(AppRadius.large),
-                border: Border.all(color: AppColors.line),
+                border: Border.all(color: context.appColors.line),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        '${items.length} 条本地内容',
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                      const Spacer(),
-                      FilledButton.tonalIcon(
-                        onPressed: pendingCount == 0 || provider.syncing
-                            ? null
-                            : () => _syncPending(context),
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size(44, 40),
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                  if (accessibilityLayout) ...[
+                    Text(
+                      '${items.length} 条本地内容',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: _syncButton(context, pendingCount),
+                    ),
+                  ] else
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${items.length} 条本地内容',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
                         ),
-                        icon: provider.syncing
-                            ? const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.sync, size: 17),
-                        label: Text('同步 $pendingCount 条'),
-                      ),
-                    ],
-                  ),
+                        const SizedBox(width: 8),
+                        _syncButton(context, pendingCount),
+                      ],
+                    ),
                   const SizedBox(height: 5),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Padding(
-                        padding: EdgeInsets.only(top: 1),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 1),
                         child: Icon(
                           Icons.verified_user_outlined,
                           size: 14,
-                          color: AppColors.inkMuted,
+                          color: context.appColors.inkMuted,
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -183,16 +185,43 @@ class _SavedList extends StatelessWidget {
     );
   }
 
+  Widget _syncButton(BuildContext context, int pendingCount) {
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.4,
+      child: FilledButton.tonalIcon(
+        onPressed: pendingCount == 0 || provider.syncing
+            ? null
+            : () => _syncPending(context),
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(44, 40),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+        ),
+        icon: provider.syncing
+            ? const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.sync, size: 17),
+        label: Text('同步 $pendingCount 条'),
+      ),
+    );
+  }
+
   Widget _empty(BuildContext context) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.bookmark_border, size: 48, color: Colors.grey[300]),
+          Icon(
+            Icons.bookmark_border,
+            size: 48,
+            color: context.appColors.lineStrong,
+          ),
           const SizedBox(height: 10),
           Text(
             kind == SavedListKind.watchLater ? '还没有稍后再看的内容' : '还没有收藏的内容',
-            style: TextStyle(color: Colors.grey[500], fontSize: 14),
+            style: TextStyle(color: context.appColors.inkMuted, fontSize: 14),
           ),
         ],
       ),
@@ -201,6 +230,7 @@ class _SavedList extends StatelessWidget {
 
   Widget _itemCard(BuildContext context, SavedItem item) {
     final theme = Theme.of(context);
+    final accessibilityLayout = MediaQuery.textScalerOf(context).scale(1) > 1.3;
     return Card(
       margin: const EdgeInsets.fromLTRB(12, 6, 12, 6),
       clipBehavior: Clip.antiAlias,
@@ -212,17 +242,19 @@ class _SavedList extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(
-                width: 104,
-                height: 78,
-                child: CoverImage(
-                  url: item.coverUrl,
+              if (!accessibilityLayout) ...[
+                SizedBox(
                   width: 104,
                   height: 78,
-                  borderRadius: 12,
+                  child: CoverImage(
+                    url: item.coverUrl,
+                    width: 104,
+                    height: 78,
+                    borderRadius: 12,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
+                const SizedBox(width: 12),
+              ],
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -239,7 +271,7 @@ class _SavedList extends StatelessWidget {
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        _sourceChip(item.sourcePlatform),
+                        _sourceChip(context, item.sourcePlatform),
                         if (item.authorName.isNotEmpty) ...[
                           const SizedBox(width: 6),
                           Expanded(
@@ -255,10 +287,12 @@ class _SavedList extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 5),
-                    Row(
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        _syncChip(item),
-                        const Spacer(),
+                        _syncChip(context, item),
                         if (item.canSync)
                           IconButton(
                             tooltip: '同步到平台',
@@ -275,26 +309,29 @@ class _SavedList extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 2),
-                    Row(
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         _feedbackChip(
+                          context,
                           Icons.thumb_up_outlined,
                           '喜欢',
                           () => _feedback(context, item, 'like'),
                         ),
-                        const SizedBox(width: 6),
                         _feedbackChip(
+                          context,
                           Icons.thumb_down_outlined,
                           '不感兴趣',
                           () => _feedback(context, item, 'dislike'),
                         ),
-                        const SizedBox(width: 6),
                         _feedbackChip(
+                          context,
                           Icons.chat_bubble_outline_rounded,
                           '聊一聊',
                           () => _comment(context, item),
                         ),
-                        const Spacer(),
                         _crossToggle(context, item),
                       ],
                     ),
@@ -317,21 +354,26 @@ class _SavedList extends StatelessWidget {
     );
   }
 
-  Widget _feedbackChip(IconData icon, String label, VoidCallback onTap) {
+  Widget _feedbackChip(
+    BuildContext context,
+    IconData icon,
+    String label,
+    VoidCallback onTap,
+  ) {
     return InkWell(
       borderRadius: BorderRadius.circular(8),
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: AppColors.surface.withValues(alpha: 0.6),
+          color: context.appColors.surface.withValues(alpha: 0.6),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.line),
+          border: Border.all(color: context.appColors.line),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: AppColors.ink),
+            Icon(icon, size: 14, color: context.appColors.ink),
             const SizedBox(width: 3),
             Text(label, style: const TextStyle(fontSize: 11)),
           ],
@@ -357,7 +399,9 @@ class _SavedList extends StatelessWidget {
         icon: Icon(
           icon,
           size: 19,
-          color: active ? AppColors.brandStrong : AppColors.ink,
+          color: active
+              ? Theme.of(context).colorScheme.primary
+              : context.appColors.ink,
         ),
       ),
     );
@@ -452,34 +496,24 @@ class _SavedList extends StatelessWidget {
     }
   }
 
-  Widget _sourceChip(String source) {
-    final label = switch (source) {
-      'bilibili' => 'B站',
-      'xiaohongshu' => '小红书',
-      'douyin' => '抖音',
-      'youtube' => 'YouTube',
-      'twitter' => 'X',
-      'zhihu' => '知乎',
-      'reddit' => 'Reddit',
-      'bangumi' => 'Bangumi',
-      _ => source,
-    };
+  Widget _sourceChip(BuildContext context, String source) {
+    final label = sourcePlatformLabel(source);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
       decoration: BoxDecoration(
-        color: const Color(0xFF5AA9FF).withValues(alpha: 0.1),
+        color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(5),
       ),
       child: Text(label, style: const TextStyle(fontSize: 9)),
     );
   }
 
-  Widget _syncChip(SavedItem item) {
+  Widget _syncChip(BuildContext context, SavedItem item) {
     final color = item.synced
-        ? const Color(0xFF30B980)
+        ? context.appPositive
         : item.errorMessage.isNotEmpty
-        ? const Color(0xFFEF7A86)
-        : const Color(0xFF5AA9FF);
+        ? Theme.of(context).colorScheme.error
+        : Theme.of(context).colorScheme.secondary;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
@@ -495,12 +529,15 @@ class _SavedList extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.red.withValues(alpha: 0.08),
+        color: Theme.of(context).colorScheme.error.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         error,
-        style: const TextStyle(fontSize: 12, color: Colors.red),
+        style: TextStyle(
+          fontSize: 12,
+          color: Theme.of(context).colorScheme.error,
+        ),
       ),
     );
   }
@@ -525,9 +562,9 @@ class _SavedList extends StatelessWidget {
   }
 
   Future<void> _confirmRemove(BuildContext context, SavedItem item) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAdaptiveDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => AlertDialog.adaptive(
         title: const Text('从本地移除？'),
         content: Text(
           '${item.title.isNotEmpty ? item.title : '这条内容'}\n\n不会删除平台账号里已有的稍后再看或收藏。',
@@ -679,20 +716,23 @@ class _HistoryHeader extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(12, 2, 12, 4),
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: AppColors.surface.withValues(alpha: 0.82),
+        color: context.appColors.surface.withValues(alpha: 0.82),
         borderRadius: BorderRadius.circular(AppRadius.large),
-        border: Border.all(color: AppColors.line),
+        border: Border.all(color: context.appColors.line),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text(
-                total > 0 ? '$total 条近 30 天记录' : '近 30 天记录',
-                style: Theme.of(context).textTheme.titleSmall,
+              Expanded(
+                child: Text(
+                  total > 0 ? '$total 条近 30 天记录' : '近 30 天记录',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
               ),
-              const Spacer(),
               if (provider.historyBusy)
                 const SizedBox(
                   width: 14,
@@ -712,12 +752,17 @@ class _HistoryHeader extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.08),
+                color: Theme.of(
+                  context,
+                ).colorScheme.error.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
                 provider.error,
-                style: const TextStyle(fontSize: 12, color: Colors.red),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.error,
+                ),
               ),
             ),
           ],
@@ -743,7 +788,7 @@ class _HistorySectionHeader extends StatelessWidget {
           Text(
             spec.eyebrow.toUpperCase(),
             style: theme.textTheme.labelSmall?.copyWith(
-              color: AppColors.brandStrong,
+              color: theme.colorScheme.primary,
               fontWeight: FontWeight.w800,
               letterSpacing: 0.6,
             ),
@@ -779,7 +824,7 @@ class _HistorySectionBody extends StatelessWidget {
           return const SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.all(20),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: CircularProgressIndicator.adaptive()),
             ),
           );
         }
@@ -795,7 +840,10 @@ class _HistorySectionBody extends StatelessWidget {
               child: Center(
                 child: Text(
                   provider.historyLoadedOnce ? '还没有记录' : '正在整理这段历史…',
-                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  style: TextStyle(
+                    color: context.appColors.inkMuted,
+                    fontSize: 13,
+                  ),
                 ),
               ),
             ),
@@ -829,12 +877,16 @@ class _HistorySectionBody extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(12, 6, 12, 6),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.red.withValues(alpha: 0.08),
+        color: Theme.of(context).colorScheme.error.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, color: Colors.red, size: 17),
+          Icon(
+            Icons.error_outline,
+            color: Theme.of(context).colorScheme.error,
+            size: 17,
+          ),
           const SizedBox(width: 8),
           Expanded(child: Text(error, style: const TextStyle(fontSize: 12))),
           TextButton(
@@ -886,6 +938,7 @@ class _HistoryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isRemoved = spec.category == ContentHistoryCategory.removed;
+    final accessibilityLayout = MediaQuery.textScalerOf(context).scale(1) > 1.3;
     final contextEntries = item.contexts.isEmpty && item.context.isNotEmpty
         ? [
             ContentHistoryContext(
@@ -909,17 +962,19 @@ class _HistoryCard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(
-                    width: 96,
-                    height: 72,
-                    child: CoverImage(
-                      url: item.coverUrl,
+                  if (!accessibilityLayout) ...[
+                    SizedBox(
                       width: 96,
                       height: 72,
-                      borderRadius: 12,
+                      child: CoverImage(
+                        url: item.coverUrl,
+                        width: 96,
+                        height: 72,
+                        borderRadius: 12,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
+                    const SizedBox(width: 12),
+                  ],
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -936,7 +991,7 @@ class _HistoryCard extends StatelessWidget {
                         const SizedBox(height: 6),
                         Row(
                           children: [
-                            _sourceChip(item.sourcePlatform),
+                            _sourceChip(context, item.sourcePlatform),
                             if (item.authorName.isNotEmpty) ...[
                               const SizedBox(width: 6),
                               Expanded(
@@ -952,15 +1007,17 @@ class _HistoryCard extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 5),
-                        Row(
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             _eventChip(
                               item.eventLabelFor(spec.category),
                               isRemoved
-                                  ? const Color(0xFFEF7A86)
-                                  : const Color(0xFF5AA9FF),
+                                  ? theme.colorScheme.error
+                                  : theme.colorScheme.secondary,
                             ),
-                            const Spacer(),
                             Text(
                               _formatTime(item.occurredAt),
                               style: theme.textTheme.labelSmall?.copyWith(
@@ -1012,22 +1069,12 @@ class _HistoryCard extends StatelessWidget {
     );
   }
 
-  Widget _sourceChip(String source) {
-    final label = switch (source) {
-      'bilibili' => 'B站',
-      'xiaohongshu' => '小红书',
-      'douyin' => '抖音',
-      'youtube' => 'YouTube',
-      'twitter' => 'X',
-      'zhihu' => '知乎',
-      'reddit' => 'Reddit',
-      'bangumi' => 'Bangumi',
-      _ => source,
-    };
+  Widget _sourceChip(BuildContext context, String source) {
+    final label = sourcePlatformLabel(source);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
       decoration: BoxDecoration(
-        color: const Color(0xFF5AA9FF).withValues(alpha: 0.1),
+        color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(5),
       ),
       child: Text(label, style: const TextStyle(fontSize: 9)),

@@ -61,7 +61,7 @@ class _RecommendViewState extends State<RecommendView> {
                           context,
                           rp.error,
                           Icons.error_outline,
-                          Colors.red,
+                          Theme.of(context).colorScheme.error,
                         ),
                       )
                     else if (!rp.online && !rp.loading)
@@ -70,7 +70,7 @@ class _RecommendViewState extends State<RecommendView> {
                           context,
                           '无法连接后端，下拉可重试',
                           Icons.wifi_off,
-                          Colors.orange,
+                          Theme.of(context).colorScheme.tertiary,
                         ),
                       ),
                     if (rp.activityFeed.headline.isNotEmpty ||
@@ -82,7 +82,9 @@ class _RecommendViewState extends State<RecommendView> {
                       ),
                     if (rp.loading && rp.recommendations.isEmpty)
                       const SliverFillRemaining(
-                        child: Center(child: CircularProgressIndicator()),
+                        child: Center(
+                          child: CircularProgressIndicator.adaptive(),
+                        ),
                       )
                     else if (rp.recommendations.isEmpty)
                       SliverFillRemaining(
@@ -183,113 +185,186 @@ class _RecommendViewState extends State<RecommendView> {
         : status.poolAvailableCount > 0
         ? '阿B 已经备好 ${status.poolAvailableCount} 条内容，慢慢挑。'
         : '阿B 这会儿先替你盯着。';
-    final runtimeSummary = [
-      '${status.poolAvailableCount} 条可换',
-      if (status.poolPendingCount > 0) '${status.poolPendingCount} 条整理中',
-      if (status.lastReplenishedCount > 0)
-        '刚补 ${status.lastReplenishedCount} 条',
-    ].join(' · ');
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
-        color: AppColors.surface.withValues(alpha: 0.94),
-        borderRadius: BorderRadius.circular(AppRadius.hero),
-        border: Border.all(color: AppColors.line),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.lavender.withValues(alpha: 0.06),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        color: context.appColors.surface.withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(AppRadius.large),
+        border: Border.all(color: context.appColors.line),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [AppColors.brand, AppColors.lavender],
-                  ),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: const Text(
-                  'For You',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                  ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [AppColors.brand, AppColors.sky],
+                        ),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const Text(
+                        'For You',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Text(
+                      '这几条，你大概会点开',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ],
                 ),
               ),
-              const Spacer(),
-              FilledButton.tonalIcon(
+              const SizedBox(width: 10),
+              FilledButton.tonal(
                 onPressed: rp.reshuffling ? null : rp.reshuffle,
                 style: FilledButton.styleFrom(
-                  minimumSize: const Size(92, 44),
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  backgroundColor: AppColors.brandSoft,
-                  foregroundColor: AppColors.brandStrong,
+                  minimumSize: const Size(80, 44),
+                  padding: const EdgeInsets.symmetric(horizontal: 13),
+                  backgroundColor: context.appColors.surface,
+                  foregroundColor: context.appColors.ink,
+                  side: BorderSide(color: context.appColors.line),
                 ),
-                icon: rp.reshuffling
+                child: rp.reshuffling
                     ? const SizedBox(
-                        width: 14,
-                        height: 14,
+                        width: 16,
+                        height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.shuffle_rounded, size: 18),
-                label: const Text('换一批'),
+                    : const Text(
+                        '换一批',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _poolChip(
+                  context,
+                  label: '当前可换',
+                  value: '${status.poolAvailableCount} 条',
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _poolChip(
+                  context,
+                  label: '最近补进',
+                  value: status.lastReplenishedCount > 0
+                      ? '补进 ${status.lastReplenishedCount} 条'
+                      : '还在整理',
+                  brand: true,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _poolChip(
+                  context,
+                  label: '现在在忙',
+                  value: status.topicSummary.isNotEmpty
+                      ? status.topicSummary
+                      : status.busy
+                      ? '整理候选'
+                      : '等你来挑',
+                  info: true,
+                ),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          Text('这几条，你大概会点开', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 12),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
-              color: AppColors.lavenderSoft.withValues(alpha: 0.64),
-              borderRadius: BorderRadius.circular(AppRadius.medium),
+              color: context.appColors.lavenderSoft.withValues(alpha: 0.62),
+              borderRadius: BorderRadius.circular(AppRadius.small),
+              border: Border.all(color: AppColors.sky.withValues(alpha: 0.15)),
             ),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.auto_awesome_rounded,
-                  size: 16,
-                  color: AppColors.lavender,
+                  size: 14,
+                  color: AppColors.sky,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 7),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        summary,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodySmall?.copyWith(color: AppColors.ink),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        runtimeSummary,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AppColors.lavender,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    summary,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _poolChip(
+    BuildContext context, {
+    required String label,
+    required String value,
+    bool brand = false,
+    bool info = false,
+  }) {
+    final tint = info
+        ? AppColors.sky
+        : brand
+        ? AppColors.brand
+        : context.appColors.inkMuted;
+    return Container(
+      height: 42,
+      padding: const EdgeInsets.symmetric(horizontal: 9),
+      decoration: BoxDecoration(
+        color: tint.withValues(alpha: 0.055),
+        borderRadius: BorderRadius.circular(AppRadius.small),
+        border: Border.all(color: tint.withValues(alpha: 0.16)),
+      ),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Expanded(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: context.appColors.ink,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -302,44 +377,23 @@ class _RecommendViewState extends State<RecommendView> {
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       decoration: BoxDecoration(
-        color: AppColors.surface.withValues(alpha: 0.82),
-        borderRadius: BorderRadius.circular(AppRadius.large),
-        border: Border.all(color: AppColors.line),
+        color: context.appColors.surface.withValues(alpha: 0.82),
+        borderRadius: BorderRadius.circular(AppRadius.medium),
+        border: Border.all(color: context.appColors.line),
       ),
       child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+        minTileHeight: 46,
+        tilePadding: const EdgeInsets.symmetric(horizontal: 12),
         childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-        leading: Container(
-          width: 36,
-          height: 36,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AppColors.success.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(
-            Icons.bolt_rounded,
-            size: 20,
-            color: AppColors.success,
-          ),
-        ),
         title: Text(
           feed.headline.isNotEmpty ? feed.headline : feed.liveSummary,
-          maxLines: 2,
+          maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: AppColors.ink,
+            color: context.appColors.ink,
             fontWeight: FontWeight.w600,
           ),
         ),
-        subtitle: feed.headline.isNotEmpty && feed.liveSummary.isNotEmpty
-            ? Text(
-                feed.liveSummary,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelSmall,
-              )
-            : null,
         children: feed.items
             .take(5)
             .map(
@@ -444,11 +498,15 @@ class _RecommendViewState extends State<RecommendView> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.inbox_outlined, size: 48, color: Colors.grey[300]),
+          Icon(
+            Icons.inbox_outlined,
+            size: 48,
+            color: context.appColors.lineStrong,
+          ),
           const SizedBox(height: 8),
           Text(
             rp.online ? '推荐池暂时为空' : '后端暂时不可达',
-            style: TextStyle(color: Colors.grey[500], fontSize: 14),
+            style: TextStyle(color: context.appColors.inkMuted, fontSize: 14),
           ),
           const SizedBox(height: 8),
           FilledButton.tonal(onPressed: rp.load, child: const Text('重新加载')),

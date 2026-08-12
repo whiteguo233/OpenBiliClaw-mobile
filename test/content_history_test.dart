@@ -68,6 +68,17 @@ void main() {
     expect(item.eventLabelFor(ContentHistoryCategory.removed), '从稍后再看移除');
   });
 
+  test('normalizes current source aliases in history payloads', () {
+    final item = ContentHistoryItem.fromJson({
+      'item_key': 'v2:123',
+      'source_platform': 'v2',
+      'content_id': '123',
+      'content_url': 'https://www.v2ex.com/t/123',
+    });
+
+    expect(item.sourcePlatform, 'v2ex');
+  });
+
   test('removal labels cover every context', () {
     final item = ContentHistoryItem.fromJson({
       'item_key': 'bilibili:BV1',

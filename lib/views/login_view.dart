@@ -27,7 +27,7 @@ class _LoginViewState extends State<LoginView> {
     final theme = Theme.of(context);
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(gradient: AppGradients.background),
+        decoration: BoxDecoration(gradient: AppGradients.background(context)),
         child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
@@ -37,9 +37,9 @@ class _LoginViewState extends State<LoginView> {
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
                   decoration: BoxDecoration(
-                    color: AppColors.surface.withValues(alpha: 0.94),
+                    color: context.appColors.surface.withValues(alpha: 0.94),
                     borderRadius: BorderRadius.circular(AppRadius.hero),
-                    border: Border.all(color: AppColors.line),
+                    border: Border.all(color: context.appColors.line),
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -73,8 +73,8 @@ class _LoginViewState extends State<LoginView> {
                           padding: const EdgeInsets.only(bottom: 16),
                           child: Text(
                             _error!,
-                            style: const TextStyle(
-                              color: AppColors.danger,
+                            style: TextStyle(
+                              color: theme.colorScheme.error,
                               fontSize: 13,
                             ),
                           ),
@@ -84,12 +84,12 @@ class _LoginViewState extends State<LoginView> {
                         child: FilledButton(
                           onPressed: _submitting ? null : _login,
                           child: _submitting
-                              ? const SizedBox(
+                              ? SizedBox(
                                   width: 20,
                                   height: 20,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    color: Colors.white,
+                                    color: theme.colorScheme.onPrimary,
                                   ),
                                 )
                               : const Text('登录'),

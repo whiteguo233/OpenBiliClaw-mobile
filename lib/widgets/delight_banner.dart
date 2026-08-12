@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/delight.dart';
+import '../models/recommendation.dart';
 import '../theme/app_theme.dart';
 import 'cover_image.dart';
 
@@ -36,70 +37,71 @@ class DelightBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final accessibilityLayout = MediaQuery.textScalerOf(context).scale(1) > 1.3;
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 2, 12, 8),
       decoration: BoxDecoration(
-        gradient: AppGradients.brandSoft(),
-        borderRadius: BorderRadius.circular(AppRadius.hero),
-        border: Border.all(color: AppColors.brand.withValues(alpha: 0.14)),
+        gradient: AppGradients.brandSoft(context),
+        borderRadius: BorderRadius.circular(AppRadius.medium),
+        border: Border.all(color: AppColors.brand.withValues(alpha: 0.26)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 10, 0),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: AppColors.surface.withValues(alpha: 0.82),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.auto_awesome_rounded,
-                    size: 19,
-                    color: AppColors.brandStrong,
-                  ),
-                ),
-                const SizedBox(width: 9),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
                   children: [
-                    Text(
-                      '惊喜推荐',
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: AppColors.brandStrong,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [AppColors.brand, AppColors.sky],
+                        ),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const Text(
+                        '惊喜推荐',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
-                    Text(
-                      _sourceLabel(delight.sourcePlatform),
-                      style: theme.textTheme.labelSmall,
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        delight.hook.isNotEmpty
+                            ? delight.hook
+                            : sourcePlatformLabel(delight.sourcePlatform),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
+                    if (totalCount > 1 && !accessibilityLayout)
+                      _pagination(context),
+                    if (onDismiss != null && !accessibilityLayout)
+                      IconButton(
+                        tooltip: '忽略',
+                        icon: const Icon(Icons.close_rounded, size: 19),
+                        onPressed: onDismiss,
+                      ),
                   ],
                 ),
-                const Spacer(),
-                if (totalCount > 1)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        tooltip: '上一条惊喜推荐',
-                        onPressed: onPrev,
-                        icon: const Icon(Icons.chevron_left_rounded, size: 20),
-                      ),
-                      Text(
-                        '${currentIndex + 1}/$totalCount',
-                        style: theme.textTheme.labelMedium,
-                      ),
-                      IconButton(
-                        tooltip: '下一条惊喜推荐',
-                        onPressed: onNext,
-                        icon: const Icon(Icons.chevron_right_rounded, size: 20),
-                      ),
-                    ],
+                if (totalCount > 1 && accessibilityLayout)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: _pagination(context),
                   ),
               ],
             ),
@@ -158,7 +160,7 @@ class DelightBanner extends StatelessWidget {
                         Text(
                           delight.hook,
                           style: theme.textTheme.labelSmall?.copyWith(
-                            color: AppColors.brandStrong,
+                            color: theme.colorScheme.primary,
                             fontWeight: FontWeight.w700,
                           ),
                           maxLines: 2,
@@ -173,55 +175,185 @@ class DelightBanner extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 0, 10, 12),
-            child: Wrap(
-              alignment: WrapAlignment.start,
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _actionChip(
-                  '去看看',
-                  Icons.open_in_new_rounded,
-                  () => onView?.call(),
-                  primary: true,
-                ),
-                _actionChip(
-                  delight.state == 'liked' ? '已喜欢' : '喜欢',
-                  delight.state == 'liked'
-                      ? Icons.thumb_up_rounded
-                      : Icons.thumb_up_outlined,
-                  delight.state == 'liked' ? null : () => onLike?.call(),
-                ),
-                if (onWatchLater != null)
-                  _actionChip(
-                    '稍后再看',
-                    Icons.bookmark_border_rounded,
-                    () => onWatchLater?.call(),
+            child: accessibilityLayout
+                ? Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _actionChip(
+                        context,
+                        '去看看',
+                        Icons.open_in_new_rounded,
+                        onView,
+                        primary: true,
+                      ),
+                      _actionChip(
+                        context,
+                        delight.state == 'liked' ? '已喜欢' : '喜欢',
+                        Icons.thumb_up_outlined,
+                        delight.state == 'liked' ? null : onLike,
+                      ),
+                      if (onWatchLater != null)
+                        _actionChip(
+                          context,
+                          '稍后再看',
+                          Icons.schedule_rounded,
+                          onWatchLater,
+                        ),
+                      if (onFavorite != null)
+                        _actionChip(
+                          context,
+                          '收藏',
+                          Icons.star_border_rounded,
+                          onFavorite,
+                        ),
+                      _actionChip(
+                        context,
+                        '不感兴趣',
+                        Icons.thumb_down_outlined,
+                        onDislike,
+                      ),
+                      if (onChat != null)
+                        _actionChip(
+                          context,
+                          '聊一聊',
+                          Icons.chat_bubble_outline_rounded,
+                          onChat,
+                        ),
+                      IconButton(
+                        tooltip: '忽略',
+                        icon: const Icon(Icons.close_rounded, size: 20),
+                        onPressed: onDismiss,
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: _compactAction(
+                          context,
+                          label: '看看',
+                          onTap: onView,
+                          primary: true,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: _compactAction(
+                          context,
+                          label: delight.state == 'liked' ? '已喜欢' : '喜欢',
+                          onTap: delight.state == 'liked' ? null : onLike,
+                        ),
+                      ),
+                      if (onWatchLater != null) ...[
+                        const SizedBox(width: 6),
+                        _compactAction(
+                          context,
+                          label: '稍后再看',
+                          icon: Icons.schedule_rounded,
+                          onTap: onWatchLater,
+                        ),
+                      ],
+                      if (onFavorite != null) ...[
+                        const SizedBox(width: 6),
+                        _compactAction(
+                          context,
+                          label: '收藏',
+                          icon: Icons.star_border_rounded,
+                          onTap: onFavorite,
+                        ),
+                      ],
+                      const SizedBox(width: 6),
+                      Expanded(
+                        flex: 2,
+                        child: _compactAction(
+                          context,
+                          label: '不感兴趣',
+                          onTap: onDislike,
+                        ),
+                      ),
+                      if (onChat != null) ...[
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: _compactAction(
+                            context,
+                            label: '聊一聊',
+                            onTap: onChat,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                if (onFavorite != null)
-                  _actionChip(
-                    '收藏',
-                    Icons.star_border_rounded,
-                    () => onFavorite?.call(),
-                  ),
-                _actionChip(
-                  '不感兴趣',
-                  Icons.thumb_down_outlined,
-                  () => onDislike?.call(),
-                ),
-                if (onChat != null)
-                  _actionChip(
-                    '聊一聊',
-                    Icons.chat_bubble_outline_rounded,
-                    () => onChat?.call(),
-                  ),
-                IconButton(
-                  tooltip: '忽略',
-                  icon: const Icon(Icons.close_rounded, size: 20),
-                  onPressed: onDismiss,
-                  color: AppColors.inkMuted,
-                ),
-              ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _compactAction(
+    BuildContext context, {
+    required String label,
+    required VoidCallback? onTap,
+    IconData? icon,
+    bool primary = false,
+  }) {
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        button: true,
+        label: label,
+        child: Material(
+          color: primary
+              ? AppColors.brandStrong
+              : context.appColors.surface.withValues(alpha: 0.9),
+          borderRadius: BorderRadius.circular(AppRadius.small),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: SizedBox(
+              width: icon == null ? null : 44,
+              height: 44,
+              child: Center(
+                child: icon == null
+                    ? Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.fade,
+                        softWrap: false,
+                        style: TextStyle(
+                          color: primary ? Colors.white : context.appColors.ink,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      )
+                    : Icon(icon, size: 19, color: context.appColors.ink),
+              ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _pagination(BuildContext context) {
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.3,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: '上一条惊喜推荐',
+            onPressed: onPrev,
+            icon: const Icon(Icons.chevron_left_rounded, size: 20),
+          ),
+          Text(
+            '${currentIndex + 1}/$totalCount',
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
+          IconButton(
+            tooltip: '下一条惊喜推荐',
+            onPressed: onNext,
+            icon: const Icon(Icons.chevron_right_rounded, size: 20),
           ),
         ],
       ),
@@ -229,6 +361,7 @@ class DelightBanner extends StatelessWidget {
   }
 
   Widget _actionChip(
+    BuildContext context,
     String label,
     IconData icon,
     VoidCallback? onTap, {
@@ -238,8 +371,8 @@ class DelightBanner extends StatelessWidget {
       return FilledButton.tonalIcon(
         onPressed: onTap,
         style: FilledButton.styleFrom(
-          backgroundColor: AppColors.surface.withValues(alpha: 0.88),
-          foregroundColor: AppColors.brandStrong,
+          backgroundColor: context.appColors.surface.withValues(alpha: 0.88),
+          foregroundColor: Theme.of(context).colorScheme.primary,
         ),
         icon: Icon(icon, size: 17),
         label: Text(label),
@@ -248,24 +381,10 @@ class DelightBanner extends StatelessWidget {
     return OutlinedButton.icon(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
-        backgroundColor: AppColors.surface.withValues(alpha: 0.72),
+        backgroundColor: context.appColors.surface.withValues(alpha: 0.72),
       ),
       icon: Icon(icon, size: 16),
       label: Text(label),
     );
-  }
-
-  String _sourceLabel(String source) {
-    return switch (source.toLowerCase()) {
-      'bilibili' => 'B站',
-      'xiaohongshu' => '小红书',
-      'douyin' => '抖音',
-      'youtube' => 'YouTube',
-      'twitter' => 'X',
-      'zhihu' => '知乎',
-      'reddit' => 'Reddit',
-      'bangumi' => 'Bangumi',
-      _ => source.isEmpty ? '内容' : source,
-    };
   }
 }

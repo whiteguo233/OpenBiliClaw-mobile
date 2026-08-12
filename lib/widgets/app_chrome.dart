@@ -17,7 +17,7 @@ class AppBrandMark extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFFFF7BA1), AppColors.brandStrong],
+          colors: [Color(0xFFCE3E6B), AppColors.brandStrong],
         ),
         borderRadius: BorderRadius.circular(size * 0.3),
         boxShadow: [
@@ -52,13 +52,14 @@ class AppPageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final palette = context.appColors;
     return Container(
       margin: margin,
       padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
       decoration: BoxDecoration(
-        color: AppColors.surface.withValues(alpha: 0.9),
+        color: palette.surface.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(AppRadius.large),
-        border: Border.all(color: AppColors.line),
+        border: Border.all(color: palette.line),
       ),
       child: Row(
         children: [
@@ -67,10 +68,14 @@ class AppPageHeader extends StatelessWidget {
             height: 42,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              gradient: AppGradients.brandSoft(),
+              gradient: AppGradients.brandSoft(context),
               borderRadius: BorderRadius.circular(AppRadius.medium),
             ),
-            child: Icon(icon, size: 22, color: AppColors.brandStrong),
+            child: Icon(
+              icon,
+              size: 22,
+              color: Theme.of(context).colorScheme.primary,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -103,37 +108,33 @@ class AppStatusDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = online ? AppColors.success : AppColors.inkMuted;
+    final color = online ? AppColors.successBright : context.appColors.inkMuted;
     return Semantics(
       label: online ? '后端在线' : '后端离线',
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: showLabel ? 9 : 6,
-          vertical: 6,
-        ),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 7,
-              height: 7,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            ),
-            if (showLabel) ...[
-              const SizedBox(width: 6),
-              Text(
-                online ? '在线' : '离线',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w700,
-                ),
+      child: SizedBox(
+        height: 44,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
               ),
+              if (showLabel) ...[
+                const SizedBox(width: 8),
+                Text(
+                  online ? '在线' : '离线',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: context.appColors.inkMuted,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

@@ -14,15 +14,6 @@ import 'views/home_view.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
-      systemNavigationBarColor: AppColors.surface,
-      systemNavigationBarIconBrightness: Brightness.dark,
-      systemNavigationBarDividerColor: AppColors.surface,
-    ),
-  );
   runApp(const OpenBiliClawApp());
 }
 
@@ -46,6 +37,29 @@ class OpenBiliClawApp extends StatelessWidget {
         title: 'OpenBiliClaw',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
+        themeMode: ThemeMode.system,
+        builder: (context, child) {
+          final palette = context.appColors;
+          final brightness = Theme.of(context).brightness;
+          final dark = brightness == Brightness.dark;
+          return AnnotatedRegion<SystemUiOverlayStyle>(
+            value: SystemUiOverlayStyle(
+              statusBarColor: Colors.transparent,
+              statusBarIconBrightness: dark
+                  ? Brightness.light
+                  : Brightness.dark,
+              statusBarBrightness: brightness,
+              systemNavigationBarColor: palette.surface,
+              systemNavigationBarIconBrightness: dark
+                  ? Brightness.light
+                  : Brightness.dark,
+              systemNavigationBarDividerColor: palette.surface,
+              systemNavigationBarContrastEnforced: false,
+            ),
+            child: child ?? const SizedBox.shrink(),
+          );
+        },
         home: const AppEntry(),
       ),
     );
@@ -81,13 +95,15 @@ class _AppEntryState extends State<AppEntry> {
   @override
   Widget build(BuildContext context) {
     if (!_ready) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator.adaptive()),
+      );
     }
     return Consumer<AuthProvider>(
       builder: (context, auth, _) {
         if (auth.loading) {
           return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+            body: Center(child: CircularProgressIndicator.adaptive()),
           );
         }
         if (auth.needsLogin) return const LoginView();

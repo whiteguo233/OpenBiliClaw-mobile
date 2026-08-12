@@ -1,4 +1,5 @@
 import '../api/utils.dart';
+import 'recommendation.dart';
 
 /// One bounded content-history category. Mirrors the backend
 /// `ContentHistoryCategory` literal: `clicked` / `shown` / `removed`.
@@ -92,6 +93,13 @@ class ContentHistoryItem {
   });
 
   factory ContentHistoryItem.fromJson(Map<String, dynamic> json) {
+    final itemKey = _text(json['item_key']);
+    final contentUrl = _text(json['content_url']);
+    final source = normalizeSourcePlatform(
+      _text(json['source_platform']),
+      contentUrl: contentUrl,
+      bvid: itemKey,
+    );
     final rawContexts = json['contexts'];
     final contexts = rawContexts is List
         ? rawContexts
@@ -104,12 +112,10 @@ class ContentHistoryItem {
               .toList()
         : <ContentHistoryContext>[];
     return ContentHistoryItem(
-      itemKey: _text(json['item_key']),
-      sourcePlatform: _text(json['source_platform']).isNotEmpty
-          ? _text(json['source_platform'])
-          : 'bilibili',
+      itemKey: itemKey,
+      sourcePlatform: source,
       contentId: _text(json['content_id']),
-      contentUrl: _text(json['content_url']),
+      contentUrl: contentUrl,
       contentType: _text(json['content_type']).isNotEmpty
           ? _text(json['content_type'])
           : 'video',

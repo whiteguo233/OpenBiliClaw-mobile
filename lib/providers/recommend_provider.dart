@@ -86,12 +86,28 @@ class RecommendProvider extends ChangeNotifier {
         return 'https://www.youtube.com/watch?v=$contentId';
       case 'twitter':
         return 'https://x.com/i/status/$contentId';
+      case 'zhihu':
+        return 'https://www.zhihu.com/question/$contentId';
+      case 'reddit':
+        return 'https://www.reddit.com/comments/$contentId';
       case 'douyin':
         return 'https://www.douyin.com/video/$contentId';
       case 'xiaohongshu':
         return 'https://www.xiaohongshu.com/explore/$contentId';
       case 'bangumi':
         return 'https://bgm.tv/subject/$contentId';
+      case 'linuxdo':
+        final topicId = contentId.replaceFirst(
+          RegExp(r'^topic[:_]', caseSensitive: false),
+          '',
+        );
+        return RegExp(r'^[1-9]\d*$').hasMatch(topicId)
+            ? 'https://linux.do/t/$topicId'
+            : null;
+      case 'v2ex':
+        return 'https://www.v2ex.com/t/$contentId';
+      case 'weibo':
+        return 'https://m.weibo.cn/detail/$contentId';
       case 'bilibili':
         return 'https://www.bilibili.com/video/$contentId';
       default:

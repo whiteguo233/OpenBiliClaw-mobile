@@ -24,4 +24,27 @@ void main() {
     expect(client.wsUrl, 'wss://example.test:9443/api/runtime-stream');
     expect(client.apiUri('profile-summary').scheme, 'https');
   });
+
+  test('accepts an IPv4 host pasted with its port', () {
+    final client = ApiClient(host: '100.100.100.100:8420', port: 8420);
+
+    expect(client.host, '100.100.100.100');
+    expect(client.baseUrl, 'http://100.100.100.100:8420/api');
+    expect(client.apiUri('recommendations').host, '100.100.100.100');
+  });
+
+  test('extracts hosts from common endpoint input formats', () {
+    final domain = ApiClient(host: 'openbiliclaw.local:8420', port: 8420);
+    final url = ApiClient(
+      scheme: 'https',
+      host: 'https://example.test:9443/api',
+      port: 9443,
+    );
+    final ipv6 = ApiClient(host: '[fd00::1234]:8420', port: 8420);
+
+    expect(domain.host, 'openbiliclaw.local');
+    expect(url.host, 'example.test');
+    expect(ipv6.host, 'fd00::1234');
+    expect(ipv6.baseUrl, 'http://[fd00::1234]:8420/api');
+  });
 }

@@ -33,18 +33,24 @@ class Delight {
   factory Delight.fromJson(Map<String, dynamic> json) {
     final bvid = json['bvid']?.toString() ?? '';
     final contentId = json['content_id']?.toString() ?? '';
+    final contentUrl = json['content_url']?.toString() ?? '';
+    final source = normalizeSourcePlatform(
+      json['source_platform']?.toString() ?? '',
+      contentUrl: contentUrl,
+      bvid: bvid,
+    );
     return Delight(
       bvid: bvid,
       itemKey:
           json['item_key']?.toString() ??
-          (contentId.isEmpty ? '' : '${json['source_platform']}:$contentId'),
+          (contentId.isEmpty ? '' : '$source:$contentId'),
       contentId: contentId,
       title: decodeHtml(json['title']?.toString() ?? ''),
       reason: decodeHtml(json['delight_reason']?.toString() ?? ''),
       hook: decodeHtml(json['delight_hook']?.toString() ?? ''),
       coverUrl: json['cover_url']?.toString() ?? '',
-      contentUrl: json['content_url']?.toString() ?? '',
-      sourcePlatform: json['source_platform']?.toString() ?? 'bilibili',
+      contentUrl: contentUrl,
+      sourcePlatform: source,
       contentType: json['content_type']?.toString() ?? 'video',
       bodyText: decodeHtml(json['body_text']?.toString() ?? ''),
       state: json['state']?.toString() ?? 'pending',

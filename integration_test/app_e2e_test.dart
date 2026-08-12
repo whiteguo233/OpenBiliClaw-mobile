@@ -12,6 +12,7 @@ import 'package:openbiliclaw_app/views/recommend_view.dart';
 import 'package:openbiliclaw_app/views/saved_view.dart';
 import 'package:openbiliclaw_app/views/profile_view.dart';
 import 'package:openbiliclaw_app/views/chat_view.dart';
+import 'package:openbiliclaw_app/widgets/cover_image.dart';
 
 /// Real end-to-end test: launches the actual app against the REAL local
 /// backend (127.0.0.1:8420 on desktop / 10.0.2.2 on Android emulator) and
@@ -37,6 +38,26 @@ void main() {
     expect(recommend.online, isTrue, reason: '推荐页应在线并连上后端');
     expect(recommend.recommendations, isNotEmpty, reason: '推荐列表应有真实数据');
     expect(find.byType(RecommendView), findsOneWidget);
+    // Wait for Flutter's image decoder, not merely the network widget. A
+    // non-null RawImage proves that the real proxy response was downloaded and
+    // decoded on this device.
+    await _pumpUntil(tester, () async {
+      final decodedImages = tester.widgetList<RawImage>(
+        find.descendant(
+          of: find.byType(CoverImage),
+          matching: find.byType(RawImage),
+        ),
+      );
+      return decodedImages.any((image) => image.image != null);
+    }, timeout: const Duration(seconds: 20));
+    expect(
+      find.descendant(
+        of: find.byType(CoverImage),
+        matching: find.byIcon(Icons.broken_image_outlined),
+      ),
+      findsNothing,
+      reason: '真实推荐封面应在设备端成功下载并解码',
+    );
     // 惊喜推荐 banner（LLM 生成）应展示（后端有候选时）。
     if (recommend.delights.isNotEmpty) {
       expect(find.text('惊喜推荐'), findsOneWidget, reason: '有惊喜推荐候选时页面应展示 banner');
@@ -82,12 +103,17 @@ void main() {
     expect(profile.summary, isNotNull, reason: '画像应加载成功');
     expect(find.text('我的画像'), findsOneWidget);
     // LLM 生成的人格素描应渲染出来（真实文本，非占位）。
-    expect(find.text('人格素描'), findsOneWidget, reason: '画像页应展示 LLM 生成的人格素描');
     expect(
       profile.summary!.portrait.length,
       greaterThan(50),
       reason: '人格素描应为 LLM 生成的真实长文本',
     );
+    await tester.scrollUntilVisible(
+      find.text('人格素描'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('人格素描'), findsOneWidget, reason: '画像页应渲染 LLM 生成的人格素描');
 
     // ── Tab 4: 对话 ──
     await tester.tap(find.text('对话'));
@@ -96,7 +122,7 @@ void main() {
       final chat = tester.element(find.byType(ChatView)).read<ChatProvider>();
       return !chat.loading;
     }, timeout: const Duration(seconds: 15));
-    expect(find.text('和阿B聊聊'), findsOneWidget);
+    expect(find.textContaining('和阿B聊聊'), findsOneWidget);
 
     // 发送一条真实消息，等待商汤 LLM 生成回复（端到端 AI 链路）。
     final chatProvider = tester
@@ -112,7 +138,7 @@ void main() {
       if (chat.turns.length <= beforeCount) return false;
       final last = chat.turns.last;
       return last.isDone || last.hasError || last.reply.isNotEmpty;
-    }, timeout: const Duration(seconds: 90));
+    }, timeout: const Duration(seconds: 150));
     final chat = tester.element(find.byType(ChatView)).read<ChatProvider>();
     final last = chat.turns.last;
     expect(last.reply, isNotEmpty, reason: '商汤 LLM 应生成真实回复');

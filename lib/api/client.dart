@@ -228,12 +228,25 @@ class ApiClient {
 
   static String _normalizeHost(String value) {
     final trimmed = value.trim();
-    final parsed = Uri.tryParse(trimmed);
-    if (parsed != null && parsed.hasScheme && parsed.host.isNotEmpty) {
-      return parsed.host;
+    if (trimmed.isEmpty) return trimmed;
+
+    // Treat the setting as an authority even when the user pastes `host:port`.
+    // Parsing that value as a relative URI leaves the port attached to the
+    // host, and a later `Uri(host: ...)` then throws "Illegal IPv4 address".
+    // Adding a temporary scheme lets Uri consistently extract IPv4, DNS and
+    // bracketed IPv6 hosts. The separately configured port remains authoritative.
+    final hasScheme = RegExp(r'^[a-zA-Z][a-zA-Z0-9+.-]*://').hasMatch(trimmed);
+    final candidate = hasScheme ? trimmed : 'http://$trimmed';
+    try {
+      final parsed = Uri.tryParse(candidate);
+      if (parsed != null && parsed.host.isNotEmpty) return parsed.host;
+    } on FormatException {
+      // Fall through for a raw, unbracketed IPv6 literal.
     }
-    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-      return trimmed.substring(1, trimmed.length - 1);
+
+    if (trimmed.startsWith('[')) {
+      final closingBracket = trimmed.indexOf(']');
+      if (closingBracket > 1) return trimmed.substring(1, closingBracket);
     }
     return trimmed;
   }

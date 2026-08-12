@@ -118,7 +118,9 @@ jobs:
         run: git diff --exit-code -- pubspec.lock
 
       - name: Check formatting
-        run: dart format --output=none --set-exit-if-changed lib test
+        run: >-
+          dart format --output=none --set-exit-if-changed
+          lib test test_e2e integration_test
 
       - name: Analyze
         run: flutter analyze

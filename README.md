@@ -1,6 +1,6 @@
 # OpenBiliClaw — Flutter 移动客户端（全量版）
 
-OpenBiliClaw 的 Flutter 移动客户端（B 站第三方客户端），连接自建的
+OpenBiliClaw 的 Flutter 移动客户端（多平台内容推荐与认知客户端），连接自建的
 [OpenBiliClaw](https://github.com/whiteguo233/OpenBiliClaw) 后端服务（提供 B 站数据 + AI 能力）。
 
 ## 使用逻辑
@@ -29,10 +29,12 @@ App 采用「客户端 + 后端」架构，使用流程：
 - 统一**消息收件箱**（铃铛）：兴趣探测、避雷探针（含「多聊聊」）、认知更新通知、待聊确认（对齐移动 Web）
 - 设置页含「保存时自动同步到对应平台」开关（对齐移动 Web 的保存与同步设置）
 - Delight 惊喜推荐：动作区对齐 Web/插件（看看 / 喜欢 / 稍后再看 / 收藏 / 不感兴趣 / 聊一聊）
-- 🖼️ **封面图 B 站 CDN 直连**（原生端跳过服务端代理，省两跳；web 端因 CORS 限制仍走代理）
+- 🖼️ **封面图统一代理与缓存**（Web/iOS/Android 均通过后端加载，规避 CORS、移动网络防盗链及 DNS/TLS 差异）
 - 封面图 / 已保存视图请求头会话管理优化
 - API 返回数据处理调整
 - 推荐页、画像页、历史记录支持「回到顶部」悬浮按钮
+- Android 使用 Material 3 导航，iOS 使用 Cupertino Tab Bar；支持跟随系统的浅色/深色主题、Dynamic Type/大字体、横屏与安全区
+- 支持 Bilibili、抖音、小红书、YouTube、X、知乎、Reddit、微博、Linux.do、V2EX 等来源识别；优先唤起已安装的原生 App，失败时回落到规范化网页地址
 - 支持 Android / iOS / Web / Linux / macOS / Windows
 - GitHub Actions 双端 CI 与 Release：签名 APK/AAB、供用户自签名的 unsigned IPA、符号文件、校验和和构建来源证明
 
@@ -49,18 +51,19 @@ App 采用「客户端 + 后端」架构，使用流程：
 ```bash
 flutter test                                   # 单元/模型测试（无需后端）
 flutter test test_e2e/                         # API + LLM 端到端：需后端 8420 且 LLM 已配置
-flutter test integration_test/app_e2e_test.dart -d macos   # 真实 App 端到端（含 AI 对话）
+flutter test integration_test/app_e2e_test.dart -d <device-id>   # 真实 App 端到端（含 AI 对话）
 ```
 
 - `test/`：纯单元/模型测试，默认 `flutter test` 执行，无需后端。
 - `test_e2e/e2e_backend_test.dart`：真实请求后端验证内容历史、保存反馈事件、收藏交叉切换、自动同步配置、健康与 embedding 就绪。
 - `test_e2e/e2e_llm_test.dart`：验证 LLM 驱动的画像素描、惊喜推荐理由、AI 对话回复、待聊确认、活动流汇总。
-- `integration_test/app_e2e_test.dart`：在 macOS 上真实启动 App，断言四个 tab 加载真实数据、画像页展示 LLM 人格素描、对话发送后收到商汤真实回复。
+- `integration_test/app_e2e_test.dart`：在 Android/iOS 设备或模拟器上真实启动 App，断言四个 tab 加载真实数据、画像页展示 LLM 人格素描、对话发送后收到商汤真实回复。
 
-## 版本状态
+## 验证状态
 
-🧪 **新特性版（未经长期实测）**：在此前网络优化前版之上新增 B 站封面直连等改动，
-作者尚未长期实测。建议合并前重点验证弱网 / 防盗链场景下的图片加载表现。
+当前版本已通过真实本地后端、商汤日日新真实回复、Android 15 模拟器和 iOS 26.5
+模拟器的四主流程端到端验收，并通过 Android APK/AAB 与 unsigned iOS release 构建。
+长期运行、弱网、防盗链和各内容平台原生 App 唤起仍建议在对应真机上持续观察。
 
 ## 环境与后端配置
 

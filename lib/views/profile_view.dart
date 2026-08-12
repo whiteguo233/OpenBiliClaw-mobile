@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../models/profile.dart';
 import '../providers/profile_provider.dart';
 import '../theme/app_theme.dart';
-import '../widgets/app_chrome.dart';
 import '../widgets/back_to_top_fab.dart';
 
 class ProfileView extends StatefulWidget {
@@ -30,23 +29,26 @@ class _ProfileViewState extends State<ProfileView> {
         final summary = provider.summary;
         return Column(
           children: [
-            AppPageHeader(
-              icon: Icons.person_search_rounded,
-              title: '我的画像',
-              subtitle: summary == null
-                  ? '阿B 正在整理你的兴趣与判断'
-                  : '${summary.interests.length} 个兴趣方向 · 持续随行为更新',
-              trailing: IconButton(
-                tooltip: '编辑画像',
-                onPressed: summary == null || !summary.initialized
-                    ? null
-                    : () => _openEditor(context, provider),
-                icon: const Icon(Icons.edit_outlined),
+            if (summary != null && summary.initialized)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton.tonalIcon(
+                    onPressed: () => _openEditor(context, provider),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(44, 44),
+                      backgroundColor: context.appColors.brandSoft,
+                      foregroundColor: AppColors.brandStrong,
+                    ),
+                    icon: const Icon(Icons.edit_outlined, size: 17),
+                    label: const Text('编辑画像'),
+                  ),
+                ),
               ),
-            ),
             Expanded(
               child: provider.loading && summary == null
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: CircularProgressIndicator.adaptive())
                   : summary == null || !summary.hasContent
                   ? _emptyState(context, summary)
                   : Stack(
@@ -119,14 +121,18 @@ class _ProfileViewState extends State<ProfileView> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.psychology_outlined, size: 48, color: Colors.grey[300]),
+          Icon(
+            Icons.psychology_outlined,
+            size: 48,
+            color: context.appColors.lineStrong,
+          ),
           const SizedBox(height: 8),
           Text(
             summary?.initialized == false
                 ? '画像尚未初始化，请先在后端完成 openbiliclaw init。'
                 : '画像还在慢慢攒，先多看一阵。',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey[500], fontSize: 14),
+            style: TextStyle(color: context.appColors.inkMuted, fontSize: 14),
           ),
         ],
       ),
@@ -138,12 +144,16 @@ class _ProfileViewState extends State<ProfileView> {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.fromLTRB(12, 7, 4, 7),
       decoration: BoxDecoration(
-        color: Colors.red.withValues(alpha: 0.08),
+        color: Theme.of(context).colorScheme.error.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, color: Colors.red, size: 18),
+          Icon(
+            Icons.error_outline,
+            color: Theme.of(context).colorScheme.error,
+            size: 18,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(provider.error, style: const TextStyle(fontSize: 12)),
@@ -166,15 +176,15 @@ class _ProfileViewState extends State<ProfileView> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            const Color(0xFF30B980).withValues(alpha: 0.12),
-            const Color(0xFF5AA9FF).withValues(alpha: 0.08),
+            context.appPositive.withValues(alpha: 0.12),
+            Theme.of(context).colorScheme.secondary.withValues(alpha: 0.08),
           ],
         ),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
-          const Icon(Icons.auto_awesome, color: Color(0xFF30B980)),
+          Icon(Icons.auto_awesome, color: context.appPositive),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -209,7 +219,7 @@ class _ProfileViewState extends State<ProfileView> {
         });
     return Container(
       decoration: BoxDecoration(
-        gradient: AppGradients.brandSoft(),
+        gradient: AppGradients.brandSoft(context),
         borderRadius: BorderRadius.circular(AppRadius.hero),
         border: Border.all(color: AppColors.brand.withValues(alpha: 0.12)),
       ),
@@ -238,7 +248,7 @@ class _ProfileViewState extends State<ProfileView> {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
               ),
             ),
-            if (edited) _badge('含手动修正', AppColors.brandStrong),
+            if (edited) _badge('含手动修正', Theme.of(context).colorScheme.primary),
           ],
         ),
         subtitle: Padding(
@@ -249,7 +259,7 @@ class _ProfileViewState extends State<ProfileView> {
             overflow: TextOverflow.ellipsis,
             style: Theme.of(
               context,
-            ).textTheme.bodySmall?.copyWith(color: AppColors.ink),
+            ).textTheme.bodySmall?.copyWith(color: context.appColors.ink),
           ),
         ),
         children: [
@@ -278,7 +288,7 @@ class _ProfileViewState extends State<ProfileView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _label(context, '核心特质'),
-          _chips(summary.layers.map((item) => item.name), brand: true),
+          _chips(context, summary.layers.map((item) => item.name), brand: true),
           if (summary.deepNeeds.isNotEmpty) ...[
             const SizedBox(height: 12),
             _label(context, '深层需求'),
@@ -304,7 +314,8 @@ class _ProfileViewState extends State<ProfileView> {
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (summary.values.isNotEmpty) _chips(summary.values, success: true),
+          if (summary.values.isNotEmpty)
+            _chips(context, summary.values, success: true),
           if (summary.motivationalDrivers.isNotEmpty) ...[
             const SizedBox(height: 10),
             _label(context, '内在驱动力'),
@@ -329,7 +340,11 @@ class _ProfileViewState extends State<ProfileView> {
           ],
           if (summary.avoidances.isNotEmpty) ...[
             const SizedBox(height: 10),
-            _label(context, '明显会避开', color: const Color(0xFFEF7A86)),
+            _label(
+              context,
+              '明显会避开',
+              color: Theme.of(context).colorScheme.error,
+            ),
             ...summary.avoidances.map(
               (item) => _interest(context, item, avoidance: true),
             ),
@@ -341,7 +356,9 @@ class _ProfileViewState extends State<ProfileView> {
               childrenPadding: EdgeInsets.zero,
               dense: true,
               title: Text('关注的创作者（${summary.favoriteUpUsers.length}）'),
-              children: [_chips(summary.favoriteUpUsers.take(40), brand: true)],
+              children: [
+                _chips(context, summary.favoriteUpUsers.take(40), brand: true),
+              ],
             ),
           ],
         ],
@@ -384,7 +401,7 @@ class _ProfileViewState extends State<ProfileView> {
         children: [
           if (summary.cognitiveStyle.isNotEmpty) ...[
             _label(context, '认知风格'),
-            _chips(summary.cognitiveStyle),
+            _chips(context, summary.cognitiveStyle),
             const SizedBox(height: 10),
           ],
           _preferenceBar(context, '质量敏感度', summary.style.qualitySensitivity),
@@ -448,8 +465,11 @@ class _ProfileViewState extends State<ProfileView> {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: (avoidance ? const Color(0xFFEF7A86) : const Color(0xFF5AA9FF))
-            .withValues(alpha: 0.06),
+        color:
+            (avoidance
+                    ? Theme.of(context).colorScheme.error
+                    : Theme.of(context).colorScheme.secondary)
+                .withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -465,7 +485,9 @@ class _ProfileViewState extends State<ProfileView> {
               ),
               _badge(
                 item.challenge ? '挑战方向' : '${(item.confidence * 100).round()}%',
-                item.challenge ? Colors.orange : const Color(0xFF5AA9FF),
+                item.challenge
+                    ? Theme.of(context).colorScheme.tertiary
+                    : Theme.of(context).colorScheme.secondary,
               ),
             ],
           ),
@@ -475,7 +497,7 @@ class _ProfileViewState extends State<ProfileView> {
           ],
           if (item.specifics.isNotEmpty) ...[
             const SizedBox(height: 6),
-            _chips(item.specifics.take(5)),
+            _chips(context, item.specifics.take(5)),
           ],
           const SizedBox(height: 8),
           LinearProgressIndicator(
@@ -629,7 +651,7 @@ class _ProfileViewState extends State<ProfileView> {
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.all(11),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF30B980).withValues(alpha: 0.06),
+                  color: context.appPositive.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Column(
@@ -673,10 +695,14 @@ class _ProfileViewState extends State<ProfileView> {
                   height: 34,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: AppColors.brandSoft,
+                    color: context.appColors.brandSoft,
                     borderRadius: BorderRadius.circular(11),
                   ),
-                  child: Icon(icon, size: 18, color: AppColors.brandStrong),
+                  child: Icon(
+                    icon,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 ),
                 const SizedBox(width: 9),
                 Text(
@@ -701,7 +727,9 @@ class _ProfileViewState extends State<ProfileView> {
     ProfileInterest item, {
     bool avoidance = false,
   }) {
-    final color = avoidance ? const Color(0xFFEF7A86) : const Color(0xFF5AA9FF);
+    final color = avoidance
+        ? Theme.of(context).colorScheme.error
+        : Theme.of(context).colorScheme.secondary;
     return ExpansionTile(
       tilePadding: EdgeInsets.zero,
       childrenPadding: const EdgeInsets.only(bottom: 7),
@@ -712,7 +740,7 @@ class _ProfileViewState extends State<ProfileView> {
         style: TextStyle(color: color, fontSize: 11),
       ),
       children: [
-        if (item.specifics.isNotEmpty) _chips(item.specifics),
+        if (item.specifics.isNotEmpty) _chips(context, item.specifics),
         if (item.reason.isNotEmpty && item.specifics.isEmpty)
           Text(item.reason, style: Theme.of(context).textTheme.bodySmall),
       ],
@@ -723,7 +751,7 @@ class _ProfileViewState extends State<ProfileView> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF5AA9FF).withValues(alpha: 0.06),
+        color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -803,15 +831,16 @@ class _ProfileViewState extends State<ProfileView> {
   }
 
   Widget _chips(
+    BuildContext context,
     Iterable<String> values, {
     bool brand = false,
     bool success = false,
   }) {
     final color = brand
-        ? const Color(0xFFFB7299)
+        ? Theme.of(context).colorScheme.primary
         : success
-        ? const Color(0xFF30B980)
-        : const Color(0xFF5AA9FF);
+        ? context.appPositive
+        : Theme.of(context).colorScheme.secondary;
     return Wrap(
       spacing: 6,
       runSpacing: 6,
@@ -995,11 +1024,14 @@ class _ProfileEditSheet extends StatelessWidget {
                   ],
                 ),
               ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Text(
                   '修改会作为用户覆盖层长期保留。误删后可用“恢复 AI 建议”撤销该字段的手动修改。',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: context.appColors.inkMuted,
+                  ),
                 ),
               ),
               if (provider.error.isNotEmpty)
@@ -1007,7 +1039,9 @@ class _ProfileEditSheet extends StatelessWidget {
                   padding: const EdgeInsets.all(12),
                   child: Text(
                     provider.error,
-                    style: const TextStyle(color: Colors.red),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                   ),
                 ),
               Expanded(
@@ -1054,9 +1088,12 @@ class _ProfileEditSheet extends StatelessWidget {
           children: [
             Expanded(child: Text(label, style: const TextStyle(fontSize: 14))),
             if (edited)
-              const Text(
+              Text(
                 '已编辑',
-                style: TextStyle(fontSize: 10, color: Color(0xFFFB7299)),
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
               ),
           ],
         ),
@@ -1203,9 +1240,9 @@ class _ProfileEditSheet extends StatelessWidget {
     String initial,
   ) async {
     final controller = TextEditingController(text: initial);
-    final value = await showDialog<String>(
+    final value = await showAdaptiveDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => AlertDialog.adaptive(
         title: const Text('修改画像文本'),
         content: TextField(
           controller: controller,
@@ -1239,10 +1276,10 @@ class _ProfileEditSheet extends StatelessWidget {
     double initial,
   ) async {
     var value = initial.clamp(0, 1).toDouble();
-    final result = await showDialog<double>(
+    final result = await showAdaptiveDialog<double>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
+        builder: (context, setState) => AlertDialog.adaptive(
           title: Text('${(value * 100).round()}%'),
           content: Slider(
             value: value,
@@ -1272,9 +1309,9 @@ class _ProfileEditSheet extends StatelessWidget {
     String path,
   ) async {
     final controller = TextEditingController();
-    final value = await showDialog<String>(
+    final value = await showAdaptiveDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => AlertDialog.adaptive(
         title: const Text('添加一项'),
         content: TextField(controller: controller, autofocus: true),
         actions: [

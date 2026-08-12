@@ -55,7 +55,7 @@ void main() {
     );
     String reply = '';
     String status = '';
-    for (var i = 0; i < 30; i++) {
+    for (var i = 0; i < 18; i++) {
       await Future<void>.delayed(const Duration(seconds: 5));
       final turn = await client.get('/chat/turns/$turnId', timeout: 15);
       status = turn['status']?.toString() ?? '';
@@ -73,7 +73,7 @@ void main() {
     }
     expect(reply.length, greaterThan(50), reason: 'AI 回复应为 LLM 生成的长文本');
     expect(status, isNot(anyOf('error', 'failed')));
-  });
+  }, timeout: const Timeout(Duration(minutes: 2)));
 
   test('e2e-llm: 待聊确认包含 hypothesis 卡', () async {
     final data = await client.get(

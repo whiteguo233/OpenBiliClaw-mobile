@@ -31,14 +31,15 @@ class RecommendationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final palette = context.appColors;
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(AppRadius.large),
-      side: const BorderSide(color: AppColors.line),
+      side: BorderSide(color: palette.line),
     );
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
       child: Material(
-        color: AppColors.surface,
+        color: palette.surface,
         surfaceTintColor: Colors.transparent,
         shape: shape,
         clipBehavior: Clip.antiAlias,
@@ -66,7 +67,11 @@ class RecommendationCard extends StatelessWidget {
                 borderRadius: 0,
               ),
             ),
-            Positioned(top: 10, left: 10, child: _sourceChip(dark: true)),
+            Positioned(
+              top: 10,
+              left: 10,
+              child: _sourceChip(context, dark: true),
+            ),
             Positioned(
               top: 8,
               right: 8,
@@ -74,6 +79,7 @@ class RecommendationCard extends StatelessWidget {
                 children: [
                   if (onWatchLater != null)
                     _floatingAction(
+                      context: context,
                       icon: watchLaterActive
                           ? Icons.watch_later_rounded
                           : Icons.watch_later_outlined,
@@ -84,6 +90,7 @@ class RecommendationCard extends StatelessWidget {
                   if (onFavorite != null) ...[
                     const SizedBox(width: 8),
                     _floatingAction(
+                      context: context,
                       icon: favoriteActive
                           ? Icons.star_rounded
                           : Icons.star_border_rounded,
@@ -99,7 +106,7 @@ class RecommendationCard extends StatelessWidget {
         ),
         _details(context, theme),
         const Divider(),
-        _actionBar(),
+        _actionBar(context),
       ],
     );
   }
@@ -111,13 +118,14 @@ class RecommendationCard extends StatelessWidget {
         Container(
           width: double.infinity,
           padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
-          decoration: BoxDecoration(gradient: AppGradients.brandSoft()),
+          decoration: BoxDecoration(gradient: AppGradients.brandSoft(context)),
           child: Row(
             children: [
-              _sourceChip(),
+              _sourceChip(context),
               const Spacer(),
               if (onWatchLater != null)
                 _inlineSaveAction(
+                  context: context,
                   icon: watchLaterActive
                       ? Icons.watch_later_rounded
                       : Icons.watch_later_outlined,
@@ -127,6 +135,7 @@ class RecommendationCard extends StatelessWidget {
                 ),
               if (onFavorite != null)
                 _inlineSaveAction(
+                  context: context,
                   icon: favoriteActive
                       ? Icons.star_rounded
                       : Icons.star_border_rounded,
@@ -139,7 +148,7 @@ class RecommendationCard extends StatelessWidget {
         ),
         _details(context, theme, showBody: true),
         const Divider(),
-        _actionBar(),
+        _actionBar(context),
       ],
     );
   }
@@ -163,7 +172,10 @@ class RecommendationCard extends StatelessWidget {
           const SizedBox(height: 8),
           Row(
             children: [
-              if (!showBody) ...[_sourceChip(), const SizedBox(width: 7)],
+              if (!showBody) ...[
+                _sourceChip(context),
+                const SizedBox(width: 7),
+              ],
               Expanded(
                 child: Text(
                   rec.displayUpName,
@@ -182,10 +194,10 @@ class RecommendationCard extends StatelessWidget {
             const SizedBox(height: 7),
             Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.auto_awesome_rounded,
                   size: 14,
-                  color: AppColors.lavender,
+                  color: theme.colorScheme.secondary,
                 ),
                 const SizedBox(width: 5),
                 Expanded(
@@ -194,7 +206,7 @@ class RecommendationCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.labelMedium?.copyWith(
-                      color: AppColors.lavender,
+                      color: theme.colorScheme.secondary,
                     ),
                   ),
                 ),
@@ -226,7 +238,7 @@ class RecommendationCard extends StatelessWidget {
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: AppColors.inkMuted,
+                color: context.appColors.inkMuted,
                 height: 1.5,
               ),
             ),
@@ -236,7 +248,7 @@ class RecommendationCard extends StatelessWidget {
     );
   }
 
-  Widget _actionBar() {
+  Widget _actionBar(BuildContext context) {
     return SizedBox(
       height: 50,
       child: Row(
@@ -288,20 +300,21 @@ class RecommendationCard extends StatelessWidget {
     );
   }
 
-  Widget _sourceChip({bool dark = false}) {
+  Widget _sourceChip(BuildContext context, {bool dark = false}) {
+    final palette = context.appColors;
     final background = dark
         ? Colors.black.withValues(alpha: 0.58)
-        : AppColors.surfaceMuted;
-    final foreground = dark ? Colors.white : AppColors.inkMuted;
+        : palette.surfaceMuted;
+    final foreground = dark ? Colors.white : palette.inkMuted;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(999),
-        border: dark ? null : Border.all(color: AppColors.line),
+        border: dark ? null : Border.all(color: palette.line),
       ),
       child: Text(
-        _sourceLabel(rec.sourcePlatform),
+        sourcePlatformLabel(rec.sourcePlatform),
         style: TextStyle(
           color: foreground,
           fontSize: 10,
@@ -312,17 +325,17 @@ class RecommendationCard extends StatelessWidget {
   }
 
   Widget _floatingAction({
+    required BuildContext context,
     required IconData icon,
     required bool active,
     required VoidCallback? onTap,
     required String tooltip,
   }) {
+    final scheme = Theme.of(context).colorScheme;
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: active
-            ? AppColors.brandStrong
-            : Colors.black.withValues(alpha: 0.5),
+        color: active ? scheme.primary : Colors.black.withValues(alpha: 0.5),
         shape: const CircleBorder(),
         child: InkWell(
           customBorder: const CircleBorder(),
@@ -330,7 +343,11 @@ class RecommendationCard extends StatelessWidget {
           child: SizedBox(
             width: 44,
             height: 44,
-            child: Icon(icon, size: 21, color: Colors.white),
+            child: Icon(
+              icon,
+              size: 21,
+              color: active ? scheme.onPrimary : Colors.white,
+            ),
           ),
         ),
       ),
@@ -338,6 +355,7 @@ class RecommendationCard extends StatelessWidget {
   }
 
   Widget _inlineSaveAction({
+    required BuildContext context,
     required IconData icon,
     required bool active,
     required VoidCallback? onTap,
@@ -346,24 +364,11 @@ class RecommendationCard extends StatelessWidget {
     return IconButton(
       tooltip: tooltip,
       onPressed: onTap,
-      color: active ? AppColors.brandStrong : AppColors.inkMuted,
+      color: active
+          ? Theme.of(context).colorScheme.primary
+          : context.appColors.inkMuted,
       icon: Icon(icon, size: 21),
     );
-  }
-
-  String _sourceLabel(String source) {
-    return switch (source.toLowerCase()) {
-      'bilibili' => 'B站',
-      'xiaohongshu' => '小红书',
-      'douyin' => '抖音',
-      'youtube' => 'YouTube',
-      'twitter' => 'X',
-      'zhihu' => '知乎',
-      'reddit' => 'Reddit',
-      'bangumi' => 'Bangumi',
-      'web' => '网页',
-      _ => source.isEmpty ? '内容' : source,
-    };
   }
 }
 
@@ -382,7 +387,9 @@ class _CardAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? AppColors.brandStrong : AppColors.inkMuted;
+    final color = active
+        ? Theme.of(context).colorScheme.primary
+        : context.appColors.inkMuted;
     return Semantics(
       button: true,
       label: label,

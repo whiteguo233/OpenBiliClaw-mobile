@@ -19,10 +19,15 @@ String decodeHtml(String text) {
 /// session token as the query token the backend accepts on this path only.
 String proxyImageUrl(String url, String baseUrl, {String? token}) {
   if (url.isEmpty) return '';
-  final apiBase = baseUrl.replaceAll('/api', '');
-  var result = '$apiBase/api/image-proxy?url=${Uri.encodeComponent(url)}';
-  if (token != null && token.isNotEmpty) {
-    result += '&token=${Uri.encodeComponent(token)}';
-  }
-  return result;
+  final baseUri = Uri.parse(baseUrl);
+  return baseUri
+      .replace(
+        path: '/api/image-proxy',
+        queryParameters: {
+          'url': url,
+          if (token != null && token.isNotEmpty) 'token': token,
+        },
+        fragment: '',
+      )
+      .toString();
 }

@@ -6,7 +6,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/chat.dart';
 import '../providers/chat_provider.dart';
 import '../theme/app_theme.dart';
-import '../widgets/app_chrome.dart';
 
 class ChatView extends StatefulWidget {
   const ChatView({super.key});
@@ -34,30 +33,114 @@ class _ChatViewState extends State<ChatView> {
       builder: (context, provider, _) {
         final turns = provider.turns;
         _scheduleHistoryScroll(turns);
-        return Column(
-          children: [
-            AppPageHeader(
-              icon: Icons.chat_bubble_rounded,
-              title: '和阿B聊聊',
-              subtitle: '${turns.length} 条共享记录 · 你的判断会在这里沉淀',
-              trailing: IconButton(
-                tooltip: '刷新共享历史',
-                onPressed: provider.loading ? null : provider.loadTurns,
-                icon: const Icon(Icons.refresh_rounded),
-              ),
-            ),
-            if (provider.pendingCount > 0) _pendingPanel(context, provider),
-            if (provider.error.isNotEmpty) _errorBanner(context, provider),
-            if (provider.dialogueContext != null)
-              _dialogueContextBar(context, provider)
-            else if (provider.composeContext.active)
-              _composeContextBar(context, provider),
-            Expanded(child: _buildMessages(context, provider, theme, turns)),
-            if (provider.responding) _thinkingBar(provider),
-            _buildInputBar(provider),
-          ],
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            // Scaffold can consume viewInsets before this subtree sees them,
+            // so read both the root view and the constrained body viewport.
+            final platformView = View.of(context);
+            final platformKeyboardVisible =
+                platformView.viewInsets.bottom / platformView.devicePixelRatio >
+                1;
+            final accessibilityChrome =
+                MediaQuery.textScalerOf(context).scale(1) > 1.8;
+            final compactViewport =
+                platformKeyboardVisible ||
+                MediaQuery.viewInsetsOf(context).bottom > 0 ||
+                constraints.maxHeight < 560;
+            return Column(
+              children: [
+                if (!compactViewport && accessibilityChrome)
+                  _compactHeader(context, provider, turns.length),
+                if (provider.pendingCount > 0 && !compactViewport)
+                  accessibilityChrome
+                      ? _compactPendingButton(context, provider)
+                      : _pendingPanel(context, provider),
+                if (provider.error.isNotEmpty) _errorBanner(context, provider),
+                if (provider.dialogueContext != null)
+                  _dialogueContextBar(context, provider)
+                else if (provider.composeContext.active)
+                  _composeContextBar(context, provider),
+                Expanded(
+                  child: _buildMessages(context, provider, theme, turns),
+                ),
+                if (provider.responding) _thinkingBar(context, provider),
+                _buildInputBar(context, provider),
+              ],
+            );
+          },
         );
       },
+    );
+  }
+
+  Widget _compactHeader(
+    BuildContext context,
+    ChatProvider provider,
+    int turnCount,
+  ) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+      padding: const EdgeInsets.fromLTRB(12, 5, 4, 5),
+      decoration: BoxDecoration(
+        color: context.appColors.surface.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(AppRadius.medium),
+        border: Border.all(color: context.appColors.line),
+      ),
+      child: MediaQuery.withClampedTextScaling(
+        maxScaleFactor: 1.4,
+        child: Row(
+          children: [
+            Icon(
+              Icons.chat_bubble_rounded,
+              size: 20,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                '和阿B聊聊 · $turnCount 条记录',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            IconButton(
+              tooltip: '刷新共享历史',
+              onPressed: provider.loading ? null : provider.loadTurns,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _compactPendingButton(BuildContext context, ChatProvider provider) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+      child: SizedBox(
+        width: double.infinity,
+        child: MediaQuery.withClampedTextScaling(
+          maxScaleFactor: 1.4,
+          child: FilledButton.tonalIcon(
+            onPressed: () => _showPendingSheet(context, provider),
+            icon: const Icon(Icons.pending_actions_rounded, size: 18),
+            label: Text('${provider.pendingCount} 条待聊确认'),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showPendingSheet(BuildContext context, ChatProvider provider) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => SingleChildScrollView(
+        padding: const EdgeInsets.only(top: 12, bottom: 20),
+        child: _pendingPanel(sheetContext, provider),
+      ),
     );
   }
 
@@ -65,9 +148,13 @@ class _ChatViewState extends State<ChatView> {
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 6),
       decoration: BoxDecoration(
-        color: AppColors.lavenderSoft.withValues(alpha: 0.72),
+        color: context.appColors.lavenderSoft.withValues(alpha: 0.72),
         borderRadius: BorderRadius.circular(AppRadius.large),
-        border: Border.all(color: AppColors.lavender.withValues(alpha: 0.12)),
+        border: Border.all(
+          color: Theme.of(
+            context,
+          ).colorScheme.secondary.withValues(alpha: 0.18),
+        ),
       ),
       clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
@@ -77,13 +164,13 @@ class _ChatViewState extends State<ChatView> {
           height: 36,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: AppColors.surface.withValues(alpha: 0.82),
+            color: context.appColors.surface.withValues(alpha: 0.82),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: const Icon(
+          child: Icon(
             Icons.pending_actions_rounded,
             size: 20,
-            color: AppColors.lavender,
+            color: Theme.of(context).colorScheme.secondary,
           ),
         ),
         title: Text('待聊确认（${provider.pendingCount}）'),
@@ -115,7 +202,7 @@ class _ChatViewState extends State<ChatView> {
           children: [
             Row(
               children: [
-                _scopeChip(item.kind == 'confusion' ? '疑惑' : '阿B 的猜测'),
+                _scopeChip(context, item.kind == 'confusion' ? '疑惑' : '阿B 的猜测'),
                 const Spacer(),
                 if (item.confidence > 0)
                   Text(
@@ -164,12 +251,16 @@ class _ChatViewState extends State<ChatView> {
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 6),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.danger.withValues(alpha: 0.08),
+        color: Theme.of(context).colorScheme.error.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(AppRadius.medium),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, color: Colors.red, size: 18),
+          Icon(
+            Icons.error_outline,
+            color: Theme.of(context).colorScheme.error,
+            size: 18,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(provider.error, style: const TextStyle(fontSize: 12)),
@@ -219,10 +310,14 @@ class _ChatViewState extends State<ChatView> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
-      color: const Color(0xFFFB7299).withValues(alpha: 0.08),
+      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
       child: Row(
         children: [
-          const Icon(Icons.reply, size: 18, color: Color(0xFFFB7299)),
+          Icon(
+            Icons.reply,
+            size: 18,
+            color: Theme.of(context).colorScheme.primary,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -267,11 +362,18 @@ class _ChatViewState extends State<ChatView> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.chat_outlined, size: 48, color: Colors.grey[300]),
+                  Icon(
+                    Icons.chat_outlined,
+                    size: 48,
+                    color: context.appColors.lineStrong,
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     '和 AI 聊聊你的口味、猜测和疑惑',
-                    style: TextStyle(color: Colors.grey[500], fontSize: 14),
+                    style: TextStyle(
+                      color: context.appColors.inkMuted,
+                      fontSize: 14,
+                    ),
                   ),
                 ],
               ),
@@ -319,7 +421,7 @@ class _ChatViewState extends State<ChatView> {
             alignment: Alignment.centerRight,
             child: Padding(
               padding: const EdgeInsets.only(bottom: 4),
-              child: _scopeChip(_scopeLabel(turn.scope)),
+              child: _scopeChip(context, _scopeLabel(turn.scope)),
             ),
           ),
         if (turn.message.isNotEmpty)
@@ -333,7 +435,7 @@ class _ChatViewState extends State<ChatView> {
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [AppColors.brand, AppColors.brandStrong],
+                  colors: [Color(0xFFCE3E6B), AppColors.brandStrong],
                 ),
                 borderRadius: BorderRadius.circular(
                   18,
@@ -355,11 +457,11 @@ class _ChatViewState extends State<ChatView> {
               ),
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: context.appColors.surface,
                 borderRadius: BorderRadius.circular(
                   18,
                 ).copyWith(bottomLeft: const Radius.circular(4)),
-                border: Border.all(color: AppColors.line),
+                border: Border.all(color: context.appColors.line),
               ),
               child: _markdown(theme, turn.reply),
             ),
@@ -398,7 +500,7 @@ class _ChatViewState extends State<ChatView> {
               ),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFEF7A86).withValues(alpha: 0.1),
+                color: theme.colorScheme.error.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Column(
@@ -406,7 +508,7 @@ class _ChatViewState extends State<ChatView> {
                 children: [
                   Text(
                     turn.error.isNotEmpty ? turn.error : '出错了，请重试',
-                    style: const TextStyle(color: Color(0xFFEF7A86)),
+                    style: TextStyle(color: theme.colorScheme.error),
                   ),
                   TextButton(
                     onPressed: () {
@@ -440,18 +542,24 @@ class _ChatViewState extends State<ChatView> {
         gradient: LinearGradient(
           colors: isQuestion
               ? [
-                  const Color(0xFF5AA9FF).withValues(alpha: 0.12),
-                  const Color(0xFF30B980).withValues(alpha: 0.06),
+                  Theme.of(
+                    context,
+                  ).colorScheme.secondary.withValues(alpha: 0.12),
+                  context.appPositive.withValues(alpha: 0.06),
                 ]
               : [
-                  const Color(0xFFFB7299).withValues(alpha: 0.12),
-                  const Color(0xFF5AA9FF).withValues(alpha: 0.06),
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                  Theme.of(
+                    context,
+                  ).colorScheme.secondary.withValues(alpha: 0.06),
                 ],
         ),
         borderRadius: BorderRadius.circular(15),
         border: Border.all(
           color:
-              (isQuestion ? const Color(0xFF5AA9FF) : const Color(0xFFFB7299))
+              (isQuestion
+                      ? Theme.of(context).colorScheme.secondary
+                      : Theme.of(context).colorScheme.primary)
                   .withValues(alpha: 0.18),
         ),
       ),
@@ -460,7 +568,7 @@ class _ChatViewState extends State<ChatView> {
         children: [
           Row(
             children: [
-              _scopeChip(isQuestion ? '待厘清的疑惑' : '阿B 的猜测'),
+              _scopeChip(context, isQuestion ? '待厘清的疑惑' : '阿B 的猜测'),
               const Spacer(),
               if (turn.cardState.isNotEmpty)
                 Text(
@@ -541,32 +649,41 @@ class _ChatViewState extends State<ChatView> {
     );
   }
 
-  Widget _thinkingBar(ChatProvider provider) {
+  Widget _thinkingBar(BuildContext context, ChatProvider provider) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
-      child: Row(
-        children: [
-          const SizedBox(
-            width: 12,
-            height: 12,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-          const SizedBox(width: 8),
-          const Text(
-            '正在等待共享后端回复…',
-            style: TextStyle(fontSize: 12, color: Colors.grey),
-          ),
-          const Spacer(),
-          TextButton(
-            onPressed: provider.cancelResponse,
-            child: const Text('停止等待'),
-          ),
-        ],
+      child: MediaQuery.withClampedTextScaling(
+        maxScaleFactor: 1.4,
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '正在等待共享后端回复…',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.appColors.inkMuted,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: provider.cancelResponse,
+              child: const Text('停止等待'),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildInputBar(ChatProvider provider) {
+  Widget _buildInputBar(BuildContext context, ChatProvider provider) {
     final subject =
         provider.dialogueContext?.title ??
         (provider.composeContext.active
@@ -575,39 +692,42 @@ class _ChatViewState extends State<ChatView> {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 9),
       decoration: BoxDecoration(
-        color: AppColors.surface.withValues(alpha: 0.96),
-        border: const Border(top: BorderSide(color: AppColors.line)),
+        color: context.appColors.surface.withValues(alpha: 0.96),
+        border: Border(top: BorderSide(color: context.appColors.line)),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _controller,
-              textInputAction: TextInputAction.send,
-              onSubmitted: (_) => _send(provider),
-              decoration: InputDecoration(
-                hintText: subject.isEmpty ? '说说你最近想看什么…' : '聊聊「$subject」…',
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+      child: MediaQuery.withClampedTextScaling(
+        maxScaleFactor: 1.8,
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => _send(provider),
+                decoration: InputDecoration(
+                  hintText: subject.isEmpty ? '说说你最近想看什么…' : '聊聊「$subject」…',
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  fillColor: context.appColors.surfaceMuted,
                 ),
-                fillColor: AppColors.surfaceMuted,
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          IconButton.filled(
-            tooltip: '发送',
-            style: IconButton.styleFrom(
-              minimumSize: const Size(48, 48),
-              backgroundColor: AppColors.brandStrong,
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: AppColors.brandSoft,
+            const SizedBox(width: 8),
+            IconButton.filled(
+              tooltip: '发送',
+              style: IconButton.styleFrom(
+                minimumSize: const Size(48, 48),
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                disabledBackgroundColor: context.appColors.brandSoft,
+              ),
+              icon: const Icon(Icons.arrow_upward_rounded, size: 22),
+              onPressed: provider.responding ? null : () => _send(provider),
             ),
-            icon: const Icon(Icons.arrow_upward_rounded, size: 22),
-            onPressed: provider.responding ? null : () => _send(provider),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -634,19 +754,19 @@ class _ChatViewState extends State<ChatView> {
           color: theme.colorScheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(8),
         ),
-        a: const TextStyle(
-          color: Color(0xFFFB7299),
+        a: TextStyle(
+          color: theme.colorScheme.primary,
           decoration: TextDecoration.underline,
         ),
       ),
     );
   }
 
-  Widget _scopeChip(String label) {
+  Widget _scopeChip(BuildContext context, String label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.8),
+        color: context.appColors.surface.withValues(alpha: 0.8),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(label, style: const TextStyle(fontSize: 10)),
@@ -711,7 +831,11 @@ class _ChatViewState extends State<ChatView> {
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
+      if (!mounted || !_scrollController.hasClients) return;
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _scrollController.jumpTo(_scrollController.position.minScrollExtent);
+        return;
+      }
       _scrollController.animateTo(
         _scrollController.position.minScrollExtent,
         duration: const Duration(milliseconds: 300),
@@ -745,6 +869,10 @@ class _ChatViewState extends State<ChatView> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) return;
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _scrollController.jumpTo(_scrollController.position.minScrollExtent);
+        return;
+      }
       _scrollController.animateTo(
         _scrollController.position.minScrollExtent,
         duration: const Duration(milliseconds: 250),

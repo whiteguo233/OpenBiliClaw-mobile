@@ -1,9 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:openbiliclaw_app/api/client.dart';
 import 'package:openbiliclaw_app/api/config_api.dart';
 import 'package:openbiliclaw_app/api/events_api.dart';
 import 'package:openbiliclaw_app/api/history_api.dart';
 import 'package:openbiliclaw_app/api/saved_api.dart';
+import 'package:openbiliclaw_app/api/utils.dart';
 import 'package:openbiliclaw_app/models/content_history.dart';
 import 'package:openbiliclaw_app/models/saved_item.dart';
 
@@ -171,6 +173,37 @@ void main() {
     });
   });
 
+  group('e2e image proxy', () {
+    test('a real content cover returns decodable image bytes', () async {
+      final coverUrl = await _pickRealCoverUrl(client, historyApi);
+      expect(coverUrl, isNotEmpty, reason: '真实推荐或历史记录中应包含封面地址');
+
+      final proxyUrl = proxyImageUrl(
+        coverUrl,
+        client.baseUrl,
+        token: client.sessionToken,
+      );
+      final response = await http
+          .get(
+            Uri.parse(proxyUrl),
+            headers: {
+              'X-OBC-Auth': '1',
+              if (client.sessionToken.isNotEmpty)
+                'Cookie': 'obc_session=${client.sessionToken}',
+            },
+          )
+          .timeout(const Duration(seconds: 20));
+
+      expect(response.statusCode, 200);
+      expect(
+        response.headers['content-type'],
+        startsWith('image/'),
+        reason: '图片代理必须返回图片 MIME 类型',
+      );
+      expect(response.bodyBytes.length, greaterThan(100));
+    });
+  });
+
   group('e2e probes & pending confirmations', () {
     test('pending probes endpoint responds with a well-formed list', () async {
       final data = await client.get('/interest-probes/pending', timeout: 8);
@@ -202,6 +235,28 @@ Future<SavedItem?> _pickHistoryItem(HistoryApi api) async {
     }
   }
   return null;
+}
+
+Future<String> _pickRealCoverUrl(
+  ApiClient client,
+  HistoryApi historyApi,
+) async {
+  final recommendations = await client.get('/recommendations', timeout: 15);
+  final items = recommendations['items'];
+  if (items is List) {
+    for (final raw in items.whereType<Map>()) {
+      final coverUrl = raw['cover_url']?.toString().trim() ?? '';
+      if (coverUrl.isNotEmpty) return coverUrl;
+    }
+  }
+
+  for (final category in ContentHistoryCategory.values) {
+    final page = await historyApi.fetch(category, limit: 20);
+    for (final item in page.items) {
+      if (item.coverUrl.isNotEmpty) return item.coverUrl;
+    }
+  }
+  return '';
 }
 
 Future<bool> _isSaved(SavedApi api, SavedListKind kind, SavedItem item) async {

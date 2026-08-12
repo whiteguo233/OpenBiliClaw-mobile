@@ -39,31 +39,50 @@ class ContentLauncher {
     String contentUrl = '',
     String fallbackId = '',
   }) async {
+    for (final candidate in buildLaunchUris(
+      sourcePlatform: sourcePlatform,
+      contentId: contentId,
+      contentUrl: contentUrl,
+      fallbackId: fallbackId,
+    )) {
+      try {
+        if (await launchUrl(candidate, mode: LaunchMode.externalApplication)) {
+          return true;
+        }
+      } catch (_) {
+        // Native platform apps are optional. Continue through the candidates
+        // until the canonical web URL is reached.
+      }
+    }
+    return false;
+  }
+
+  /// Pure launch plan shared by the runtime and regression tests. Native app
+  /// links come first; the canonical web URL is always the last candidate.
+  static List<Uri> buildLaunchUris({
+    required String sourcePlatform,
+    required String contentId,
+    String contentUrl = '',
+    String fallbackId = '',
+  }) {
     final source = normalizeSourcePlatform(
       sourcePlatform,
       contentUrl: contentUrl,
       bvid: fallbackId,
     );
     final id = _canonicalId(contentId, fallbackId, source);
-    for (final deepLink in _deepLinks(source, id)) {
-      try {
-        if (await launchUrl(deepLink, mode: LaunchMode.externalApplication)) {
-          return true;
-        }
-      } catch (_) {
-        // The platform app is optional. Continue to the canonical web URL.
-      }
+    final candidates = _deepLinks(source, id, contentUrl);
+    final fallbackText = contentUrl.trim().isNotEmpty
+        ? contentUrl.trim()
+        : _webUrl(source, id);
+    final fallback = Uri.tryParse(fallbackText);
+    if (fallback != null &&
+        const {'http', 'https'}.contains(fallback.scheme.toLowerCase()) &&
+        fallback.host.isNotEmpty &&
+        fallback.userInfo.isEmpty) {
+      candidates.add(fallback);
     }
-
-    final fallback = Uri.tryParse(
-      contentUrl.trim().isNotEmpty ? contentUrl.trim() : _webUrl(source, id),
-    );
-    if (fallback == null || !fallback.hasScheme) return false;
-    try {
-      return await launchUrl(fallback, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      return false;
-    }
+    return candidates;
   }
 
   static String _canonicalId(
@@ -81,21 +100,84 @@ class ContentLauncher {
     return id;
   }
 
-  static List<Uri> _deepLinks(String source, String id) {
-    if (id.isEmpty) return const [];
-    final values = switch (source) {
-      'bilibili' => ['bilibili://video/$id'],
+  static List<Uri> _deepLinks(String source, String id, String contentUrl) {
+    if (source == 'zhihu') {
+      final uri = _zhihuDeepLink(contentUrl, id);
+      return uri == null ? <Uri>[] : [uri];
+    }
+    if (id.isEmpty) return <Uri>[];
+    return switch (source) {
+      'bilibili' => [Uri(scheme: 'bilibili', host: 'video', path: '/$id')],
       'youtube' => [
-        'vnd.youtube://$id',
-        'youtube://www.youtube.com/watch?v=$id',
+        Uri(
+          scheme: 'vnd.youtube',
+          host: 'www.youtube.com',
+          path: '/watch',
+          queryParameters: {'v': id},
+        ),
+        Uri(
+          scheme: 'youtube',
+          host: 'www.youtube.com',
+          path: '/watch',
+          queryParameters: {'v': id},
+        ),
       ],
-      'douyin' => ['snssdk1128://aweme/detail/$id'],
-      'xiaohongshu' => ['xhsdiscover://item/$id'],
-      'twitter' => ['twitter://status?id=$id'],
-      'reddit' => ['reddit://reddit.com/comments/$id'],
-      _ => const <String>[],
+      'douyin' => [
+        Uri(scheme: 'snssdk1128', host: 'aweme', path: '/detail/$id'),
+      ],
+      'xiaohongshu' => [_xiaohongshuDeepLink(id, contentUrl)],
+      'twitter' => [
+        Uri(scheme: 'twitter', host: 'status', queryParameters: {'id': id}),
+      ],
+      'reddit' => [
+        Uri(scheme: 'reddit', host: 'reddit.com', path: '/comments/$id'),
+      ],
+      _ => <Uri>[],
     };
-    return values.map(Uri.parse).toList();
+  }
+
+  static Uri _xiaohongshuDeepLink(String id, String contentUrl) {
+    final source = Uri.tryParse(contentUrl);
+    final query = <String, String>{};
+    for (final key in const ['xsec_token', 'xsec_source']) {
+      final value = source?.queryParameters[key];
+      if (value != null && value.isNotEmpty) query[key] = value;
+    }
+    return Uri(
+      scheme: 'xhsdiscover',
+      host: 'item',
+      path: '/$id',
+      queryParameters: query.isEmpty ? null : query,
+    );
+  }
+
+  static Uri? _zhihuDeepLink(String contentUrl, String fallbackId) {
+    final source = Uri.tryParse(contentUrl);
+    final segments = source?.pathSegments ?? const <String>[];
+    final questionIndex = segments.indexOf('question');
+    final answerIndex = segments.indexOf('answer');
+    if (answerIndex >= 0 && answerIndex + 1 < segments.length) {
+      return Uri(
+        scheme: 'zhihu',
+        host: 'answers',
+        path: '/${segments[answerIndex + 1]}',
+      );
+    }
+    final articleIndex = segments.indexOf('p');
+    if (source?.host.startsWith('zhuanlan.') == true &&
+        articleIndex >= 0 &&
+        articleIndex + 1 < segments.length) {
+      return Uri(
+        scheme: 'zhihu',
+        host: 'articles',
+        path: '/${segments[articleIndex + 1]}',
+      );
+    }
+    final questionId = questionIndex >= 0 && questionIndex + 1 < segments.length
+        ? segments[questionIndex + 1]
+        : fallbackId;
+    if (questionId.isEmpty) return null;
+    return Uri(scheme: 'zhihu', host: 'questions', path: '/$questionId');
   }
 
   static String _webUrl(String source, String id) {
@@ -109,7 +191,20 @@ class ContentLauncher {
       'zhihu' => 'https://www.zhihu.com/question/$id',
       'reddit' => 'https://www.reddit.com/comments/$id',
       'bangumi' => 'https://bgm.tv/subject/$id',
+      'linuxdo' => _linuxDoUrl(id),
+      'v2ex' => 'https://www.v2ex.com/t/$id',
+      'weibo' => 'https://m.weibo.cn/detail/$id',
       _ => '',
     };
+  }
+
+  static String _linuxDoUrl(String id) {
+    final topicId = id.replaceFirst(
+      RegExp(r'^topic[:_]', caseSensitive: false),
+      '',
+    );
+    return RegExp(r'^[1-9]\d*$').hasMatch(topicId)
+        ? 'https://linux.do/t/$topicId'
+        : '';
   }
 }

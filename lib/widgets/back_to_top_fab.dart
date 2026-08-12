@@ -54,8 +54,12 @@ class _BackToTopFabState extends State<BackToTopFab> {
     }
   }
 
-  void _scrollToTop() {
+  void _scrollToTop(BuildContext context) {
     if (!widget.controller.hasClients) return;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      widget.controller.jumpTo(0);
+      return;
+    }
     widget.controller.animateTo(
       0,
       duration: const Duration(milliseconds: 320),
@@ -67,16 +71,18 @@ class _BackToTopFabState extends State<BackToTopFab> {
   Widget build(BuildContext context) {
     return AnimatedOpacity(
       opacity: _visible ? 1 : 0,
-      duration: const Duration(milliseconds: 160),
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 160),
       child: IgnorePointer(
         ignoring: !_visible,
         child: FloatingActionButton.small(
           heroTag: null,
           tooltip: '回到顶部',
-          backgroundColor: AppColors.surface.withValues(alpha: 0.96),
-          foregroundColor: AppColors.brandStrong,
+          backgroundColor: context.appColors.surface.withValues(alpha: 0.96),
+          foregroundColor: Theme.of(context).colorScheme.primary,
           elevation: 3,
-          onPressed: _scrollToTop,
+          onPressed: () => _scrollToTop(context),
           child: const Icon(Icons.arrow_upward_rounded, size: 20),
         ),
       ),

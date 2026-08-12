@@ -19,6 +19,7 @@ class MessageInbox extends StatefulWidget {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (_) => const MessageInbox(),
     );
@@ -47,80 +48,86 @@ class _MessageInboxState extends State<MessageInbox> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * 0.78,
-      ),
-      decoration: const BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Consumer2<ProfileProvider, ChatProvider>(
-        builder: (context, profile, chat, _) {
-          final probes = profile.probes;
-          final avoidanceProbes = profile.avoidanceProbes;
-          final cognition = profile.cognitionNotification;
-          final pending = chat.pendingConfirmations;
-          final hasAny =
-              probes.isNotEmpty ||
-              avoidanceProbes.isNotEmpty ||
-              cognition != null ||
-              pending.isNotEmpty;
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 14, 8, 6),
-                child: Row(
-                  children: [
-                    Text('消息', style: theme.textTheme.titleLarge),
-                    const Spacer(),
-                    IconButton(
-                      tooltip: '关闭',
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-                  ],
+    return SafeArea(
+      top: false,
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.78,
+        ),
+        decoration: BoxDecoration(
+          color: context.appColors.background,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Consumer2<ProfileProvider, ChatProvider>(
+          builder: (context, profile, chat, _) {
+            final probes = profile.probes;
+            final avoidanceProbes = profile.avoidanceProbes;
+            final cognition = profile.cognitionNotification;
+            final pending = chat.pendingConfirmations;
+            final hasAny =
+                probes.isNotEmpty ||
+                avoidanceProbes.isNotEmpty ||
+                cognition != null ||
+                pending.isNotEmpty;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 14, 8, 6),
+                  child: Row(
+                    children: [
+                      Text('消息', style: theme.textTheme.titleLarge),
+                      const Spacer(),
+                      IconButton(
+                        tooltip: '关闭',
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Flexible(
-                child: hasAny
-                    ? ListView(
-                        shrinkWrap: true,
-                        padding: const EdgeInsets.fromLTRB(14, 0, 14, 24),
-                        children: [
-                          if (probes.isNotEmpty)
-                            _ProbeSection(
-                              title: '兴趣探测',
-                              icon: Icons.travel_explore_rounded,
-                              color: const Color(0xFF5AA9FF),
-                              probes: probes,
-                              avoidance: false,
-                              onChat: (domain) =>
-                                  _startChat('probe', domain, domain),
-                            ),
-                          if (avoidanceProbes.isNotEmpty)
-                            _ProbeSection(
-                              title: '避雷探针',
-                              icon: Icons.shield_outlined,
-                              color: const Color(0xFFEF7A86),
-                              probes: avoidanceProbes,
-                              avoidance: true,
-                              onChat: (domain) =>
-                                  _startChat('avoidance_probe', domain, domain),
-                            ),
-                          if (cognition != null)
-                            _CognitionCard(notification: cognition),
-                          if (pending.isNotEmpty)
-                            _PendingConfirmations(items: pending),
-                        ],
-                      )
-                    : const _EmptyInbox(),
-              ),
-            ],
-          );
-        },
+                Flexible(
+                  child: hasAny
+                      ? ListView(
+                          shrinkWrap: true,
+                          padding: const EdgeInsets.fromLTRB(14, 0, 14, 24),
+                          children: [
+                            if (probes.isNotEmpty)
+                              _ProbeSection(
+                                title: '兴趣探测',
+                                icon: Icons.travel_explore_rounded,
+                                color: Theme.of(context).colorScheme.secondary,
+                                probes: probes,
+                                avoidance: false,
+                                onChat: (domain) =>
+                                    _startChat('probe', domain, domain),
+                              ),
+                            if (avoidanceProbes.isNotEmpty)
+                              _ProbeSection(
+                                title: '避雷探针',
+                                icon: Icons.shield_outlined,
+                                color: Theme.of(context).colorScheme.error,
+                                probes: avoidanceProbes,
+                                avoidance: true,
+                                onChat: (domain) => _startChat(
+                                  'avoidance_probe',
+                                  domain,
+                                  domain,
+                                ),
+                              ),
+                            if (cognition != null)
+                              _CognitionCard(notification: cognition),
+                            if (pending.isNotEmpty)
+                              _PendingConfirmations(items: pending),
+                          ],
+                        )
+                      : const _EmptyInbox(),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -183,9 +190,9 @@ class _ProbeSection extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.appColors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.line),
+        border: Border.all(color: context.appColors.line),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -314,16 +321,16 @@ class _CognitionCard extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            const Color(0xFF30B980).withValues(alpha: 0.1),
-            const Color(0xFF5AA9FF).withValues(alpha: 0.06),
+            context.appPositive.withValues(alpha: 0.1),
+            theme.colorScheme.secondary.withValues(alpha: 0.06),
           ],
         ),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.line),
+        border: Border.all(color: context.appColors.line),
       ),
       child: Row(
         children: [
-          const Icon(Icons.auto_awesome, color: Color(0xFF30B980)),
+          Icon(Icons.auto_awesome, color: context.appPositive),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -367,10 +374,10 @@ class _PendingConfirmations extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 6),
           child: Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.pending_actions_rounded,
                 size: 17,
-                color: AppColors.lavender,
+                color: theme.colorScheme.secondary,
               ),
               const SizedBox(width: 6),
               Text(
@@ -388,9 +395,9 @@ class _PendingConfirmations extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: context.appColors.surface,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.line),
+              border: Border.all(color: context.appColors.line),
             ),
             child: Row(
               children: [
@@ -442,22 +449,25 @@ class _EmptyInbox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 48),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 48),
       child: Center(
         child: Column(
           children: [
             Icon(
               Icons.notifications_none_rounded,
               size: 44,
-              color: Colors.grey,
+              color: context.appColors.lineStrong,
             ),
-            SizedBox(height: 10),
-            Text('暂时没有新消息', style: TextStyle(color: Colors.grey, fontSize: 14)),
-            SizedBox(height: 2),
+            const SizedBox(height: 10),
+            Text(
+              '暂时没有新消息',
+              style: TextStyle(color: context.appColors.inkMuted, fontSize: 14),
+            ),
+            const SizedBox(height: 2),
             Text(
               '兴趣探测、避雷探针和待聊确认会在这里出现',
-              style: TextStyle(color: Colors.grey, fontSize: 12),
+              style: TextStyle(color: context.appColors.inkMuted, fontSize: 12),
             ),
           ],
         ),
