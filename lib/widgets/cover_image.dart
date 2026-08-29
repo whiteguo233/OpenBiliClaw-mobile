@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
@@ -40,19 +42,29 @@ class CoverImage extends StatelessWidget {
     final headers = token.isEmpty ? null : {'Cookie': 'obc_session=$token'};
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
-      child: CachedNetworkImage(
-        imageUrl: imageUrl,
-        httpHeaders: headers,
-        width: width,
-        height: height,
-        fit: BoxFit.cover,
-        fadeInDuration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 220),
-        placeholder: (_, _) => _placeholder(context, Icons.image_outlined),
-        errorWidget: (_, _, _) =>
-            _placeholder(context, Icons.broken_image_outlined),
-      ),
+      child: client.usesTailscale
+          ? _TailnetImage(
+              client: client,
+              imageUrl: imageUrl,
+              headers: headers,
+              width: width,
+              height: height,
+              placeholder: _placeholder,
+            )
+          : CachedNetworkImage(
+              imageUrl: imageUrl,
+              httpHeaders: headers,
+              width: width,
+              height: height,
+              fit: BoxFit.cover,
+              fadeInDuration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 220),
+              placeholder: (_, _) =>
+                  _placeholder(context, Icons.image_outlined),
+              errorWidget: (_, _, _) =>
+                  _placeholder(context, Icons.broken_image_outlined),
+            ),
     );
   }
 
@@ -67,6 +79,78 @@ class CoverImage extends StatelessWidget {
         ),
       ),
       child: Center(child: Icon(icon, size: 32, color: palette.lineStrong)),
+    );
+  }
+}
+
+class _TailnetImage extends StatefulWidget {
+  const _TailnetImage({
+    required this.client,
+    required this.imageUrl,
+    required this.headers,
+    required this.width,
+    required this.height,
+    required this.placeholder,
+  });
+
+  final ApiClient client;
+  final String imageUrl;
+  final Map<String, String>? headers;
+  final double width;
+  final double height;
+  final Widget Function(BuildContext, IconData) placeholder;
+
+  @override
+  State<_TailnetImage> createState() => _TailnetImageState();
+}
+
+class _TailnetImageState extends State<_TailnetImage> {
+  late Future<Uint8List> _bytes;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _TailnetImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.imageUrl != widget.imageUrl ||
+        oldWidget.client != widget.client) {
+      _load();
+    }
+  }
+
+  void _load() {
+    _bytes = widget.client.getBytes(
+      Uri.parse(widget.imageUrl),
+      headers: widget.headers,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List>(
+      future: _bytes,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return widget.placeholder(context, Icons.broken_image_outlined);
+        }
+        final bytes = snapshot.data;
+        if (bytes == null) {
+          return widget.placeholder(context, Icons.image_outlined);
+        }
+        return Image.memory(
+          bytes,
+          width: widget.width,
+          height: widget.height,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          errorBuilder: (context, error, stackTrace) =>
+              widget.placeholder(context, Icons.broken_image_outlined),
+        );
+      },
     );
   }
 }

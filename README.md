@@ -7,7 +7,7 @@ OpenBiliClaw 的 Flutter 移动客户端（多平台内容推荐与认知客户�
 
 App 采用「客户端 + 后端」架构，使用流程：
 
-1. **配置后端连接**：右上角 ⚙️ 进入连接设置，填后端 IP/端口
+1. **配置后端连接**：右上角 ⚙️ 进入连接设置，选择直接连接或内置 Tailscale，再填后端 IP/端口
    （Web/iOS/macOS 默认 `127.0.0.1:8420`；Android 模拟器默认
    `10.0.2.2:8420`，真机填电脑局域网 IP；远程部署填服务器 IP，后端开启密码门禁）。
    保存后会立即按新地址重连，可点「测试连接」验证。
@@ -36,9 +36,14 @@ App 采用「客户端 + 后端」架构，使用流程：
 - Android 使用 Material 3 导航，iOS 使用 Cupertino Tab Bar；支持跟随系统的浅色/深色主题、Dynamic Type/大字体、横屏与安全区
 - 支持 Bilibili、抖音、小红书、YouTube、X、知乎、Reddit、微博、Linux.do、V2EX 等来源识别；优先唤起已安装的原生 App，失败时回落到规范化网页地址
 - 支持 Android / iOS / Web / Linux / macOS / Windows
+- Android / iOS 可使用内置 Tailscale，仅让本 App 的后端请求进入 tailnet，无需开放公网端口或安装系统级 VPN
 - GitHub Actions 双端 CI 与 Release：签名 APK/AAB、供用户自签名的 unsigned IPA、符号文件、校验和和构建来源证明
 
 ## 构建与发版
+
+内置 Tailscale 原生资产需要 Go 1.26.5+（`GOTOOLCHAIN=auto`）以及对应平台工具链；
+Android 最低版本为 API 31，iOS 最低版本为 15.0。Android ARM、ARM64 与 x86/x64
+均支持内置 Tailscale。CI 已配置 Go 工具链。
 
 - Pull Request 和 `main` 会自动执行格式检查、静态分析、测试及 Android/iOS 构建验证。
 - 推送与 `pubspec.yaml` 版本一致的 `vX.Y.Z` 标签，会并行构建 Android 和 iOS 正式产物并创建 GitHub Release。
@@ -71,6 +76,19 @@ flutter test integration_test/app_e2e_test.dart -d <device-id>   # 真实 App �
 - 自建 OpenBiliClaw 后端（LLM 可配商汤日日新等 OpenAI 兼容服务）
 - Web/iOS/macOS 默认连接 `127.0.0.1:8420`；Android 模拟器默认连接
   `10.0.2.2:8420`，Android 真机或远程部署在设置页填服务器局域网 IP。
+
+### 通过内置 Tailscale 连接
+
+1. 在后端服务器安装 Tailscale、加入同一个 tailnet，并确保后端的 `8420` 端口可从
+   tailnet 访问；建议用 Tailscale ACL 只授权 OpenBiliClaw 客户端访问该端口。
+2. 首次连接时可以在系统浏览器登录 Tailscale，或在管理后台创建一次性/短期 Auth Key。
+   不要把可复用 Key 写入源码、配置文件或发布包。
+3. App 的「连接设置」选择「内置 Tailscale」，填写服务器 MagicDNS 名称（或 `100.x.x.x` 地址）
+   和端口；Auth Key 可留空，此时 App 会打开系统浏览器完成登录授权。
+
+首次注册后，App 会把节点身份保存在应用私有且排除云备份的目录中，之后可无 Key 自动重连；
+「移除设备」会清除本地身份。此模式目前仅覆盖 App 的 HTTP API 请求，实时 WebSocket 会自动回退为轮询；
+Web、Linux、macOS 和 Windows 继续使用直接连接。
 
 后端 LLM 切换示例（`config.toml`，商汤日日新走 OpenAI 兼容模式）：
 

@@ -339,7 +339,13 @@ class RecommendProvider extends ChangeNotifier {
   }
 
   Future<void> _connectStream() async {
-    if (kIsWeb || !_running || _wsConnecting || _ws != null) return;
+    if (kIsWeb ||
+        !_client.supportsWebSocket ||
+        !_running ||
+        _wsConnecting ||
+        _ws != null) {
+      return;
+    }
     _wsConnecting = true;
     try {
       final ws = await WebSocket.connect(
@@ -378,7 +384,9 @@ class RecommendProvider extends ChangeNotifier {
   }
 
   void _scheduleReconnect() {
-    if (!_running || _reconnectTimer != null) return;
+    if (!_running || !_client.supportsWebSocket || _reconnectTimer != null) {
+      return;
+    }
     _reconnectTimer = Timer(const Duration(seconds: 10), () {
       _reconnectTimer = null;
       unawaited(_connectStream());

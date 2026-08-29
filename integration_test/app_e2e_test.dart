@@ -25,7 +25,10 @@ void main() {
   testWidgets('真实后端：四个 tab 均能加载数据并渲染', (tester) async {
     await tester.pumpWidget(const OpenBiliClawApp());
     // Wait for loadSettings + auth check + first recommend load.
-    await tester.pumpAndSettle(const Duration(milliseconds: 300));
+    // The real app intentionally keeps polling and animating, so waiting for
+    // a globally settled frame queue can never complete on newer live-test
+    // bindings. Business readiness is asserted by the bounded waits below.
+    await tester.pump(const Duration(milliseconds: 500));
     await _pumpUntil(tester, () async {
       final ctx = tester.element(find.byType(RecommendView));
       final rp = ctx.read<RecommendProvider>();
@@ -37,6 +40,7 @@ void main() {
     final recommend = ctx.read<RecommendProvider>();
     expect(recommend.online, isTrue, reason: '推荐页应在线并连上后端');
     expect(recommend.recommendations, isNotEmpty, reason: '推荐列表应有真实数据');
+    debugPrint('E2E phase: recommendations ready');
     expect(find.byType(RecommendView), findsOneWidget);
     // Wait for Flutter's image decoder, not merely the network widget. A
     // non-null RawImage proves that the real proxy response was downloaded and
@@ -58,6 +62,7 @@ void main() {
       findsNothing,
       reason: '真实推荐封面应在设备端成功下载并解码',
     );
+    debugPrint('E2E phase: cover decoded');
     // 惊喜推荐 banner（LLM 生成）应展示（后端有候选时）。
     if (recommend.delights.isNotEmpty) {
       expect(find.text('惊喜推荐'), findsOneWidget, reason: '有惊喜推荐候选时页面应展示 banner');
@@ -65,7 +70,7 @@ void main() {
 
     // ── Tab 2: 内容库（稍后再看/收藏/历史记录）──
     await tester.tap(find.text('内容库'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
     await _pumpUntil(tester, () async {
       final saved = tester
           .element(find.byType(SavedView))
@@ -75,10 +80,11 @@ void main() {
     expect(find.text('稍后再看'), findsOneWidget);
     expect(find.text('我的收藏'), findsOneWidget);
     expect(find.text('历史记录'), findsOneWidget);
+    debugPrint('E2E phase: saved library ready');
 
     // 切到历史记录 tab 并等待加载。
     await tester.tap(find.text('历史记录'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
     await _pumpUntil(tester, () async {
       final saved = tester
           .element(find.byType(SavedView))
@@ -87,10 +93,11 @@ void main() {
     }, timeout: const Duration(seconds: 15));
     final saved = tester.element(find.byType(SavedView)).read<SavedProvider>();
     expect(saved.historyLoadedOnce, isTrue, reason: '历史记录应完成首次加载');
+    debugPrint('E2E phase: history ready');
 
     // ── Tab 3: 画像 ──
     await tester.tap(find.text('画像'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
     await _pumpUntil(tester, () async {
       final profile = tester
           .element(find.byType(ProfileView))
@@ -114,10 +121,11 @@ void main() {
       scrollable: find.byType(Scrollable).last,
     );
     expect(find.text('人格素描'), findsOneWidget, reason: '画像页应渲染 LLM 生成的人格素描');
+    debugPrint('E2E phase: profile ready');
 
     // ── Tab 4: 对话 ──
     await tester.tap(find.text('对话'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
     await _pumpUntil(tester, () async {
       final chat = tester.element(find.byType(ChatView)).read<ChatProvider>();
       return !chat.loading;
@@ -130,6 +138,7 @@ void main() {
       findsOneWidget,
       reason: '对话页应展示消息输入框',
     );
+    debugPrint('E2E phase: chat ready');
 
     // 发送一条真实消息，等待商汤 LLM 生成回复（端到端 AI 链路）。
     final chatProvider = tester
@@ -145,13 +154,14 @@ void main() {
       if (chat.turns.length <= beforeCount) return false;
       final last = chat.turns.last;
       return last.isDone || last.hasError || last.reply.isNotEmpty;
-    }, timeout: const Duration(seconds: 150));
+    }, timeout: const Duration(minutes: 5));
     final chat = tester.element(find.byType(ChatView)).read<ChatProvider>();
     final last = chat.turns.last;
     expect(last.reply, isNotEmpty, reason: '商汤 LLM 应生成真实回复');
     expect(last.hasError, isFalse, reason: 'AI 回复不应报错');
+    debugPrint('E2E phase: LLM reply ready');
     expect(find.byType(ChatView), findsOneWidget);
-  });
+  }, timeout: const Timeout(Duration(minutes: 8)));
 }
 
 Future<void> _pumpUntil(

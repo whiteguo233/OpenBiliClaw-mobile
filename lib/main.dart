@@ -7,6 +7,7 @@ import 'providers/recommend_provider.dart';
 import 'providers/chat_provider.dart';
 import 'providers/profile_provider.dart';
 import 'providers/saved_provider.dart';
+import 'services/tailnet_service.dart';
 import 'theme/app_theme.dart';
 import 'views/login_view.dart';
 import 'views/home_view.dart';
@@ -17,21 +18,37 @@ void main() {
   runApp(const OpenBiliClawApp());
 }
 
-class OpenBiliClawApp extends StatelessWidget {
-  const OpenBiliClawApp({super.key});
+class OpenBiliClawApp extends StatefulWidget {
+  const OpenBiliClawApp({super.key, this.tailnetService});
+
+  final TailnetService? tailnetService;
+
+  @override
+  State<OpenBiliClawApp> createState() => _OpenBiliClawAppState();
+}
+
+class _OpenBiliClawAppState extends State<OpenBiliClawApp> {
+  late final TailnetService _tailnetService =
+      widget.tailnetService ?? createTailnetService();
+  late final ApiClient _client = ApiClient(tailnetService: _tailnetService);
+
+  @override
+  void dispose() {
+    if (widget.tailnetService == null) _tailnetService.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final client = ApiClient();
-
     return MultiProvider(
       providers: [
-        Provider.value(value: client),
-        ChangeNotifierProvider(create: (_) => AuthProvider(client)),
-        ChangeNotifierProvider(create: (_) => RecommendProvider(client)),
-        ChangeNotifierProvider(create: (_) => ChatProvider(client)),
-        ChangeNotifierProvider(create: (_) => ProfileProvider(client)),
-        ChangeNotifierProvider(create: (_) => SavedProvider(client)),
+        ChangeNotifierProvider.value(value: _tailnetService),
+        Provider.value(value: _client),
+        ChangeNotifierProvider(create: (_) => AuthProvider(_client)),
+        ChangeNotifierProvider(create: (_) => RecommendProvider(_client)),
+        ChangeNotifierProvider(create: (_) => ChatProvider(_client)),
+        ChangeNotifierProvider(create: (_) => ProfileProvider(_client)),
+        ChangeNotifierProvider(create: (_) => SavedProvider(_client)),
       ],
       child: MaterialApp(
         title: 'OpenBiliClaw',

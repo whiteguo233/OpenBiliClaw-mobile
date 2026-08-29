@@ -63,7 +63,8 @@ android {
 
     defaultConfig {
         applicationId = "com.openbiliclaw.openbiliclaw_app"
-        minSdk = flutter.minSdkVersion
+        // Persistent Tailscale identity uses Android Keystore via Keybay.
+        minSdk = 31
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

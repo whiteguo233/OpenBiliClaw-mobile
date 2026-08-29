@@ -4,11 +4,16 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../services/tailnet_service.dart';
+
+enum ConnectionMode { direct, tailscale }
+
 class ApiClient {
   static const String _schemeKey = 'api_scheme';
   static const String _hostKey = 'api_host';
   static const String _portKey = 'api_port';
   static const String _sessionKey = 'session_token';
+  static const String _connectionModeKey = 'connection_mode';
   static const int _defaultPort = 8420;
 
   // Android emulators expose the host machine as 10.0.2.2. A physical
@@ -22,11 +27,29 @@ class ApiClient {
   String _host;
   int _port;
   String _sessionToken = '';
+  ConnectionMode _connectionMode;
+  final TailnetService? _tailnetService;
+  final http.Client Function() _directClientFactory;
 
-  ApiClient({String scheme = 'http', String? host, int port = _defaultPort})
-    : _scheme = _normalizeScheme(scheme),
-      _host = _normalizeHost(host ?? _defaultHost),
-      _port = port;
+  ApiClient({
+    String scheme = 'http',
+    String? host,
+    int port = _defaultPort,
+    ConnectionMode connectionMode = ConnectionMode.direct,
+    TailnetService? tailnetService,
+    http.Client Function()? directClientFactory,
+  }) : _scheme = _normalizeScheme(scheme),
+       _host = _normalizeHost(host ?? _defaultHost),
+       // Keep the public named argument `port` instead of exposing `_port`.
+       // ignore: prefer_initializing_formals
+       _port = port,
+       // Keep the public named argument `connectionMode`.
+       // ignore: prefer_initializing_formals
+       _connectionMode = connectionMode,
+       // Keep the public named argument `tailnetService`.
+       // ignore: prefer_initializing_formals
+       _tailnetService = tailnetService,
+       _directClientFactory = directClientFactory ?? http.Client.new;
 
   Uri get _originUri => Uri(scheme: _scheme, host: _host, port: _port);
   String get baseUrl => _originUri.replace(path: '/api').toString();
@@ -39,6 +62,9 @@ class ApiClient {
   String get scheme => _scheme;
   String get host => _host;
   int get port => _port;
+  ConnectionMode get connectionMode => _connectionMode;
+  bool get usesTailscale => _connectionMode == ConnectionMode.tailscale;
+  bool get supportsWebSocket => !usesTailscale;
   String get sessionToken => _sessionToken;
   Map<String, String> get wsHeaders => _sessionToken.isNotEmpty
       ? {
@@ -53,20 +79,44 @@ class ApiClient {
     _host = _normalizeHost(prefs.getString(_hostKey) ?? _host);
     _port = prefs.getInt(_portKey) ?? _defaultPort;
     _sessionToken = prefs.getString(_sessionKey) ?? '';
+    final savedMode = prefs.getString(_connectionModeKey);
+    _connectionMode =
+        savedMode == ConnectionMode.tailscale.name &&
+            _tailnetService?.supported == true
+        ? ConnectionMode.tailscale
+        : ConnectionMode.direct;
+    if (usesTailscale) await _tailnetService?.connect();
   }
 
-  Future<void> saveSettings(String host, int port, {String? scheme}) async {
+  Future<void> saveSettings(
+    String host,
+    int port, {
+    String? scheme,
+    ConnectionMode? connectionMode,
+  }) async {
     final nextScheme = _normalizeScheme(scheme ?? _scheme);
     final nextHost = _normalizeHost(host);
-    final changed = nextScheme != _scheme || nextHost != _host || port != _port;
+    final requestedMode = connectionMode ?? _connectionMode;
+    final nextMode =
+        requestedMode == ConnectionMode.tailscale &&
+            _tailnetService?.supported == true
+        ? requestedMode
+        : ConnectionMode.direct;
+    final changed =
+        nextScheme != _scheme ||
+        nextHost != _host ||
+        port != _port ||
+        nextMode != _connectionMode;
     _scheme = nextScheme;
     _host = nextHost;
     _port = port;
+    _connectionMode = nextMode;
     if (changed) clearSession();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_schemeKey, _scheme);
     await prefs.setString(_hostKey, _host);
     await prefs.setInt(_portKey, port);
+    await prefs.setString(_connectionModeKey, _connectionMode.name);
   }
 
   Uri apiUri(String path) {
@@ -113,18 +163,15 @@ class ApiClient {
 
   Future<Map<String, dynamic>> get(String path, {int? timeout}) async {
     final uri = apiUri(path);
-    final client = http.Client();
-    try {
-      final res = await client
-          .get(uri, headers: _headers())
-          .timeout(Duration(seconds: timeout ?? 10));
-      _captureSession(res);
-      if (res.statusCode == 401) clearSession();
-      if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
-      return _decodeMap(res.body);
-    } finally {
-      client.close();
-    }
+    final res = await _getWithRetry(
+      uri,
+      headers: _headers(),
+      timeout: Duration(seconds: timeout ?? 10),
+    );
+    _captureSession(res);
+    if (res.statusCode == 401) clearSession();
+    if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
+    return _decodeMap(res.body);
   }
 
   Future<Map<String, dynamic>> post(
@@ -133,9 +180,9 @@ class ApiClient {
     int? timeout,
   }) async {
     final uri = apiUri(path);
-    final client = http.Client();
+    final lease = _openClient();
     try {
-      final res = await client
+      final res = await lease.client
           .post(
             uri,
             headers: _headers(),
@@ -147,7 +194,7 @@ class ApiClient {
       if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
       return _decodeMap(res.body);
     } finally {
-      client.close();
+      lease.close();
     }
   }
 
@@ -157,9 +204,9 @@ class ApiClient {
     int? timeout,
   }) async {
     final uri = apiUri(path);
-    final client = http.Client();
+    final lease = _openClient();
     try {
-      final res = await client
+      final res = await lease.client
           .put(
             uri,
             headers: _headers(),
@@ -171,15 +218,15 @@ class ApiClient {
       if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
       return _decodeMap(res.body);
     } finally {
-      client.close();
+      lease.close();
     }
   }
 
   Future<Map<String, dynamic>> delete(String path) async {
     final uri = apiUri(path);
-    final client = http.Client();
+    final lease = _openClient();
     try {
-      final res = await client
+      final res = await lease.client
           .delete(uri, headers: _headers())
           .timeout(const Duration(seconds: 10));
       _captureSession(res);
@@ -187,11 +234,27 @@ class ApiClient {
       if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
       return _decodeMap(res.body);
     } finally {
-      client.close();
+      lease.close();
     }
   }
 
-  Future<bool> checkHealth({String? overrideHost, int? overridePort}) async {
+  Future<Uint8List> getBytes(Uri uri, {Map<String, String>? headers}) async {
+    final res = await _getWithRetry(
+      uri,
+      headers: {..._headers(), ...?headers},
+      timeout: const Duration(seconds: 15),
+    );
+    _captureSession(res);
+    if (res.statusCode == 401) clearSession();
+    if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
+    return res.bodyBytes;
+  }
+
+  Future<bool> checkHealth({
+    String? overrideHost,
+    int? overridePort,
+    ConnectionMode? overrideConnectionMode,
+  }) async {
     try {
       var nextScheme = _scheme;
       var nextHost = overrideHost ?? _host;
@@ -208,18 +271,75 @@ class ApiClient {
         port: p,
         path: '/api/health',
       );
-      final client = http.Client();
-      try {
-        final res = await client
-            .get(uri, headers: {'X-OBC-Auth': '1'})
-            .timeout(const Duration(seconds: 5));
-        return res.statusCode == 200;
-      } finally {
-        client.close();
-      }
+      final selectedMode = overrideConnectionMode ?? _connectionMode;
+      final res = await _getWithRetry(
+        uri,
+        headers: const {'X-OBC-Auth': '1'},
+        timeout: Duration(
+          seconds: selectedMode == ConnectionMode.tailscale ? 30 : 5,
+        ),
+        mode: selectedMode,
+      );
+      return res.statusCode == 200;
     } catch (_) {
       return false;
     }
+  }
+
+  Future<http.Response> _getWithRetry(
+    Uri uri, {
+    required Map<String, String> headers,
+    required Duration timeout,
+    ConnectionMode? mode,
+  }) async {
+    final selectedMode = mode ?? _connectionMode;
+    // A freshly-running mobile tailnet can report its node state before the
+    // first peer path has fully settled. Keep retries bounded to idempotent
+    // GETs and known transport failures, but allow enough time for that path
+    // to become usable on slower Android devices.
+    const retryDelays = [
+      Duration(milliseconds: 300),
+      Duration(seconds: 1),
+      Duration(seconds: 2),
+      Duration(seconds: 4),
+    ];
+
+    for (var attempt = 0; ; attempt += 1) {
+      final lease = _openClient(mode: selectedMode);
+      try {
+        return await lease.client.get(uri, headers: headers).timeout(timeout);
+      } catch (error) {
+        final canRetry =
+            selectedMode == ConnectionMode.tailscale &&
+            attempt < retryDelays.length &&
+            _isTransientTailnetGetError(error);
+        if (!canRetry) rethrow;
+      } finally {
+        lease.close();
+      }
+      await Future<void>.delayed(retryDelays[attempt]);
+    }
+  }
+
+  static bool _isTransientTailnetGetError(Object error) {
+    if (error is! http.ClientException) return false;
+    final message = error.message.toLowerCase();
+    return message.contains('eof') ||
+        message.contains('connection reset') ||
+        message.contains('broken pipe') ||
+        message.contains('closed before');
+  }
+
+  _ClientLease _openClient({ConnectionMode? mode}) {
+    final selectedMode = mode ?? _connectionMode;
+    if (selectedMode == ConnectionMode.tailscale) {
+      final client = _tailnetService?.httpClient;
+      if (client == null) {
+        throw StateError('Tailscale 尚未连接');
+      }
+      return _ClientLease(client, owned: false);
+    }
+    return _ClientLease(_directClientFactory(), owned: true);
   }
 
   static String _normalizeScheme(String value) {
@@ -257,6 +377,17 @@ class ApiClient {
     if (decoded is Map<String, dynamic>) return decoded;
     if (decoded is Map) return Map<String, dynamic>.from(decoded);
     throw const FormatException('Expected a JSON object response');
+  }
+}
+
+class _ClientLease {
+  const _ClientLease(this.client, {required this.owned});
+
+  final http.Client client;
+  final bool owned;
+
+  void close() {
+    if (owned) client.close();
   }
 }
 
