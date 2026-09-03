@@ -34,7 +34,11 @@ App 采用「客户端 + 后端」架构，使用流程：
 - API 返回数据处理调整
 - 推荐页、画像页、历史记录支持「回到顶部」悬浮按钮
 - Android 使用 Material 3 导航，iOS 使用 Cupertino Tab Bar；支持跟随系统的浅色/深色主题、Dynamic Type/大字体、横屏与安全区
-- 支持 Bilibili、抖音、小红书、YouTube、X、知乎、Reddit、微博、Linux.do、V2EX 等来源识别；优先唤起已安装的原生 App，失败时回落到规范化网页地址
+- Bilibili 卡片点击后默认进入 App 内原生播放器（基于 media_kit 移植自 PiliPlus 的思路）；登录态/取流走后端 `/api/bilibili/player/play-url` 协议，后端未就绪时可一键回退内置 WebView
+- 原生播放器支持弹幕、字幕、倍速、画质/分 P 切换、记忆播放、双击快进/快退、滑动调音量；WebView 登录后可一键同步 Cookie 到后端
+- 原生播放页支持点赞、投币、收藏、稍后再看、三连、原生评论列表和相关视频推荐
+- B 站登录态与原生播放器取流协议见 [docs/bilibili-login-and-player-protocol.md](docs/bilibili-login-and-player-protocol.md)
+- 支持 Bilibili、抖音、小红书、YouTube、X、知乎、Reddit、微博、Linux.do、V2EX 等来源识别；非 Bilibili 内容优先唤起已安装的原生 App，失败时回落到规范化网页地址
 - 支持 Android / iOS / Web / Linux / macOS / Windows
 - Android / iOS 可使用内置 Tailscale，仅让本 App 的后端请求进入 tailnet，无需开放公网端口或安装系统级 VPN
 - GitHub Actions 双端 CI 与 Release：签名 APK/AAB、供用户自签名的 unsigned IPA、符号文件、校验和和构建来源证明

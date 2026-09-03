@@ -1,7 +1,7 @@
 name: openbiliclaw_app
 description: "OpenBiliClaw mobile app — personalized content discovery agent"
 publish_to: 'none'
-version: 0.3.149+3
+version: 0.3.150+1
 
 environment:
   sdk: ^3.12.0
@@ -11,11 +11,16 @@ dependencies:
     sdk: flutter
   http: ^1.2.0
   provider: ^6.1.0
+  qr_flutter: ^4.1.0
   cupertino_icons: ^1.0.8
   cached_network_image: ^4.0.0
   shared_preferences: ^2.2.0
   url_launcher: ^6.2.0
+  webview_flutter: ^4.14.1
   flutter_markdown: ^0.7.4
+  media_kit: ^1.1.11
+  media_kit_video: ^1.2.5
+  media_kit_libs_video: ^1.0.5
   path_provider: ^2.1.5
   # Pinned while the embedded runtime is pre-1.0; review before upgrading.
   tailscale: 0.9.0

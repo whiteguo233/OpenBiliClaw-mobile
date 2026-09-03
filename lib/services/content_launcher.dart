@@ -1,35 +1,53 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/delight.dart';
 import '../models/recommendation.dart';
 import '../models/saved_item.dart';
+import '../views/native_bilibili_video_page.dart';
 
 class ContentLauncher {
   const ContentLauncher._();
 
-  static Future<bool> openRecommendation(Recommendation item) {
+  static Future<bool> openRecommendation(
+    Recommendation item, {
+    BuildContext? context,
+  }) {
     return open(
       sourcePlatform: item.sourcePlatform,
       contentId: item.contentId,
       contentUrl: item.contentUrl,
       fallbackId: item.bvid,
+      title: item.displayTitle,
+      coverUrl: item.coverUrl,
+      contentType: item.contentType,
+      context: context,
     );
   }
 
-  static Future<bool> openDelight(Delight item) {
+  static Future<bool> openDelight(Delight item, {BuildContext? context}) {
     return open(
       sourcePlatform: item.sourcePlatform,
       contentId: item.contentId,
       contentUrl: item.contentUrl,
       fallbackId: item.bvid,
+      title: item.title,
+      coverUrl: item.coverUrl,
+      contentType: item.contentType,
+      context: context,
     );
   }
 
-  static Future<bool> openSaved(SavedItem item) {
+  static Future<bool> openSaved(SavedItem item, {BuildContext? context}) {
     return open(
       sourcePlatform: item.sourcePlatform,
       contentId: item.contentId,
       contentUrl: item.contentUrl,
+      title: item.title,
+      coverUrl: item.coverUrl,
+      contentType: item.contentType,
+      context: context,
     );
   }
 
@@ -38,7 +56,32 @@ class ContentLauncher {
     required String contentId,
     String contentUrl = '',
     String fallbackId = '',
+    String title = '',
+    String coverUrl = '',
+    String contentType = 'video',
+    BuildContext? context,
   }) async {
+    final source = normalizeSourcePlatform(
+      sourcePlatform,
+      contentUrl: contentUrl,
+      bvid: fallbackId,
+    );
+    final id = _canonicalId(contentId, fallbackId, source);
+    if (context != null &&
+        _canOpenInAppBilibili(source, id, contentType: contentType)) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => NativeBilibiliVideoPage(
+            bvid: id,
+            title: title,
+            contentUrl: contentUrl,
+            coverUrl: coverUrl,
+          ),
+        ),
+      );
+      return true;
+    }
+
     for (final candidate in buildLaunchUris(
       sourcePlatform: sourcePlatform,
       contentId: contentId,
@@ -55,6 +98,28 @@ class ContentLauncher {
       }
     }
     return false;
+  }
+
+  /// Whether this mobile build can keep Bilibili videos inside an embedded
+  /// web view instead of handing them to the system-native Bilibili app.
+  static bool _canOpenInAppBilibili(
+    String source,
+    String id, {
+    String contentType = 'video',
+  }) {
+    if (kIsWeb || id.isEmpty) return false;
+    if (contentType.trim().isEmpty) {
+      // Legacy data may not carry a content type yet; keep the previous
+      // in-app behavior for unknown types rather than silently breaking taps.
+    } else if (contentType.trim().toLowerCase() != 'video') {
+      return false;
+    }
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android ||
+      TargetPlatform.iOS ||
+      TargetPlatform.macOS => source == 'bilibili',
+      _ => false,
+    };
   }
 
   /// Pure launch plan shared by the runtime and regression tests. Native app

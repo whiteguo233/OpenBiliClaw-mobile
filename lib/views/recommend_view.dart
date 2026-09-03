@@ -111,7 +111,10 @@ class _RecommendViewState extends State<RecommendView> {
                             onTap: () async {
                               unawaited(rp.reportClick(rec));
                               final opened =
-                                  await ContentLauncher.openRecommendation(rec);
+                                  await ContentLauncher.openRecommendation(
+                                    rec,
+                                    context: context,
+                                  );
                               if (context.mounted && !opened) {
                                 _showMessage(
                                   context,
@@ -437,7 +440,10 @@ class _RecommendViewState extends State<RecommendView> {
       onNext: rp.nextDelight,
       onView: () async {
         unawaited(rp.respondToDelight(delight, 'view'));
-        final opened = await ContentLauncher.openDelight(delight);
+        final opened = await ContentLauncher.openDelight(
+          delight,
+          context: context,
+        );
         if (context.mounted && !opened) {
           _showMessage(context, '没有可打开的内容链接', error: true);
         }

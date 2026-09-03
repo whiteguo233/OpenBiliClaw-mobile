@@ -543,7 +543,7 @@ class _SavedList extends StatelessWidget {
   }
 
   Future<void> _open(BuildContext context, SavedItem item) async {
-    final opened = await ContentLauncher.openSaved(item);
+    final opened = await ContentLauncher.openSaved(item, context: context);
     if (context.mounted && !opened) {
       _message(context, '没有可打开的内容链接', error: true);
     }
@@ -1098,6 +1098,10 @@ class _HistoryCard extends StatelessWidget {
       sourcePlatform: item.sourcePlatform,
       contentId: item.contentId,
       contentUrl: item.contentUrl,
+      title: item.title,
+      coverUrl: item.coverUrl,
+      contentType: item.contentType,
+      context: context,
     );
     if (context.mounted && !opened) {
       _message(context, '没有可打开的内容链接', error: true);
