@@ -54,6 +54,8 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
   int? _selectedQn;
   int? _selectedCid;
   List<DanmakuItem> _danmakuItems = const [];
+  bool _danmakuEnabled = true;
+  List<String> _danmakuBlockWords = const [];
   double _rate = 1.0;
   int _selectedSubtitle = -1;
   TapDownDetails? _doubleTapDetails;
@@ -67,6 +69,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
     _api ??= BilibiliApi(context.read<ApiClient>());
     if (!_loadStarted) {
       _loadStarted = true;
+      unawaited(_loadDanmakuSettings());
       unawaited(_load());
     }
   }
@@ -149,6 +152,17 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
     setState(() {});
   }
 
+  Future<void> _loadDanmakuSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final enabled = prefs.getBool('bilibili_danmaku_enabled');
+    final blockWords = prefs.getStringList('bilibili_danmaku_block_words');
+    if (!mounted) return;
+    setState(() {
+      _danmakuEnabled = enabled ?? true;
+      _danmakuBlockWords = blockWords ?? const [];
+    });
+  }
+
   Future<void> _loadDanmaku(BilibiliPlayResult result) async {
     final danmaku = result.danmaku;
     if (!danmaku.exists) return;
@@ -166,7 +180,9 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
         if (params.isEmpty) continue;
         final seconds = double.tryParse(params.first) ?? 0;
         final text = match.group(2) ?? '';
-        if (text.trim().isEmpty) continue;
+        final normalized = text.trim();
+        if (normalized.isEmpty) continue;
+        if (_danmakuBlockWords.any(normalized.contains)) continue;
         items.add(
           DanmakuItem(
             time: Duration(milliseconds: (seconds * 1000).round()),
@@ -356,6 +372,119 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
     ).push<bool>(MaterialPageRoute(builder: (_) => const BilibiliLoginView()));
     if (loggedIn == true && mounted) {
       await _load();
+    }
+  }
+
+  Future<void> _openDanmakuSettings() async {
+    var enabled = _danmakuEnabled;
+    final blockWords = List<String>.from(_danmakuBlockWords);
+    final controller = TextEditingController();
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            20,
+            20,
+            MediaQuery.viewInsetsOf(context).bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('弹幕设置', style: TextStyle(fontSize: 16)),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('显示弹幕'),
+                value: enabled,
+                onChanged: (value) => setSheetState(() => enabled = value),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      decoration: const InputDecoration(
+                        labelText: '屏蔽词',
+                        hintText: '输入后回车添加',
+                        isDense: true,
+                      ),
+                      onSubmitted: (value) {
+                        final text = value.trim();
+                        if (text.isNotEmpty && !blockWords.contains(text)) {
+                          setSheetState(() => blockWords.add(text));
+                          controller.clear();
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: '添加屏蔽词',
+                    onPressed: () {
+                      final text = controller.text.trim();
+                      if (text.isNotEmpty && !blockWords.contains(text)) {
+                        setSheetState(() => blockWords.add(text));
+                        controller.clear();
+                      }
+                    },
+                    icon: const Icon(Icons.add_rounded),
+                  ),
+                ],
+              ),
+              if (blockWords.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: blockWords
+                      .map(
+                        (word) => Chip(
+                          label: Text(word),
+                          onDeleted: () =>
+                              setSheetState(() => blockWords.remove(word)),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(sheetContext, false),
+                    child: const Text('取消'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(sheetContext, true),
+                    child: const Text('保存'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    controller.dispose();
+    if (saved != true || !mounted) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('bilibili_danmaku_enabled', enabled);
+    await prefs.setStringList('bilibili_danmaku_block_words', blockWords);
+    if (!mounted) return;
+    setState(() {
+      _danmakuEnabled = enabled;
+      _danmakuBlockWords = List.unmodifiable(blockWords);
+    });
+    final result = _result;
+    if (result != null) {
+      unawaited(_loadDanmaku(result));
     }
   }
 
@@ -561,6 +690,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
                 child: DanmakuOverlay(
                   position: _player.stream.position,
                   items: _danmakuItems,
+                  enabled: _danmakuEnabled,
                 ),
               ),
             ],
@@ -682,6 +812,20 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
                     ],
                   ),
                 ],
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    ActionChip(
+                      label: Text(_danmakuEnabled ? '弹幕：开' : '弹幕：关'),
+                      labelStyle: const TextStyle(fontSize: 11),
+                      visualDensity: VisualDensity.compact,
+                      backgroundColor: _danmakuEnabled ? Colors.white24 : null,
+                      onPressed: _openDanmakuSettings,
+                    ),
+                  ],
+                ),
                 if (result.pages.length > 1) ...[
                   const SizedBox(height: 10),
                   Text('分P', style: theme.textTheme.labelLarge),
