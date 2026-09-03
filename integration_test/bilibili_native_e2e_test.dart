@@ -29,19 +29,21 @@ void main() {
       ),
     );
 
-    // 播放器应加载成功并显示互动按钮。
+    // 播放器应加载成功并显示互动按钮 + 高级弹幕入口。
     await _pumpUntil(tester, () async {
       return find.text('点赞').evaluate().isNotEmpty &&
           find.text('投币').evaluate().isNotEmpty &&
           find.text('收藏').evaluate().isNotEmpty &&
           find.text('稍后').evaluate().isNotEmpty &&
-          find.text('三连').evaluate().isNotEmpty;
+          find.text('三连').evaluate().isNotEmpty &&
+          find.textContaining('弹幕：').evaluate().isNotEmpty;
     }, timeout: const Duration(seconds: 30));
     expect(find.text('点赞'), findsOneWidget);
     expect(find.text('投币'), findsOneWidget);
     expect(find.text('收藏'), findsOneWidget);
     expect(find.text('稍后'), findsOneWidget);
     expect(find.text('三连'), findsOneWidget);
+    expect(find.textContaining('弹幕：'), findsOneWidget);
 
     // 评论/相关视频是异步增强能力，允许存在；至少不应因为错误而消失。
     await _pumpUntil(tester, () async {
