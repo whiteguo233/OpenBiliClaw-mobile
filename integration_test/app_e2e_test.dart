@@ -30,6 +30,7 @@ void main() {
     // bindings. Business readiness is asserted by the bounded waits below.
     await tester.pump(const Duration(milliseconds: 500));
     await _pumpUntil(tester, () async {
+      if (tester.widgetList(find.byType(RecommendView)).isEmpty) return false;
       final ctx = tester.element(find.byType(RecommendView));
       final rp = ctx.read<RecommendProvider>();
       return !rp.loading && rp.online;
