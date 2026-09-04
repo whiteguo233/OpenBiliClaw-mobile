@@ -353,8 +353,9 @@ class _ProfileViewState extends State<ProfileView> {
             const SizedBox(height: 10),
             ExpansionTile(
               tilePadding: EdgeInsets.zero,
-              childrenPadding: EdgeInsets.zero,
+              childrenPadding: const EdgeInsets.only(bottom: 4),
               dense: true,
+              initiallyExpanded: true,
               title: Text('关注的创作者（${summary.favoriteUpUsers.length}）'),
               children: [
                 _chips(context, summary.favoriteUpUsers.take(40), brand: true),
@@ -730,20 +731,48 @@ class _ProfileViewState extends State<ProfileView> {
     final color = avoidance
         ? Theme.of(context).colorScheme.error
         : Theme.of(context).colorScheme.secondary;
-    return ExpansionTile(
-      tilePadding: EdgeInsets.zero,
-      childrenPadding: const EdgeInsets.only(bottom: 7),
-      dense: true,
-      title: Text(item.name, style: const TextStyle(fontSize: 13)),
-      trailing: Text(
-        item.weight > 0 ? '${(item.weight * 100).round()}%' : '',
-        style: TextStyle(color: color, fontSize: 11),
+    final generatedReason = item.specifics.isNotEmpty
+        ? '细分：${item.specifics.join('、')}'
+        : '';
+    final showReason = item.reason.isNotEmpty && item.reason != generatedReason;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.1)),
       ),
-      children: [
-        if (item.specifics.isNotEmpty) _chips(context, item.specifics),
-        if (item.reason.isNotEmpty && item.specifics.isEmpty)
-          Text(item.reason, style: Theme.of(context).textTheme.bodySmall),
-      ],
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+        childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+        dense: true,
+        initiallyExpanded: true,
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(item.name, style: const TextStyle(fontSize: 13)),
+            ),
+            if (item.weight > 0)
+              Text(
+                '${(item.weight * 100).round()}%',
+                style: TextStyle(color: color, fontSize: 11),
+              ),
+          ],
+        ),
+        children: [
+          if (showReason)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text(
+                item.reason,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          if (item.specifics.isNotEmpty) _chips(context, item.specifics),
+        ],
+      ),
     );
   }
 
