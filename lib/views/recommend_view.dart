@@ -24,16 +24,30 @@ class RecommendView extends StatefulWidget {
   onStartChat;
 
   @override
-  State<RecommendView> createState() => _RecommendViewState();
+  State<RecommendView> createState() => RecommendViewState();
 }
 
-class _RecommendViewState extends State<RecommendView> {
+class RecommendViewState extends State<RecommendView> {
   final ScrollController _scrollController = ScrollController();
 
   @override
   void dispose() {
     _scrollController.dispose();
     super.dispose();
+  }
+
+  /// 点击底部「推荐」时，先回到顶部，再触发一次真实刷新。
+  Future<void> scrollToTopAndRefresh() async {
+    if (!mounted) return;
+    if (_scrollController.hasClients) {
+      await _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    if (!mounted) return;
+    await context.read<RecommendProvider>().load();
   }
 
   @override
@@ -500,9 +514,7 @@ class _RecommendViewState extends State<RecommendView> {
           final selected =
               (isAll && rp.platformFilter.isEmpty) ||
               (!isAll && rp.platformFilter == slug);
-          final label = isAll
-              ? '全部'
-              : RecommendProvider.platformLabel(slug);
+          final label = isAll ? '全部' : RecommendProvider.platformLabel(slug);
           return ChoiceChip(
             label: Text(label),
             selected: selected,
@@ -533,10 +545,7 @@ class _RecommendViewState extends State<RecommendView> {
           Icon(icon, size: 17, color: color),
           const SizedBox(width: 8),
           Expanded(child: Text(message, style: const TextStyle(fontSize: 13))),
-          if (action != null) ...[
-            const SizedBox(width: 8),
-            action,
-          ],
+          if (action != null) ...[const SizedBox(width: 8), action],
         ],
       ),
     );

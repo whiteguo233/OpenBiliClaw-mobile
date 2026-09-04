@@ -735,6 +735,8 @@ class _ProfileViewState extends State<ProfileView> {
         ? '细分：${item.specifics.join('、')}'
         : '';
     final showReason = item.reason.isNotEmpty && item.reason != generatedReason;
+    final category = item.category.trim();
+    final showCategory = category.isNotEmpty && category != item.name;
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 6),
@@ -751,26 +753,87 @@ class _ProfileViewState extends State<ProfileView> {
         initiallyExpanded: true,
         title: Row(
           children: [
+            Icon(
+              avoidance ? Icons.block_rounded : Icons.favorite_border_rounded,
+              size: 16,
+              color: color,
+            ),
+            const SizedBox(width: 7),
             Expanded(
-              child: Text(item.name, style: const TextStyle(fontSize: 13)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.name,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (showCategory)
+                    Text(
+                      category,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: context.appColors.inkMuted,
+                      ),
+                    ),
+                ],
+              ),
             ),
             if (item.weight > 0)
-              Text(
-                '${(item.weight * 100).round()}%',
-                style: TextStyle(color: color, fontSize: 11),
-              ),
+              _badge('${(item.weight * 100).round()}%', color),
           ],
         ),
         children: [
           if (showReason)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
+            _profileDetailBlock(
+              context,
+              icon: Icons.lightbulb_outline_rounded,
+              label: '推荐理由',
               child: Text(
                 item.reason,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
-          if (item.specifics.isNotEmpty) _chips(context, item.specifics),
+          if (item.specifics.isNotEmpty)
+            _profileDetailBlock(
+              context,
+              icon: Icons.tag_rounded,
+              label: '细分偏好',
+              child: _chips(context, item.specifics),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _profileDetailBlock(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required Widget child,
+  }) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          child,
         ],
       ),
     );

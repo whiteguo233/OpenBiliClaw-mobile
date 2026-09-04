@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:provider/provider.dart';
@@ -382,21 +384,41 @@ class _ChatViewState extends State<ChatView> {
         ),
       );
     }
-    return RefreshIndicator(
-      onRefresh: provider.loadTurns,
-      child: ListView.builder(
-        controller: _scrollController,
-        reverse: true,
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
-        itemCount: turns.length,
-        itemBuilder: (context, index) {
-          final turn = turns[turns.length - index - 1];
-          if (turn.isCard || turn.isQuestion) {
-            return _dialogueCard(context, provider, turn);
-          }
-          return _messageTurn(context, provider, turn, theme);
-        },
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification.metrics.extentAfter < 200 && provider.hasMoreHistory) {
+          unawaited(provider.loadOlderTurns());
+        }
+        return false;
+      },
+      child: RefreshIndicator(
+        onRefresh: provider.loadTurns,
+        child: ListView.builder(
+          controller: _scrollController,
+          reverse: true,
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+          itemCount: turns.length + (provider.loadingOlder ? 1 : 0),
+          itemBuilder: (context, index) {
+            if (provider.loadingOlder && index == turns.length) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Center(
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              );
+            }
+            final turn = turns[turns.length - index - 1];
+            if (turn.isCard || turn.isQuestion) {
+              return _dialogueCard(context, provider, turn);
+            }
+            return _messageTurn(context, provider, turn, theme);
+          },
+        ),
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
@@ -38,7 +39,16 @@ class CoverImage extends StatelessWidget {
     // Keep native and web on the same backend-proxied image path. Direct CDN
     // requests can be rejected on mobile networks because of hotlink, DNS, or
     // TLS policy differences, while the backend proxy also provides caching.
-    final imageUrl = proxyImageUrl(url, client.baseUrl, token: token);
+    //
+    // Keep the proxy URL stable (no per-session token query) so CachedNetworkImage
+    // and the tailnet in-memory cache can reuse cached bytes across rebuilds.
+    // Authentication still travels in the Cookie header below.
+    // Browsers cannot carry the session Cookie through CachedNetworkImage on
+    // web, so keep the query token there. Native/tailnet clients send the
+    // Cookie header and benefit from a stable cache URL.
+    final imageUrl = kIsWeb
+        ? proxyImageUrl(url, client.baseUrl, token: token)
+        : proxyImageUrl(url, client.baseUrl);
     final headers = token.isEmpty ? null : {'Cookie': 'obc_session=$token'};
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
@@ -105,6 +115,13 @@ class _TailnetImage extends StatefulWidget {
 }
 
 class _TailnetImageState extends State<_TailnetImage> {
+  /// Simple process-wide memory cache for tailnet cover bytes.
+  /// Tailnet mode cannot use CachedNetworkImage's disk cache directly, so
+  /// avoid re-fetching the same backend proxy image every time a widget is
+  /// rebuilt or scrolled back into view.
+  static final Map<String, Uint8List> _memoryCache = {};
+  static const int _maxMemoryCacheEntries = 300;
+
   late Future<Uint8List> _bytes;
 
   @override
@@ -123,10 +140,20 @@ class _TailnetImageState extends State<_TailnetImage> {
   }
 
   void _load() {
-    _bytes = widget.client.getBytes(
-      Uri.parse(widget.imageUrl),
-      headers: widget.headers,
-    );
+    final cached = _memoryCache[widget.imageUrl];
+    if (cached != null) {
+      _bytes = Future.value(cached);
+      return;
+    }
+    _bytes = widget.client
+        .getBytes(Uri.parse(widget.imageUrl), headers: widget.headers)
+        .then((bytes) {
+          if (_memoryCache.length >= _maxMemoryCacheEntries) {
+            _memoryCache.remove(_memoryCache.keys.first);
+          }
+          _memoryCache[widget.imageUrl] = bytes;
+          return bytes;
+        });
   }
 
   @override

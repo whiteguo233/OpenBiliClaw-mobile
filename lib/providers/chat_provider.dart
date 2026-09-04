@@ -26,6 +26,11 @@ class ChatProvider extends ChangeNotifier {
   DialogueContext? _dialogueContext;
   ChatComposeContext _composeContext = const ChatComposeContext();
   bool _disposed = false;
+  static const int _historyPageSize = 30;
+  static const int _historyMaxLimit = 200;
+  int _historyLimit = _historyPageSize;
+  bool _loadingOlder = false;
+  bool _hasMoreHistory = true;
 
   ChatProvider(ApiClient client) : _api = ChatApi(client);
 
@@ -60,6 +65,8 @@ class ChatProvider extends ChangeNotifier {
       List.unmodifiable(_pendingConfirmations);
   int get pendingCount => _pendingConfirmations.length;
   bool get loading => _loading;
+  bool get loadingOlder => _loadingOlder;
+  bool get hasMoreHistory => _hasMoreHistory;
   bool get responding => _responding;
   String get error => _error;
   DialogueContext? get dialogueContext => _dialogueContext;
@@ -74,7 +81,7 @@ class ChatProvider extends ChangeNotifier {
   }
 
   Future<void> loadTurns({bool showLoading = true}) async {
-    if (_syncingHistory) return;
+    if (_syncingHistory || _loadingOlder) return;
     _syncingHistory = true;
     var changed = false;
     if (showLoading) {
@@ -82,7 +89,12 @@ class ChatProvider extends ChangeNotifier {
       _safeNotify();
     }
     try {
-      final fetched = await _api.fetchTurns(session: 'popup', limit: 100);
+      final fetched = await _api.fetchTurns(
+        session: 'popup',
+        limit: _historyLimit,
+      );
+      _hasMoreHistory =
+          fetched.length >= _historyLimit && _historyLimit < _historyMaxLimit;
       final fetchedIds = fetched.map((turn) => turn.turnId).toSet();
       final localPending = _turns
           .where(
@@ -136,6 +148,40 @@ class ChatProvider extends ChangeNotifier {
     } catch (_) {
       // Keep the last good work-list while the backend reconnects.
       return false;
+    }
+  }
+
+  /// 往上滑到历史顶部时，按页扩大后端 limit 拉取更早的对话。
+  Future<void> loadOlderTurns() async {
+    if (_syncingHistory || _loadingOlder || !_hasMoreHistory) return;
+    if (_historyLimit >= _historyMaxLimit) return;
+    _loadingOlder = true;
+    _error = '';
+    _safeNotify();
+    try {
+      final nextLimit = min(_historyLimit + _historyPageSize, _historyMaxLimit);
+      final fetched = await _api.fetchTurns(session: 'popup', limit: nextLimit);
+      final fetchedIds = fetched.map((turn) => turn.turnId).toSet();
+      final localPending = _turns
+          .where(
+            (turn) =>
+                turn.isPending &&
+                turn.turnId.isNotEmpty &&
+                !fetchedIds.contains(turn.turnId),
+          )
+          .toList();
+      _turns = [...fetched, ...localPending];
+      _historyLimit = nextLimit;
+      _historySignature = _turnSignature(_turns);
+      _hasMoreHistory =
+          fetched.length >= nextLimit && nextLimit < _historyMaxLimit;
+      _safeNotify();
+    } catch (error) {
+      _error = _message(error, '更多对话加载失败');
+      _safeNotify();
+    } finally {
+      _loadingOlder = false;
+      _safeNotify();
     }
   }
 

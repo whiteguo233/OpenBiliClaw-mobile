@@ -201,4 +201,27 @@ class BilibiliApi {
     );
     return BilibiliCommentPage.fromJson(data);
   }
+
+  /// `POST /api/bilibili/video/comment`
+  ///
+  /// Publishes a comment (or a reply inside a thread when [root]/[parent]
+  /// carry the reply rpids) through the backend, which owns the Bilibili
+  /// cookie and CSRF token.
+  Future<Map<String, dynamic>> postComment({
+    required String bvid,
+    required String message,
+    int? root,
+    int? parent,
+  }) {
+    return _client.post(
+      '/bilibili/video/comment',
+      body: {
+        'bvid': bvid,
+        'message': message,
+        'root': ?root,
+        'parent': ?parent,
+      },
+      timeout: 20,
+    );
+  }
 }

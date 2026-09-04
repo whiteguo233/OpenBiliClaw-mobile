@@ -31,6 +31,8 @@ class _HomeViewState extends State<HomeView> {
   final Set<int> _loadedTabs = {};
   bool _providersReady = false;
   bool _disposed = false;
+  final GlobalKey<RecommendViewState> _recommendViewKey =
+      GlobalKey<RecommendViewState>();
   late RecommendProvider _recommendProvider;
   late ChatProvider _chatProvider;
   late ProfileProvider _profileProvider;
@@ -98,8 +100,14 @@ class _HomeViewState extends State<HomeView> {
     if (_currentIndex == 3 && index != 3) {
       _chatProvider.stopHistorySync();
     }
+    final isSameRecommend = index == 0 && _currentIndex == 0;
     setState(() => _currentIndex = index);
-    unawaited(_loadTab(index));
+    if (isSameRecommend) {
+      // 已停在推荐页时，点击推荐 = 回顶 + 刷新一屏。
+      unawaited(_recommendViewKey.currentState?.scrollToTopAndRefresh());
+    } else {
+      unawaited(_loadTab(index));
+    }
   }
 
   void _startContextualChat(
@@ -132,7 +140,7 @@ class _HomeViewState extends State<HomeView> {
     final textScale = MediaQuery.textScalerOf(context).scale(1);
     final compactChrome = screenWidth < 350 || textScale > 1.3;
     final pages = [
-      RecommendView(onStartChat: _startContextualChat),
+      RecommendView(key: _recommendViewKey, onStartChat: _startContextualChat),
       const SavedView(),
       const ProfileView(),
       const ChatView(),
