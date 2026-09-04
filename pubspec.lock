@@ -57,6 +57,15 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.0"
+  canvas_danmaku:
+    dependency: "direct main"
+    description:
+      path: "."
+      ref: main
+      resolved-ref: "275046d8647a6a26cba1d0dadb9e28688cb3dbf1"
+      url: "https://github.com/bggRGjQaUbCoE/canvas_danmaku.git"
+    source: git
+    version: "0.2.6"
   characters:
     dependency: transitive
     description:
@@ -105,6 +114,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.9.0"
+  cupertino_http:
+    dependency: "direct main"
+    description:
+      name: cupertino_http
+      sha256: d57188b07349a373bec9a78997a80c00e1de08dab0fe454b3f86c84661ac457c
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.1.0"
   cupertino_icons:
     dependency: "direct main"
     description:
@@ -223,6 +240,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  glob:
+    dependency: transitive
+    description:
+      name: glob
+      sha256: "218aeb56050c714f62a3182775320dfa04602b55074873e24e31bbd39bda96fb"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.2.0"
   hooks:
     dependency: transitive
     description:
@@ -247,6 +272,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.1.2"
+  http_profile:
+    dependency: transitive
+    description:
+      name: http_profile
+      sha256: "7e679e355b09aaee2ab5010915c932cce3f2d1c11c3b2dc177891687014ffa78"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.0"
   image:
     dependency: transitive
     description:
@@ -444,6 +477,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.19.0"
+  native_toolchain_c:
+    dependency: transitive
+    description:
+      name: native_toolchain_c
+      sha256: a1c26117c48cebe5677b0cf0e33a980a79a7c5577effc86f52e5a0d309cdcb60
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.19.3"
   nested:
     dependency: transitive
     description:
@@ -977,6 +1018,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.1"
+  web_socket:
+    dependency: transitive
+    description:
+      name: web_socket
+      sha256: "34d64019aa8e36bf9842ac014bb5d2f5586ca73df5e4d9bf5c936975cae6982c"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.1"
+  web_socket_channel:
+    dependency: "direct main"
+    description:
+      name: web_socket_channel
+      sha256: d645757fb0f4773d602444000a8131ff5d48c9e47adfe9772652dd1a4f2d45c8
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.0.3"
   webdriver:
     dependency: transitive
     description:

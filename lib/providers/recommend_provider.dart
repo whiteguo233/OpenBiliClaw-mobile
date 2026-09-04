@@ -2,7 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:cupertino_http/cupertino_http.dart';
 import 'package:flutter/foundation.dart';
+import 'package:web_socket_channel/adapter_web_socket_channel.dart';
+import 'package:web_socket_channel/io.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../api/client.dart';
 import '../api/recommend_api.dart';
@@ -26,7 +30,7 @@ class RecommendProvider extends ChangeNotifier {
   RuntimeStatus _runtimeStatus = const RuntimeStatus();
   ActivityFeed _activityFeed = const ActivityFeed();
   Timer? _pollTimer;
-  WebSocket? _ws;
+  WebSocketChannel? _ws;
   Timer? _reconnectTimer;
   bool _wsConnecting = false;
   bool _running = false;
@@ -297,7 +301,7 @@ class RecommendProvider extends ChangeNotifier {
     _pollTimer = null;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
-    _ws?.close();
+    unawaited(_ws?.sink.close() ?? Future.value());
     _ws = null;
   }
 
@@ -338,6 +342,19 @@ class RecommendProvider extends ChangeNotifier {
     }
   }
 
+  /// dart:io's [WebSocket.connect] uses raw sockets that fight iOS Local
+  /// Network privacy (release-mode `errno = 65`, see flutter/flutter#171197).
+  /// On iOS go through NSURLSessionWebSocketTask (CupertinoWebSocket), which
+  /// follows the same permission rules as Safari/CFNetwork.
+  Future<WebSocketChannel> _openRuntimeStream() async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      final socket = await CupertinoWebSocket.connect(Uri.parse(_client.wsUrl));
+      return AdapterWebSocketChannel(socket);
+    }
+    final ws = await WebSocket.connect(_client.wsUrl, headers: _client.wsHeaders);
+    return IOWebSocketChannel(ws);
+  }
+
   Future<void> _connectStream() async {
     if (kIsWeb ||
         !_client.supportsWebSocket ||
@@ -348,12 +365,9 @@ class RecommendProvider extends ChangeNotifier {
     }
     _wsConnecting = true;
     try {
-      final ws = await WebSocket.connect(
-        _client.wsUrl,
-        headers: _client.wsHeaders,
-      );
+      final ws = await _openRuntimeStream();
       _ws = ws;
-      ws.listen(
+      ws.stream.listen(
         (raw) {
           try {
             final event = jsonDecode(raw as String) as Map<String, dynamic>;

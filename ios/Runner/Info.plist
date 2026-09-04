@@ -31,6 +31,8 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>OpenBiliClaw 需要访问本地网络，以连接您电脑上的后端服务。</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

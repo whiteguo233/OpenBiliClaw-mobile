@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/delight.dart';
 import '../models/recommendation.dart';
@@ -68,9 +71,10 @@ class _RecommendViewState extends State<RecommendView> {
                       SliverToBoxAdapter(
                         child: _statusBanner(
                           context,
-                          '无法连接后端，下拉可重试',
+                          '无法连接后端，下拉可重试。\n如首次安装：请检查 设置 → 蜂窝网络 → 无线数据 → 选择“无线局域网与蜂窝网络”',
                           Icons.wifi_off,
                           Theme.of(context).colorScheme.tertiary,
+                          action: _networkSettingsAction(context),
                         ),
                       ),
                     if (rp.activityFeed.headline.isNotEmpty ||
@@ -479,8 +483,9 @@ class _RecommendViewState extends State<RecommendView> {
     BuildContext context,
     String message,
     IconData icon,
-    Color color,
-  ) {
+    Color color, {
+    Widget? action,
+  }) {
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
       padding: const EdgeInsets.all(12),
@@ -494,8 +499,28 @@ class _RecommendViewState extends State<RecommendView> {
           Icon(icon, size: 17, color: color),
           const SizedBox(width: 8),
           Expanded(child: Text(message, style: const TextStyle(fontSize: 13))),
+          if (action != null) ...[
+            const SizedBox(width: 8),
+            action,
+          ],
         ],
       ),
+    );
+  }
+
+  /// Opens the system settings page for this app. On iOS this is the app's
+  /// own settings page; "无线数据" lives under 蜂窝网络 but the app page is
+  /// still the fastest way for users to find related toggles. No public API
+  /// exists to query or change the Wireless Data permission directly.
+  Widget? _networkSettingsAction(BuildContext context) {
+    if (kIsWeb) return null;
+    if (!Platform.isIOS) return null;
+    return TextButton(
+      onPressed: () => launchUrl(
+        Uri.parse('app-settings:'),
+        mode: LaunchMode.externalApplication,
+      ),
+      child: const Text('打开设置'),
     );
   }
 

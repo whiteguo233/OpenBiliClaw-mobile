@@ -22,8 +22,17 @@ dependencies:
   media_kit_video: ^1.2.5
   media_kit_libs_video: ^1.0.5
   path_provider: ^2.1.5
+  # Danmaku engine used by the PiliPlus (biliplus) reference client. Scrolling,
+  # track collision and removal are engine-driven, so danmaku can never vanish
+  # mid-screen the way a hand-rolled overlay animation can.
+  canvas_danmaku:
+    git:
+      url: https://github.com/bggRGjQaUbCoE/canvas_danmaku.git
+      ref: main
   # Pinned while the embedded runtime is pre-1.0; review before upgrading.
   tailscale: 0.9.0
+  cupertino_http: ^3.1.0
+  web_socket_channel: ^3.0.3
 
 dev_dependencies:
   flutter_test:

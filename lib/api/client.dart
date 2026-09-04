@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:cupertino_http/cupertino_http.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -49,7 +50,17 @@ class ApiClient {
        // Keep the public named argument `tailnetService`.
        // ignore: prefer_initializing_formals
        _tailnetService = tailnetService,
-       _directClientFactory = directClientFactory ?? http.Client.new;
+       _directClientFactory = directClientFactory ?? _defaultDirectClientFactory;
+
+  /// dart:io's raw sockets fight iOS Local Network privacy (release-mode
+  /// `errno = 65`); use the NSURLSession-backed client on iOS so the same
+  /// permission rules as Safari/CFNetwork apply. See flutter/flutter#171197.
+  static http.Client _defaultDirectClientFactory() {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      return CupertinoClient.defaultSessionConfiguration();
+    }
+    return http.Client();
+  }
 
   Uri get _originUri => Uri(scheme: _scheme, host: _host, port: _port);
   String get baseUrl => _originUri.replace(path: '/api').toString();
