@@ -61,6 +61,10 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
   TapDownDetails? _doubleTapDetails;
   BilibiliVideoState? _videoState;
   List<BilibiliComment> _comments = const [];
+  int _commentTotal = 0;
+  int _commentNextPn = 1;
+  bool _commentHasMore = false;
+  bool _commentsLoadingMore = false;
   List<BilibiliRelatedVideo> _related = const [];
 
   @override
@@ -215,15 +219,60 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
         api.relatedVideos(bvid: widget.bvid),
       ]);
       if (!mounted) return;
+      final commentPage = results[1] as BilibiliCommentPage;
       setState(() {
         _videoState = results[0] as BilibiliVideoState;
-        _comments = results[1] as List<BilibiliComment>;
+        _comments = commentPage.items;
+        _commentTotal = commentPage.total;
+        _commentHasMore = commentPage.hasMore;
+        _commentNextPn = commentPage.page + 1;
         _related = results[2] as List<BilibiliRelatedVideo>;
       });
     } catch (_) {
       // Interactions/comments/related are optional enhancements.
     }
   }
+
+  Future<void> _loadMoreComments() async {
+    final api = _api;
+    if (api == null || !_commentHasMore || _commentsLoadingMore) return;
+    setState(() => _commentsLoadingMore = true);
+    try {
+      final page = await api.videoComments(
+        bvid: widget.bvid,
+        pn: _commentNextPn,
+      );
+      if (!mounted) return;
+      setState(() {
+        _comments = _mergeComments(_comments, page.items);
+        _commentTotal = page.total;
+        _commentHasMore = page.hasMore;
+        _commentNextPn = page.page + 1;
+        _commentsLoadingMore = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _commentsLoadingMore = false);
+      _showSnack('评论加载失败，请重试');
+    }
+  }
+
+  /// Appends [next] to [current] skipping duplicates, so a backend that
+  /// ignores the `pn` parameter cannot make the list repeat itself.
+  static List<BilibiliComment> _mergeComments(
+    List<BilibiliComment> current,
+    List<BilibiliComment> next,
+  ) {
+    final seen = current.map(_commentKey).toSet();
+    return [
+      ...current,
+      ...next.where((comment) => seen.add(_commentKey(comment))),
+    ];
+  }
+
+  static String _commentKey(BilibiliComment comment) => comment.rpid != 0
+      ? 'r${comment.rpid}'
+      : 'm${comment.mid}:${comment.message.hashCode}';
 
   Future<void> _toggleLike() async {
     final api = _api;
@@ -859,7 +908,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        '评论',
+                        _commentTotal > 0 ? '评论 $_commentTotal' : '评论',
                         style: theme.textTheme.labelLarge?.copyWith(
                           color: Colors.white,
                         ),
@@ -867,43 +916,26 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  ..._comments
-                      .take(10)
-                      .map(
-                        (comment) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                comment.uname,
-                                style: const TextStyle(
-                                  color: Color(0xFFFB7299),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
+                  ..._comments.map(_commentTile),
+                  if (_commentHasMore || _commentsLoadingMore)
+                    Center(
+                      child: _commentsLoadingMore
+                          ? const Padding(
+                              padding: EdgeInsets.all(10),
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white70,
                                 ),
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                comment.message,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13,
-                                  height: 1.4,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '👍 ${comment.likeCount}',
-                                style: const TextStyle(
-                                  color: Colors.white54,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                            )
+                          : TextButton(
+                              onPressed: _loadMoreComments,
+                              child: const Text('加载更多评论'),
+                            ),
+                    ),
                 ],
                 if (_related.isNotEmpty) ...[
                   const SizedBox(height: 16),
@@ -975,5 +1007,311 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
       return video.width / video.height;
     }
     return 16 / 9;
+  }
+
+  Widget _commentTile(BilibiliComment comment) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            comment.uname,
+            style: const TextStyle(
+              color: Color(0xFFFB7299),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            comment.message,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '👍 ${comment.likeCount}',
+            style: const TextStyle(color: Colors.white54, fontSize: 11),
+          ),
+          if (comment.replies.isNotEmpty || comment.replyCount > 0) ...[
+            const SizedBox(height: 6),
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final reply in comment.replies)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: '${reply.uname}: ',
+                              style: const TextStyle(
+                                color: Color(0xFFFB7299),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            TextSpan(
+                              text: reply.message,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  if (comment.replyCount > comment.replies.length)
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _openCommentReplies(comment),
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          '共 ${comment.replyCount} 条回复 >',
+                          style: const TextStyle(
+                            color: Color(0xFF6D9EEB),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openCommentReplies(BilibiliComment root) async {
+    final api = _api;
+    if (api == null || root.rpid == 0) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1B1B1B),
+      builder: (sheetContext) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.4,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) => _CommentRepliesSheet(
+          api: api,
+          bvid: widget.bvid,
+          root: root,
+          scrollController: scrollController,
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom sheet that shows the full reply thread of a top-level comment,
+/// paginated through `/api/bilibili/video/comment-replies`.
+class _CommentRepliesSheet extends StatefulWidget {
+  const _CommentRepliesSheet({
+    required this.api,
+    required this.bvid,
+    required this.root,
+    required this.scrollController,
+  });
+
+  final BilibiliApi api;
+  final String bvid;
+  final BilibiliComment root;
+  final ScrollController scrollController;
+
+  @override
+  State<_CommentRepliesSheet> createState() => _CommentRepliesSheetState();
+}
+
+class _CommentRepliesSheetState extends State<_CommentRepliesSheet> {
+  List<BilibiliComment> _replies = const [];
+  int _total = 0;
+  int _nextPn = 1;
+  bool _hasMore = false;
+  bool _loading = true;
+  bool _loadingMore = false;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    if (_loadingMore) return;
+    setState(() {
+      if (!_loading) _loadingMore = true;
+      _failed = false;
+    });
+    try {
+      final page = await widget.api.commentReplies(
+        bvid: widget.bvid,
+        root: widget.root.rpid,
+        pn: _nextPn,
+      );
+      if (!mounted) return;
+      setState(() {
+        final seen = _replies.map(_replyKey).toSet();
+        _replies = [
+          ..._replies,
+          ...page.items.where((reply) => seen.add(_replyKey(reply))),
+        ];
+        _total = page.total;
+        _hasMore = page.hasMore;
+        _nextPn = page.page + 1;
+        _loading = false;
+        _loadingMore = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _loadingMore = false;
+        _failed = true;
+      });
+    }
+  }
+
+  static String _replyKey(BilibiliComment reply) => reply.rpid != 0
+      ? 'r${reply.rpid}'
+      : 'm${reply.mid}:${reply.message.hashCode}';
+
+  @override
+  Widget build(BuildContext context) {
+    final root = widget.root;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _total > 0 ? '回复 $_total' : '回复',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: '关闭',
+                icon: const Icon(Icons.close, color: Colors.white70),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _loading
+              ? const Center(
+                  child: CircularProgressIndicator(color: Colors.white70),
+                )
+              : ListView(
+                  controller: widget.scrollController,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  children: [
+                    _sheetComment(root, isRoot: true),
+                    const Divider(color: Colors.white12, height: 20),
+                    if (_replies.isEmpty && !_failed)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Center(
+                          child: Text(
+                            '暂无回复',
+                            style: TextStyle(
+                              color: Colors.white54,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                    for (final reply in _replies) _sheetComment(reply),
+                    if (_failed)
+                      Center(
+                        child: TextButton(
+                          onPressed: _load,
+                          child: const Text('加载失败，点击重试'),
+                        ),
+                      )
+                    else if (_hasMore || _loadingMore)
+                      Center(
+                        child: _loadingMore
+                            ? const Padding(
+                                padding: EdgeInsets.all(10),
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white70,
+                                  ),
+                                ),
+                              )
+                            : TextButton(
+                                onPressed: _load,
+                                child: const Text('加载更多回复'),
+                              ),
+                      ),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _sheetComment(BilibiliComment comment, {bool isRoot = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            comment.uname,
+            style: TextStyle(
+              color: const Color(0xFFFB7299),
+              fontSize: 12,
+              fontWeight: isRoot ? FontWeight.w700 : FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            comment.message,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '👍 ${comment.likeCount}',
+            style: const TextStyle(color: Colors.white54, fontSize: 11),
+          ),
+        ],
+      ),
+    );
   }
 }

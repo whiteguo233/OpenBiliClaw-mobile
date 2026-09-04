@@ -342,6 +342,35 @@ POST /api/bilibili/player/play-url
 | `POST /api/bilibili/video/favorite` | 收藏/取消收藏 |
 | `POST /api/bilibili/video/watch-later` | 加入/移出稍后再看 |
 | `GET /api/bilibili/video/related?bvid=...` | 相关视频 |
-| `GET /api/bilibili/video/comments?bvid=...&limit=20` | 视频热评 |
+| `GET /api/bilibili/video/comments?bvid=...&pn=1&limit=20` | 视频评论（分页，`pn` 从 1 开始） |
+| `GET /api/bilibili/video/comment-replies?bvid=...&root=<rpid>&pn=1&limit=10` | 某条评论的完整回复楼（分页） |
+
+评论接口响应结构：
+
+```json
+{
+  "ok": true,
+  "items": [
+    {
+      "rpid": 123,
+      "mid": 456,
+      "uname": "某用户",
+      "message": "评论内容",
+      "like_count": 10,
+      "reply_count": 5,
+      "replies": [
+        {"rpid": 124, "mid": 789, "uname": "...", "message": "...", "like_count": 2}
+      ]
+    }
+  ],
+  "total": 1234,
+  "page": 1,
+  "has_more": true
+}
+```
+
+- `replies` 内嵌该评论的前几条回复；当 `reply_count > replies.length` 时，客户端用 `comment-replies` 接口按页拉取完整回复楼。
+- `has_more = page * limit < total`，为 `true` 时客户端展示“加载更多评论”。
+- 旧版后端不返回 `rpid`/`reply_count`/`replies`/`total`/`has_more`，客户端需按缺省值（0 / false）兼容。
 
 所有互动接口都复用同一个后端 B 站 Cookie，移动端不需要保存任何 B 站凭据。

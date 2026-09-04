@@ -177,23 +177,28 @@ class BilibiliApi {
     return const [];
   }
 
-  /// `GET /api/bilibili/video/comments?bvid=...&limit=...`
-  Future<List<BilibiliComment>> videoComments({
+  /// `GET /api/bilibili/video/comments?bvid=...&pn=...&limit=...`
+  Future<BilibiliCommentPage> videoComments({
     required String bvid,
+    int pn = 1,
     int limit = 20,
   }) async {
     final data = await _client.get(
-      '/bilibili/video/comments?bvid=${Uri.encodeQueryComponent(bvid)}&limit=$limit',
+      '/bilibili/video/comments?bvid=${Uri.encodeQueryComponent(bvid)}&pn=$pn&limit=$limit',
     );
-    final rawItems = data['items'];
-    if (rawItems is List) {
-      return rawItems
-          .whereType<Map>()
-          .map(
-            (item) => BilibiliComment.fromJson(Map<String, dynamic>.from(item)),
-          )
-          .toList();
-    }
-    return const [];
+    return BilibiliCommentPage.fromJson(data);
+  }
+
+  /// `GET /api/bilibili/video/comment-replies?bvid=...&root=...&pn=...&limit=...`
+  Future<BilibiliCommentPage> commentReplies({
+    required String bvid,
+    required int root,
+    int pn = 1,
+    int limit = 10,
+  }) async {
+    final data = await _client.get(
+      '/bilibili/video/comment-replies?bvid=${Uri.encodeQueryComponent(bvid)}&root=$root&pn=$pn&limit=$limit',
+    );
+    return BilibiliCommentPage.fromJson(data);
   }
 }

@@ -126,10 +126,21 @@ void main() {
         'stat': {'view': 12345},
       });
       final comment = BilibiliComment.fromJson({
+        'rpid': 100,
         'mid': 1,
         'uname': '用户',
         'message': '好看',
         'like_count': 10,
+        'reply_count': 2,
+        'replies': [
+          {
+            'rpid': 101,
+            'mid': 2,
+            'uname': '层主',
+            'message': '同意',
+            'like_count': 3,
+          },
+        ],
       });
 
       expect(state.like, isTrue);
@@ -137,7 +148,42 @@ void main() {
       expect(state.watchLater, isTrue);
       expect(related.bvid, 'BV1aa');
       expect(related.upName, 'UP');
+      expect(comment.rpid, 100);
       expect(comment.likeCount, 10);
+      expect(comment.replyCount, 2);
+      expect(comment.replies.single.uname, '层主');
+    });
+
+    test('parses comment page with pagination fields', () {
+      final page = BilibiliCommentPage.fromJson({
+        'ok': true,
+        'items': [
+          {'rpid': 1, 'mid': 1, 'uname': '甲', 'message': '前排'},
+          {'rpid': 2, 'mid': 2, 'uname': '乙', 'message': '后排'},
+        ],
+        'total': 45,
+        'page': 2,
+        'has_more': true,
+      });
+
+      expect(page.items, hasLength(2));
+      expect(page.total, 45);
+      expect(page.page, 2);
+      expect(page.hasMore, isTrue);
+    });
+
+    test('comment page tolerates legacy backend without pagination fields', () {
+      final page = BilibiliCommentPage.fromJson({
+        'ok': true,
+        'items': [
+          {'mid': 1, 'uname': '甲', 'message': '前排', 'like_count': 5},
+        ],
+      });
+
+      expect(page.items.single.likeCount, 5);
+      expect(page.items.single.replies, isEmpty);
+      expect(page.total, 0);
+      expect(page.hasMore, isFalse);
     });
   });
 }

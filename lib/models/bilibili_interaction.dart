@@ -65,25 +65,77 @@ class BilibiliRelatedVideo {
 }
 
 class BilibiliComment {
+  final int rpid;
   final int mid;
   final String uname;
   final String message;
   final int likeCount;
+  final int replyCount;
+  final List<BilibiliComment> replies;
 
   const BilibiliComment({
+    this.rpid = 0,
     this.mid = 0,
     this.uname = '',
     this.message = '',
     this.likeCount = 0,
+    this.replyCount = 0,
+    this.replies = const [],
   });
 
-  factory BilibiliComment.fromJson(Map<String, dynamic> json) =>
-      BilibiliComment(
-        mid: _int(json['mid']),
-        uname: _text(json['uname']),
-        message: decodeHtml(_text(json['message'])),
-        likeCount: _int(json['like_count']),
-      );
+  factory BilibiliComment.fromJson(Map<String, dynamic> json) {
+    final rawReplies = json['replies'];
+    return BilibiliComment(
+      rpid: _int(json['rpid']),
+      mid: _int(json['mid']),
+      uname: _text(json['uname']),
+      message: decodeHtml(_text(json['message'])),
+      likeCount: _int(json['like_count']),
+      replyCount: _int(json['reply_count']),
+      replies: rawReplies is List
+          ? rawReplies
+                .whereType<Map>()
+                .map(
+                  (item) =>
+                      BilibiliComment.fromJson(Map<String, dynamic>.from(item)),
+                )
+                .toList()
+          : const [],
+    );
+  }
+}
+
+class BilibiliCommentPage {
+  final List<BilibiliComment> items;
+  final int total;
+  final int page;
+  final bool hasMore;
+
+  const BilibiliCommentPage({
+    this.items = const [],
+    this.total = 0,
+    this.page = 1,
+    this.hasMore = false,
+  });
+
+  factory BilibiliCommentPage.fromJson(Map<String, dynamic> data) {
+    final rawItems = data['items'];
+    final items = rawItems is List
+        ? rawItems
+              .whereType<Map>()
+              .map(
+                (item) =>
+                    BilibiliComment.fromJson(Map<String, dynamic>.from(item)),
+              )
+              .toList()
+        : const <BilibiliComment>[];
+    return BilibiliCommentPage(
+      items: items,
+      total: _int(data['total']),
+      page: _int(data['page']) == 0 ? 1 : _int(data['page']),
+      hasMore: data['has_more'] == true,
+    );
+  }
 }
 
 String _text(dynamic value) => value?.toString().trim() ?? '';
