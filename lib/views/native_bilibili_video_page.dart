@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -190,7 +192,10 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
         headers: danmaku.headers,
       );
       if (response.statusCode != 200) return;
-      final body = utf8.decode(response.bodyBytes, allowMalformed: true);
+      final body = utf8.decode(
+        inflateDanmakuBytes(response.bodyBytes),
+        allowMalformed: true,
+      );
       final pattern = RegExp(r'<d p="([^"]+)">([^<]*)</d>');
       final items = <DanmakuItem>[];
       for (final match in pattern.allMatches(body)) {
@@ -657,6 +662,29 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
     await _player.setVolume(next);
   }
 
+  /// Custom fullscreen route so the danmaku overlay stays visible in
+  /// fullscreen (media_kit's native fullscreen only shows the video texture).
+  Future<void> _enterFullscreen() async {
+    final controller = _videoController;
+    if (controller == null) return;
+    final video = _result?.video;
+    final portrait =
+        video != null && video.width > 0 && video.height > video.width;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _DanmakuFullscreenPage(
+          controller: controller,
+          position: _player.stream.position,
+          items: _danmakuItems,
+          danmakuEnabled: _danmakuEnabled,
+          loadComments: _fetchCommentPage,
+          loadReplies: _fetchReplyPage,
+          portrait: portrait,
+        ),
+      ),
+    );
+  }
+
   Future<void> _switchQuality(BilibiliQuality quality) async {
     if (_loading || _selectedQn == quality.qn) return;
     await _saveProgress();
@@ -769,277 +797,331 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
     ThemeData theme,
   ) {
     final video = result.video;
-    return Column(
-      children: [
-        AspectRatio(
-          aspectRatio: _aspectRatio(video),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              _videoController == null
-                  ? const ColoredBox(color: Colors.black)
-                  : GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onDoubleTapDown: (details) {
-                        _doubleTapDetails = details;
-                      },
-                      onDoubleTap: _handleDoubleTap,
-                      onVerticalDragUpdate: (details) {
-                        unawaited(_handleVolumeDrag(details.delta.dy));
-                      },
-                      child: Video(controller: _videoController!),
-                    ),
-              IgnorePointer(
-                child: DanmakuOverlay(
-                  position: _player.stream.position,
-                  items: _danmakuItems,
-                  enabled: _danmakuEnabled,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          color: Colors.black,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _actionButton(
-                icon: (_videoState?.like ?? false)
-                    ? Icons.thumb_up_rounded
-                    : Icons.thumb_up_outlined,
-                label: '点赞',
-                active: _videoState?.like ?? false,
-                onPressed: _toggleLike,
-              ),
-              _actionButton(
-                icon: Icons.monetization_on_outlined,
-                label: '投币',
-                onPressed: _toggleCoin,
-              ),
-              _actionButton(
-                icon: (_videoState?.favorite ?? false)
-                    ? Icons.star_rounded
-                    : Icons.star_border_rounded,
-                label: '收藏',
-                active: _videoState?.favorite ?? false,
-                onPressed: _toggleFavorite,
-              ),
-              _actionButton(
-                icon: (_videoState?.watchLater ?? false)
-                    ? Icons.watch_later_rounded
-                    : Icons.watch_later_outlined,
-                label: '稍后',
-                active: _videoState?.watchLater ?? false,
-                onPressed: _toggleWatchLater,
-              ),
-              _actionButton(
-                icon: Icons.auto_awesome_rounded,
-                label: '三连',
-                onPressed: _triple,
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.title.isNotEmpty ? widget.title : 'B站视频',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: result.qualities
-                      .map(
-                        (quality) => ActionChip(
-                          label: Text(quality.label),
-                          labelStyle: const TextStyle(fontSize: 11),
-                          visualDensity: VisualDensity.compact,
-                          onPressed: _loading
-                              ? null
-                              : () => _switchQuality(quality),
-                        ),
-                      )
-                      .toList(),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    for (final rate in const [0.5, 1.0, 1.25, 1.5, 2.0])
-                      ActionChip(
-                        label: Text(rate == 1.0 ? '1.0x' : '${rate}x'),
-                        labelStyle: const TextStyle(fontSize: 11),
-                        visualDensity: VisualDensity.compact,
-                        backgroundColor: _rate == rate ? Colors.white24 : null,
-                        onPressed: _loading ? null : () => _switchRate(rate),
-                      ),
-                  ],
-                ),
-                if (result.subtitles.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final aspectRatio = _aspectRatio(video);
+        // Portrait videos would otherwise grow to the full body height and
+        // push the title/comments off-screen; cap the player so the content
+        // below stays reachable.
+        final maxPlayerHeight = constraints.maxHeight * 0.6;
+        final naturalHeight = constraints.maxWidth / aspectRatio;
+        final playerHeight = naturalHeight > maxPlayerHeight
+            ? maxPlayerHeight
+            : naturalHeight;
+        return Column(
+          children: [
+            SizedBox(
+              width: constraints.maxWidth,
+              height: playerHeight,
+              child: Center(
+                child: AspectRatio(
+                  aspectRatio: aspectRatio,
+                  child: Stack(
+                    fit: StackFit.expand,
                     children: [
-                      ActionChip(
-                        label: const Text('字幕'),
-                        labelStyle: const TextStyle(fontSize: 11),
-                        visualDensity: VisualDensity.compact,
-                        backgroundColor: _selectedSubtitle == -1
-                            ? Colors.white24
-                            : null,
-                        onPressed: _loading ? null : () => _selectSubtitle(-1),
-                      ),
-                      for (var i = 0; i < result.subtitles.length; i++)
-                        ActionChip(
-                          label: Text(result.subtitles[i].name),
-                          labelStyle: const TextStyle(fontSize: 11),
-                          visualDensity: VisualDensity.compact,
-                          backgroundColor: _selectedSubtitle == i
-                              ? Colors.white24
-                              : null,
-                          onPressed: _loading ? null : () => _selectSubtitle(i),
+                      _videoController == null
+                          ? const ColoredBox(color: Colors.black)
+                          : GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onDoubleTapDown: (details) {
+                                _doubleTapDetails = details;
+                              },
+                              onDoubleTap: _handleDoubleTap,
+                              onVerticalDragUpdate: (details) {
+                                unawaited(_handleVolumeDrag(details.delta.dy));
+                              },
+                              // media_kit's default fullscreen button pushes
+                              // its own fullscreen route IN ADDITION to
+                              // `onEnterFullscreen`, stacking two fullscreen
+                              // pages (exit needs two pops). Replace it with
+                              // a button that only opens the custom route.
+                              child: MaterialVideoControlsTheme(
+                                normal: MaterialVideoControlsThemeData(
+                                  bottomButtonBar: [
+                                    const MaterialPositionIndicator(),
+                                    const Spacer(),
+                                    MaterialCustomButton(
+                                      icon: const Icon(Icons.fullscreen),
+                                      onPressed: () =>
+                                          unawaited(_enterFullscreen()),
+                                    ),
+                                  ],
+                                ),
+                                fullscreen:
+                                    const MaterialVideoControlsThemeData(),
+                                child: Video(controller: _videoController!),
+                              ),
+                            ),
+                      IgnorePointer(
+                        child: DanmakuOverlay(
+                          position: _player.stream.position,
+                          items: _danmakuItems,
+                          enabled: _danmakuEnabled,
                         ),
+                      ),
                     ],
                   ),
-                ],
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    ActionChip(
-                      label: Text(_danmakuEnabled ? '弹幕：开' : '弹幕：关'),
-                      labelStyle: const TextStyle(fontSize: 11),
-                      visualDensity: VisualDensity.compact,
-                      backgroundColor: _danmakuEnabled ? Colors.white24 : null,
-                      onPressed: _openDanmakuSettings,
-                    ),
-                  ],
                 ),
-                if (result.pages.length > 1) ...[
-                  const SizedBox(height: 10),
-                  Text('分P', style: theme.textTheme.labelLarge),
-                  const SizedBox(height: 6),
-                  ...result.pages.map(
-                    (page) => ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      onTap: _loading ? null : () => _switchPage(page),
-                      leading: CircleAvatar(
-                        radius: 14,
-                        child: Text('${page.page}'),
-                      ),
-                      title: Text(
-                        page.part,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
+              ),
+            ),
+            Container(
+              color: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _actionButton(
+                    icon: (_videoState?.like ?? false)
+                        ? Icons.thumb_up_rounded
+                        : Icons.thumb_up_outlined,
+                    label: '点赞',
+                    active: _videoState?.like ?? false,
+                    onPressed: _toggleLike,
+                  ),
+                  _actionButton(
+                    icon: Icons.monetization_on_outlined,
+                    label: '投币',
+                    onPressed: _toggleCoin,
+                  ),
+                  _actionButton(
+                    icon: (_videoState?.favorite ?? false)
+                        ? Icons.star_rounded
+                        : Icons.star_border_rounded,
+                    label: '收藏',
+                    active: _videoState?.favorite ?? false,
+                    onPressed: _toggleFavorite,
+                  ),
+                  _actionButton(
+                    icon: (_videoState?.watchLater ?? false)
+                        ? Icons.watch_later_rounded
+                        : Icons.watch_later_outlined,
+                    label: '稍后',
+                    active: _videoState?.watchLater ?? false,
+                    onPressed: _toggleWatchLater,
+                  ),
+                  _actionButton(
+                    icon: Icons.auto_awesome_rounded,
+                    label: '三连',
+                    onPressed: _triple,
                   ),
                 ],
-                if (_comments.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.mode_comment_outlined,
-                        color: Colors.white70,
-                        size: 16,
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.title.isNotEmpty ? widget.title : 'B站视频',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
                       ),
-                      const SizedBox(width: 6),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: result.qualities
+                          .map(
+                            (quality) => ActionChip(
+                              label: Text(quality.label),
+                              labelStyle: const TextStyle(fontSize: 11),
+                              visualDensity: VisualDensity.compact,
+                              onPressed: _loading
+                                  ? null
+                                  : () => _switchQuality(quality),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final rate in const [0.5, 1.0, 1.25, 1.5, 2.0])
+                          ActionChip(
+                            label: Text(rate == 1.0 ? '1.0x' : '${rate}x'),
+                            labelStyle: const TextStyle(fontSize: 11),
+                            visualDensity: VisualDensity.compact,
+                            backgroundColor: _rate == rate
+                                ? Colors.white24
+                                : null,
+                            onPressed: _loading
+                                ? null
+                                : () => _switchRate(rate),
+                          ),
+                      ],
+                    ),
+                    if (result.subtitles.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          ActionChip(
+                            label: const Text('字幕'),
+                            labelStyle: const TextStyle(fontSize: 11),
+                            visualDensity: VisualDensity.compact,
+                            backgroundColor: _selectedSubtitle == -1
+                                ? Colors.white24
+                                : null,
+                            onPressed: _loading
+                                ? null
+                                : () => _selectSubtitle(-1),
+                          ),
+                          for (var i = 0; i < result.subtitles.length; i++)
+                            ActionChip(
+                              label: Text(result.subtitles[i].name),
+                              labelStyle: const TextStyle(fontSize: 11),
+                              visualDensity: VisualDensity.compact,
+                              backgroundColor: _selectedSubtitle == i
+                                  ? Colors.white24
+                                  : null,
+                              onPressed: _loading
+                                  ? null
+                                  : () => _selectSubtitle(i),
+                            ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        ActionChip(
+                          label: Text(_danmakuEnabled ? '弹幕：开' : '弹幕：关'),
+                          labelStyle: const TextStyle(fontSize: 11),
+                          visualDensity: VisualDensity.compact,
+                          backgroundColor: _danmakuEnabled
+                              ? Colors.white24
+                              : null,
+                          onPressed: _openDanmakuSettings,
+                        ),
+                      ],
+                    ),
+                    if (result.pages.length > 1) ...[
+                      const SizedBox(height: 10),
+                      Text('分P', style: theme.textTheme.labelLarge),
+                      const SizedBox(height: 6),
+                      ...result.pages.map(
+                        (page) => ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          onTap: _loading ? null : () => _switchPage(page),
+                          leading: CircleAvatar(
+                            radius: 14,
+                            child: Text('${page.page}'),
+                          ),
+                          title: Text(
+                            page.part,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (_comments.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.mode_comment_outlined,
+                            color: Colors.white70,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _commentTotal > 0 ? '评论 $_commentTotal' : '评论',
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      ..._comments.map(
+                        (comment) => _CommentTile(
+                          comment: comment,
+                          onOpenReplies: () => _openCommentReplies(comment),
+                        ),
+                      ),
+                      if (_commentHasMore || _commentsLoadingMore)
+                        Center(
+                          child: _commentsLoadingMore
+                              ? const Padding(
+                                  padding: EdgeInsets.all(10),
+                                  child: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                )
+                              : TextButton(
+                                  onPressed: _loadMoreComments,
+                                  child: const Text('加载更多评论'),
+                                ),
+                        ),
+                    ],
+                    if (_related.isNotEmpty) ...[
+                      const SizedBox(height: 16),
                       Text(
-                        _commentTotal > 0 ? '评论 $_commentTotal' : '评论',
+                        '相关视频',
                         style: theme.textTheme.labelLarge?.copyWith(
                           color: Colors.white,
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  ..._comments.map(_commentTile),
-                  if (_commentHasMore || _commentsLoadingMore)
-                    Center(
-                      child: _commentsLoadingMore
-                          ? const Padding(
-                              padding: EdgeInsets.all(10),
-                              child: SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white70,
+                      const SizedBox(height: 4),
+                      ..._related
+                          .take(8)
+                          .map(
+                            (item) => ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: SizedBox(
+                                width: 90,
+                                height: 56,
+                                child: CoverImage(
+                                  url: item.coverUrl,
+                                  width: 90,
+                                  height: 56,
+                                  borderRadius: 8,
                                 ),
                               ),
-                            )
-                          : TextButton(
-                              onPressed: _loadMoreComments,
-                              child: const Text('加载更多评论'),
-                            ),
-                    ),
-                ],
-                if (_related.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    '相关视频',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  ..._related
-                      .take(8)
-                      .map(
-                        (item) => ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: SizedBox(
-                            width: 90,
-                            height: 56,
-                            child: CoverImage(
-                              url: item.coverUrl,
-                              width: 90,
-                              height: 56,
-                              borderRadius: 8,
+                              title: Text(
+                                item.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              subtitle: Text(
+                                '${item.upName} · ${item.view} 播放',
+                                style: const TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 11,
+                                ),
+                              ),
+                              onTap: () => _openRelated(item),
                             ),
                           ),
-                          title: Text(
-                            item.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                            ),
-                          ),
-                          subtitle: Text(
-                            '${item.upName} · ${item.view} 播放',
-                            style: const TextStyle(
-                              color: Colors.white54,
-                              fontSize: 11,
-                            ),
-                          ),
-                          onTap: () => _openRelated(item),
-                        ),
-                      ),
-                ],
-              ],
+                    ],
+                  ],
+                ),
+              ),
             ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 
@@ -1063,7 +1145,175 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
     return 16 / 9;
   }
 
-  Widget _commentTile(BilibiliComment comment) {
+  Future<void> _openCommentReplies(BilibiliComment root) async {
+    if (root.rpid == 0 || (_commentDirect == null && _api == null)) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1B1B1B),
+      builder: (sheetContext) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.4,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) => _CommentRepliesSheet(
+          root: root,
+          scrollController: scrollController,
+          loadPage: (pn) => _fetchReplyPage(root.rpid, pn),
+        ),
+      ),
+    );
+  }
+}
+
+/// Bilibili's danmaku endpoint returns a deflate-compressed body without a
+/// Content-Encoding header, so the HTTP client cannot auto-decompress it.
+/// Returns the bytes unchanged when they already look like XML.
+List<int> inflateDanmakuBytes(List<int> bytes) {
+  if (bytes.isEmpty || bytes[0] == 0x3C) return bytes; // already XML
+  for (final raw in const [true, false]) {
+    try {
+      final decoded = ZLibDecoder(raw: raw).convert(bytes);
+      if (decoded.isNotEmpty && decoded[0] == 0x3C) return decoded;
+    } catch (_) {
+      // Try the next decoder, then give up and return the original bytes.
+    }
+  }
+  return bytes;
+}
+
+/// Fetches one 1-based page of top-level comments.
+typedef _CommentPageLoader = Future<BilibiliCommentPage> Function(int pn);
+
+/// Fetches one 1-based page of the reply thread under [root].
+typedef _ReplyPageLoader =
+    Future<BilibiliCommentPage> Function(int root, int pn);
+
+/// Fullscreen playback route that keeps the danmaku overlay visible.
+class _DanmakuFullscreenPage extends StatefulWidget {
+  const _DanmakuFullscreenPage({
+    required this.controller,
+    required this.position,
+    required this.items,
+    required this.danmakuEnabled,
+    required this.loadComments,
+    required this.loadReplies,
+    required this.portrait,
+  });
+
+  final VideoController controller;
+  final Stream<Duration> position;
+  final List<DanmakuItem> items;
+  final bool danmakuEnabled;
+  final _CommentPageLoader loadComments;
+  final _ReplyPageLoader loadReplies;
+
+  /// Portrait (竖屏) videos stay upright in fullscreen instead of being
+  /// letterboxed inside a forced-landscape screen.
+  final bool portrait;
+
+  @override
+  State<_DanmakuFullscreenPage> createState() => _DanmakuFullscreenPageState();
+}
+
+class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
+  @override
+  void initState() {
+    super.initState();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    SystemChrome.setPreferredOrientations(
+      widget.portrait
+          ? const [DeviceOrientation.portraitUp]
+          : const [
+              DeviceOrientation.landscapeLeft,
+              DeviceOrientation.landscapeRight,
+            ],
+    );
+  }
+
+  @override
+  void dispose() {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setPreferredOrientations(const [
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+    super.dispose();
+  }
+
+  Future<void> _openComments() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1B1B1B),
+      builder: (sheetContext) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.4,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) => _CommentsSheet(
+          loadComments: widget.loadComments,
+          loadReplies: widget.loadReplies,
+          scrollController: scrollController,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Video(controller: widget.controller, controls: NoVideoControls),
+          IgnorePointer(
+            child: DanmakuOverlay(
+              position: widget.position,
+              items: widget.items,
+              enabled: widget.danmakuEnabled,
+            ),
+          ),
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + 8,
+            left: 8,
+            child: IconButton(
+              tooltip: '退出全屏',
+              icon: const Icon(Icons.fullscreen_exit, color: Colors.white),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ),
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + 8,
+            right: 8,
+            child: IconButton(
+              tooltip: '查看评论',
+              icon: const Icon(
+                Icons.mode_comment_outlined,
+                color: Colors.white,
+              ),
+              onPressed: _openComments,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One comment card: author, message, like count and a preview of the reply
+/// thread. Shared by the player page's comment section and the fullscreen
+/// comments sheet.
+class _CommentTile extends StatelessWidget {
+  const _CommentTile({required this.comment, required this.onOpenReplies});
+
+  final BilibiliComment comment;
+  final VoidCallback onOpenReplies;
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Column(
@@ -1134,7 +1384,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
                   if (comment.replyCount > comment.replies.length)
                     GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: () => _openCommentReplies(comment),
+                      onTap: onOpenReplies,
                       child: Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
@@ -1154,9 +1404,73 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
       ),
     );
   }
+}
 
-  Future<void> _openCommentReplies(BilibiliComment root) async {
-    if (root.rpid == 0 || (_commentDirect == null && _api == null)) return;
+/// Bottom sheet listing top-level comments, paginated through the same
+/// comment loader as the player page. Used from the fullscreen player, where
+/// the page's own comment section is not reachable.
+class _CommentsSheet extends StatefulWidget {
+  const _CommentsSheet({
+    required this.loadComments,
+    required this.loadReplies,
+    required this.scrollController,
+  });
+
+  final _CommentPageLoader loadComments;
+  final _ReplyPageLoader loadReplies;
+  final ScrollController scrollController;
+
+  @override
+  State<_CommentsSheet> createState() => _CommentsSheetState();
+}
+
+class _CommentsSheetState extends State<_CommentsSheet> {
+  List<BilibiliComment> _comments = const [];
+  int _total = 0;
+  int _nextPn = 1;
+  bool _hasMore = false;
+  bool _loading = true;
+  bool _loadingMore = false;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    if (_loadingMore) return;
+    setState(() {
+      if (!_loading) _loadingMore = true;
+      _failed = false;
+    });
+    try {
+      final page = await widget.loadComments(_nextPn);
+      if (!mounted) return;
+      setState(() {
+        _comments = _NativeBilibiliVideoPageState._mergeComments(
+          _comments,
+          page.items,
+        );
+        _total = page.total;
+        _hasMore = page.hasMore;
+        _nextPn = page.page + 1;
+        _loading = false;
+        _loadingMore = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _loadingMore = false;
+        _failed = true;
+      });
+    }
+  }
+
+  Future<void> _openReplies(BilibiliComment root) async {
+    if (root.rpid == 0) return;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -1169,9 +1483,95 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
         builder: (context, scrollController) => _CommentRepliesSheet(
           root: root,
           scrollController: scrollController,
-          loadPage: (pn) => _fetchReplyPage(root.rpid, pn),
+          loadPage: (pn) => widget.loadReplies(root.rpid, pn),
         ),
       ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _total > 0 ? '评论 $_total' : '评论',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: '关闭',
+                icon: const Icon(Icons.close, color: Colors.white70),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _loading
+              ? const Center(
+                  child: CircularProgressIndicator(color: Colors.white70),
+                )
+              : ListView(
+                  controller: widget.scrollController,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  children: [
+                    if (_comments.isEmpty && !_failed)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Center(
+                          child: Text(
+                            '暂无评论',
+                            style: TextStyle(
+                              color: Colors.white54,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                    for (final comment in _comments)
+                      _CommentTile(
+                        comment: comment,
+                        onOpenReplies: () => _openReplies(comment),
+                      ),
+                    if (_failed)
+                      Center(
+                        child: TextButton(
+                          onPressed: _load,
+                          child: const Text('加载失败，点击重试'),
+                        ),
+                      )
+                    else if (_hasMore || _loadingMore)
+                      Center(
+                        child: _loadingMore
+                            ? const Padding(
+                                padding: EdgeInsets.all(10),
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white70,
+                                  ),
+                                ),
+                              )
+                            : TextButton(
+                                onPressed: _load,
+                                child: const Text('加载更多评论'),
+                              ),
+                      ),
+                  ],
+                ),
+        ),
+      ],
     );
   }
 }
