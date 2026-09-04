@@ -46,7 +46,8 @@ class NativeBilibiliVideoPage extends StatefulWidget {
       _NativeBilibiliVideoPageState();
 }
 
-class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
+class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
+    with SingleTickerProviderStateMixin {
   late final Player _player = Player();
   VideoController? _videoController;
   BilibiliApi? _api;
@@ -71,6 +72,11 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
   BilibiliCommentApi? _commentDirect;
   int? _commentAid;
   List<BilibiliRelatedVideo> _related = const [];
+
+  late final TabController _tabController = TabController(
+    length: 2,
+    vsync: this,
+  );
 
   @override
   void didChangeDependencies() {
@@ -977,209 +983,275 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
               ),
             ),
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.title.isNotEmpty ? widget.title : 'B站视频',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+              child: Column(
+                children: [
+                  TabBar(
+                    controller: _tabController,
+                    labelColor: Colors.white,
+                    unselectedLabelColor: Colors.white54,
+                    indicatorColor: Colors.white,
+                    tabs: const [
+                      Tab(text: '简介'),
+                      Tab(text: '评论'),
+                    ],
+                  ),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
                       children: [
-                        if (result.qualities.isNotEmpty)
-                          _playerOptionDropdown<int>(
-                            label: '清晰度',
-                            value:
-                                _selectedQualityQn(result) ??
-                                result.qualities.first.qn,
-                            items: [
-                              for (final quality in result.qualities)
-                                DropdownMenuItem<int>(
-                                  value: quality.qn,
-                                  child: Text(quality.label),
+                        // ── Tab 1: 简介（视频信息 + 相关推荐）──
+                        SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.title.isNotEmpty ? widget.title : 'B站视频',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
                                 ),
-                            ],
-                            onChanged: _loading
-                                ? null
-                                : (qn) {
-                                    if (qn == null) return;
-                                    final quality = result.qualities.firstWhere(
-                                      (item) => item.qn == qn,
-                                    );
-                                    unawaited(_switchQuality(quality));
-                                  },
-                          ),
-                        _playerOptionDropdown<double>(
-                          label: '倍速',
-                          value: _rate,
-                          items: [
-                            for (final rate in const [0.5, 1.0, 1.25, 1.5, 2.0])
-                              DropdownMenuItem<double>(
-                                value: rate,
-                                child: Text(rate == 1.0 ? '1.0x' : '${rate}x'),
                               ),
-                          ],
-                          onChanged: _loading
-                              ? null
-                              : (rate) {
-                                  if (rate == null) return;
-                                  unawaited(_switchRate(rate));
-                                },
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  if (result.qualities.isNotEmpty)
+                                    _playerOptionDropdown<int>(
+                                      label: '清晰度',
+                                      value:
+                                          _selectedQualityQn(result) ??
+                                          result.qualities.first.qn,
+                                      items: [
+                                        for (final quality in result.qualities)
+                                          DropdownMenuItem<int>(
+                                            value: quality.qn,
+                                            child: Text(quality.label),
+                                          ),
+                                      ],
+                                      onChanged: _loading
+                                          ? null
+                                          : (qn) {
+                                              if (qn == null) return;
+                                              final quality = result.qualities
+                                                  .firstWhere(
+                                                    (item) => item.qn == qn,
+                                                  );
+                                              unawaited(
+                                                _switchQuality(quality),
+                                              );
+                                            },
+                                    ),
+                                  _playerOptionDropdown<double>(
+                                    label: '倍速',
+                                    value: _rate,
+                                    items: [
+                                      for (final rate in const [
+                                        0.5,
+                                        1.0,
+                                        1.25,
+                                        1.5,
+                                        2.0,
+                                      ])
+                                        DropdownMenuItem<double>(
+                                          value: rate,
+                                          child: Text(
+                                            rate == 1.0 ? '1.0x' : '${rate}x',
+                                          ),
+                                        ),
+                                    ],
+                                    onChanged: _loading
+                                        ? null
+                                        : (rate) {
+                                            if (rate == null) return;
+                                            unawaited(_switchRate(rate));
+                                          },
+                                  ),
+                                  if (result.subtitles.isNotEmpty)
+                                    _playerOptionDropdown<int>(
+                                      label: '字幕',
+                                      value: _selectedSubtitle,
+                                      items: [
+                                        const DropdownMenuItem<int>(
+                                          value: -1,
+                                          child: Text('关闭'),
+                                        ),
+                                        for (
+                                          var i = 0;
+                                          i < result.subtitles.length;
+                                          i++
+                                        )
+                                          DropdownMenuItem<int>(
+                                            value: i,
+                                            child: Text(
+                                              result.subtitles[i].name,
+                                            ),
+                                          ),
+                                      ],
+                                      onChanged: _loading
+                                          ? null
+                                          : (index) {
+                                              if (index == null) return;
+                                              unawaited(_selectSubtitle(index));
+                                            },
+                                    ),
+                                  ActionChip(
+                                    label: Text(
+                                      _danmakuEnabled ? '弹幕：开' : '弹幕：关',
+                                    ),
+                                    labelStyle: const TextStyle(fontSize: 11),
+                                    visualDensity: VisualDensity.compact,
+                                    backgroundColor: _danmakuEnabled
+                                        ? Colors.white24
+                                        : null,
+                                    onPressed: _openDanmakuSettings,
+                                  ),
+                                ],
+                              ),
+                              if (result.pages.length > 1) ...[
+                                const SizedBox(height: 10),
+                                Text('分P', style: theme.textTheme.labelLarge),
+                                const SizedBox(height: 6),
+                                ...result.pages.map(
+                                  (page) => ListTile(
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                    onTap: _loading
+                                        ? null
+                                        : () => _switchPage(page),
+                                    leading: CircleAvatar(
+                                      radius: 14,
+                                      child: Text('${page.page}'),
+                                    ),
+                                    title: Text(
+                                      page.part,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              if (_related.isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                Text(
+                                  '相关视频',
+                                  style: theme.textTheme.labelLarge?.copyWith(
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                ..._related
+                                    .take(8)
+                                    .map(
+                                      (item) => ListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        leading: SizedBox(
+                                          width: 90,
+                                          height: 56,
+                                          child: CoverImage(
+                                            url: item.coverUrl,
+                                            width: 90,
+                                            height: 56,
+                                            borderRadius: 8,
+                                          ),
+                                        ),
+                                        title: Text(
+                                          item.title,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                        subtitle: Text(
+                                          '${item.upName} · ${item.view} 播放',
+                                          style: const TextStyle(
+                                            color: Colors.white54,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                        onTap: () => _openRelated(item),
+                                      ),
+                                    ),
+                              ],
+                            ],
+                          ),
                         ),
-                        if (result.subtitles.isNotEmpty)
-                          _playerOptionDropdown<int>(
-                            label: '字幕',
-                            value: _selectedSubtitle,
-                            items: [
-                              const DropdownMenuItem<int>(
-                                value: -1,
-                                child: Text('关闭'),
-                              ),
-                              for (var i = 0; i < result.subtitles.length; i++)
-                                DropdownMenuItem<int>(
-                                  value: i,
-                                  child: Text(result.subtitles[i].name),
+                        // ── Tab 2: 评论 ──
+                        SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (_comments.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.mode_comment_outlined,
+                                      color: Colors.white70,
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      _commentTotal > 0
+                                          ? '评论 $_commentTotal'
+                                          : '评论',
+                                      style: theme.textTheme.labelLarge
+                                          ?.copyWith(color: Colors.white),
+                                    ),
+                                  ],
                                 ),
+                                const SizedBox(height: 4),
+                                ..._comments.map(
+                                  (comment) => _CommentTile(
+                                    comment: comment,
+                                    onOpenReplies: () =>
+                                        _openCommentReplies(comment),
+                                  ),
+                                ),
+                                if (_commentHasMore || _commentsLoadingMore)
+                                  Center(
+                                    child: _commentsLoadingMore
+                                        ? const Padding(
+                                            padding: EdgeInsets.all(10),
+                                            child: SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: Colors.white70,
+                                              ),
+                                            ),
+                                          )
+                                        : TextButton(
+                                            onPressed: _loadMoreComments,
+                                            child: const Text('加载更多评论'),
+                                          ),
+                                  ),
+                              ] else ...[
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 48),
+                                  child: Center(
+                                    child: Text(
+                                      '还没有评论',
+                                      style: TextStyle(color: Colors.white54),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ],
-                            onChanged: _loading
-                                ? null
-                                : (index) {
-                                    if (index == null) return;
-                                    unawaited(_selectSubtitle(index));
-                                  },
                           ),
-                        ActionChip(
-                          label: Text(_danmakuEnabled ? '弹幕：开' : '弹幕：关'),
-                          labelStyle: const TextStyle(fontSize: 11),
-                          visualDensity: VisualDensity.compact,
-                          backgroundColor: _danmakuEnabled
-                              ? Colors.white24
-                              : null,
-                          onPressed: _openDanmakuSettings,
                         ),
                       ],
                     ),
-                    if (result.pages.length > 1) ...[
-                      const SizedBox(height: 10),
-                      Text('分P', style: theme.textTheme.labelLarge),
-                      const SizedBox(height: 6),
-                      ...result.pages.map(
-                        (page) => ListTile(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          onTap: _loading ? null : () => _switchPage(page),
-                          leading: CircleAvatar(
-                            radius: 14,
-                            child: Text('${page.page}'),
-                          ),
-                          title: Text(
-                            page.part,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: Colors.white),
-                          ),
-                        ),
-                      ),
-                    ],
-                    if (_related.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        '相关视频',
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      ..._related
-                          .take(8)
-                          .map(
-                            (item) => ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: SizedBox(
-                                width: 90,
-                                height: 56,
-                                child: CoverImage(
-                                  url: item.coverUrl,
-                                  width: 90,
-                                  height: 56,
-                                  borderRadius: 8,
-                                ),
-                              ),
-                              title: Text(
-                                item.title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              subtitle: Text(
-                                '${item.upName} · ${item.view} 播放',
-                                style: const TextStyle(
-                                  color: Colors.white54,
-                                  fontSize: 11,
-                                ),
-                              ),
-                              onTap: () => _openRelated(item),
-                            ),
-                          ),
-                    ],
-                    if (_comments.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.mode_comment_outlined,
-                            color: Colors.white70,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            _commentTotal > 0 ? '评论 $_commentTotal' : '评论',
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      ..._comments.map(
-                        (comment) => _CommentTile(
-                          comment: comment,
-                          onOpenReplies: () => _openCommentReplies(comment),
-                        ),
-                      ),
-                      if (_commentHasMore || _commentsLoadingMore)
-                        Center(
-                          child: _commentsLoadingMore
-                              ? const Padding(
-                                  padding: EdgeInsets.all(10),
-                                  child: SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white70,
-                                    ),
-                                  ),
-                                )
-                              : TextButton(
-                                  onPressed: _loadMoreComments,
-                                  child: const Text('加载更多评论'),
-                                ),
-                        ),
-                    ],
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ],
