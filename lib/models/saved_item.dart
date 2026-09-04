@@ -90,11 +90,11 @@ class SavedItem {
     itemKey: item.savedIdentity,
     sourcePlatform: item.sourcePlatform,
     contentId: item.contentId,
-    contentUrl: item.contentUrl,
+    contentUrl: _sanitize(item.contentUrl),
     contentType: item.contentType,
-    title: item.title,
-    coverUrl: item.coverUrl,
-    authorName: item.upName,
+    title: _sanitize(item.title),
+    coverUrl: _sanitize(item.coverUrl),
+    authorName: _sanitize(item.upName),
   );
 
   String get bvid =>
@@ -154,15 +154,26 @@ class SavedItem {
   }
 
   Map<String, dynamic> toSavePayload() => {
-    'source_platform': sourcePlatform,
-    'content_id': contentId,
-    'content_url': contentUrl,
-    'content_type': contentType,
-    'title': title,
-    'author_name': authorName,
-    'cover_url': coverUrl,
-    'note': note,
+    'source_platform': _sanitize(sourcePlatform),
+    'content_id': _sanitize(contentId),
+    'content_url': _sanitize(contentUrl),
+    'content_type': _sanitize(contentType),
+    'title': _sanitize(title),
+    'author_name': _sanitize(authorName),
+    'cover_url': _sanitize(coverUrl),
+    'note': _sanitize(note),
   };
 }
+
+/// Backend saved-item validation rejects Unicode control characters, and
+/// recommendation titles frequently contain newlines from scrape metadata.
+/// Normalize them to a single space before persisting or syncing.
+String _sanitize(String value) => value
+    .replaceAll(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]'), ' ')
+    .replaceAll('\r', ' ')
+    .replaceAll('\n', ' ')
+    .replaceAll('\t', ' ')
+    .replaceAll(RegExp(r' {2,}'), ' ')
+    .trim();
 
 String _text(dynamic value) => value?.toString().trim() ?? '';

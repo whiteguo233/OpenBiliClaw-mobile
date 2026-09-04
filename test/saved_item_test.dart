@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openbiliclaw_app/models/recommendation.dart';
 import 'package:openbiliclaw_app/models/saved_item.dart';
 
 void main() {
@@ -29,6 +30,25 @@ void main() {
         'content_id': 'abc',
       });
       expect(xhs.bvid, 'xiaohongshu:abc');
+    });
+
+    test('fromRecommendation strips control characters before saving', () {
+      final item = SavedItem.fromRecommendation(
+        Recommendation(
+          id: 0,
+          bvid: 'douyin:123',
+          sourcePlatform: 'douyin',
+          contentId: '123',
+          title: '第一行\n第二行\t第三行',
+          upName: 'UP\nName',
+          contentUrl: 'https://www.douyin.com/video/123',
+        ),
+      );
+
+      expect(item.title, '第一行 第二行 第三行');
+      expect(item.authorName, 'UP Name');
+      expect(item.toSavePayload()['title'], '第一行 第二行 第三行');
+      expect(item.toSavePayload()['author_name'], 'UP Name');
     });
   });
 }
