@@ -342,14 +342,21 @@ POST /api/bilibili/player/play-url
 | `POST /api/bilibili/video/favorite` | 收藏/取消收藏 |
 | `POST /api/bilibili/video/watch-later` | 加入/移出稍后再看 |
 | `GET /api/bilibili/video/related?bvid=...` | 相关视频 |
-| `GET /api/bilibili/video/comments?bvid=...&pn=1&limit=20` | 视频评论（分页，`pn` 从 1 开始） |
-| `GET /api/bilibili/video/comment-replies?bvid=...&root=<rpid>&pn=1&limit=10` | 某条评论的完整回复楼（分页） |
+| `GET /api/bilibili/video/comments?bvid=...&pn=1&limit=20` | 视频评论（分页，兜底路径，见下） |
+| `GET /api/bilibili/video/comment-replies?bvid=...&root=<rpid>&pn=1&limit=10` | 某条评论的完整回复楼（兜底路径，见下） |
 
-评论接口响应结构：
+### 评论区：端上直连优先，后端兜底
+
+`play-url` 响应的 `headers.cookie` 已经把后端的 B 站 Cookie 下发给播放器拉流用，因此客户端复用同一个 Cookie **直连** B 站官方评论接口，无需后端转发：
+
+- `GET https://api.bilibili.com/x/web-interface/view?bvid=...` — 解析 `aid`（评论接口的 `oid`）
+- `GET https://api.bilibili.com/x/v2/reply?type=1&oid=<aid>&sort=2&pn=1&ps=20` — 热评分页（无需 WBI 签名；匿名翻页被 B 站上游限制，必须带 Cookie）
+- `GET https://api.bilibili.com/x/v2/reply/reply?type=1&oid=<aid>&root=<rpid>&pn=1&ps=10` — 完整回复楼
+
+请求头带 `cookie` / `referer: https://www.bilibili.com` / `user-agent`。直连失败（风控、网络）时回退到上表的后端 `/api/bilibili/video/comments` 系列接口。客户端内部统一解析为：
 
 ```json
 {
-  "ok": true,
   "items": [
     {
       "rpid": 123,
@@ -358,9 +365,7 @@ POST /api/bilibili/player/play-url
       "message": "评论内容",
       "like_count": 10,
       "reply_count": 5,
-      "replies": [
-        {"rpid": 124, "mid": 789, "uname": "...", "message": "...", "like_count": 2}
-      ]
+      "replies": [{"rpid": 124, "mid": 789, "uname": "...", "message": "...", "like_count": 2}]
     }
   ],
   "total": 1234,
@@ -369,8 +374,8 @@ POST /api/bilibili/player/play-url
 }
 ```
 
-- `replies` 内嵌该评论的前几条回复；当 `reply_count > replies.length` 时，客户端用 `comment-replies` 接口按页拉取完整回复楼。
-- `has_more = page * limit < total`，为 `true` 时客户端展示“加载更多评论”。
-- 旧版后端不返回 `rpid`/`reply_count`/`replies`/`total`/`has_more`，客户端需按缺省值（0 / false）兼容。
+- `replies` 内嵌该评论的前几条回复；当 `reply_count > replies.length` 时，客户端按页拉取完整回复楼。
+- `has_more = page * pageSize < total`，为 `true` 时客户端展示“加载更多评论”。
+- 直连路径由 B 站原生响应解析（`member.uname` / `content.message` / `like` / `rcount` / `page.count`）；后端兜底路径按上表字段解析，旧版后端缺少的分页/回复字段按缺省值（0 / false）兼容。
 
-所有互动接口都复用同一个后端 B 站 Cookie，移动端不需要保存任何 B 站凭据。
+除评论外，其余互动接口都复用同一个后端 B 站 Cookie；移动端不持久化任何 B 站凭据，播放会话结束即丢弃。

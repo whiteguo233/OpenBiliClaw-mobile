@@ -103,6 +103,32 @@ class BilibiliComment {
           : const [],
     );
   }
+
+  /// Parses one raw item of Bilibili's `/x/v2/reply` family of endpoints,
+  /// including the embedded preview sub-replies.
+  factory BilibiliComment.fromBilibiliJson(Map<String, dynamic> json) {
+    final member = json['member'];
+    final content = json['content'];
+    final rawReplies = json['replies'];
+    return BilibiliComment(
+      rpid: _int(json['rpid']),
+      mid: _int(json['mid']),
+      uname: member is Map ? _text(member['uname']) : '',
+      message: decodeHtml(content is Map ? _text(content['message']) : ''),
+      likeCount: _int(json['like']),
+      replyCount: _int(json['rcount']),
+      replies: rawReplies is List
+          ? rawReplies
+                .whereType<Map>()
+                .map(
+                  (item) => BilibiliComment.fromBilibiliJson(
+                    Map<String, dynamic>.from(item),
+                  ),
+                )
+                .toList()
+          : const [],
+    );
+  }
 }
 
 class BilibiliCommentPage {
@@ -134,6 +160,36 @@ class BilibiliCommentPage {
       total: _int(data['total']),
       page: _int(data['page']) == 0 ? 1 : _int(data['page']),
       hasMore: data['has_more'] == true,
+    );
+  }
+
+  /// Parses the `data` payload of Bilibili's `/x/v2/reply` or
+  /// `/x/v2/reply/reply` endpoints. `page.count` is trusted as-is; Bilibili
+  /// may report fewer than the true total, so [hasMore] is a best-effort
+  /// estimate from the returned metadata.
+  factory BilibiliCommentPage.fromBilibiliJson(
+    Map<String, dynamic> data, {
+    required int page,
+    required int pageSize,
+  }) {
+    final pageInfo = data['page'];
+    final total = pageInfo is Map ? _int(pageInfo['count']) : 0;
+    final rawItems = data['replies'];
+    final items = rawItems is List
+        ? rawItems
+              .whereType<Map>()
+              .map(
+                (item) => BilibiliComment.fromBilibiliJson(
+                  Map<String, dynamic>.from(item),
+                ),
+              )
+              .toList()
+        : const <BilibiliComment>[];
+    return BilibiliCommentPage(
+      items: items.length > pageSize ? items.sublist(0, pageSize) : items,
+      total: total,
+      page: page,
+      hasMore: page * pageSize < total,
     );
   }
 }

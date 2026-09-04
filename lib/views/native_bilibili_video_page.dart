@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../api/bilibili_api.dart';
+import '../api/bilibili_comment_api.dart';
 import '../api/client.dart';
 import '../models/bilibili_interaction.dart';
 import '../models/bilibili_play.dart';
@@ -65,6 +66,8 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
   int _commentNextPn = 1;
   bool _commentHasMore = false;
   bool _commentsLoadingMore = false;
+  BilibiliCommentApi? _commentDirect;
+  int? _commentAid;
   List<BilibiliRelatedVideo> _related = const [];
 
   @override
@@ -111,6 +114,17 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
         _result = result;
         _loading = false;
         _error = null;
+        // The play-url response carries the backend's Bilibili cookie for
+        // stream playback; reuse it to read comments directly from
+        // api.bilibili.com instead of proxying through the backend.
+        final cookie = _headerValue(result.headers, 'cookie');
+        _commentDirect = cookie.isNotEmpty
+            ? BilibiliCommentApi(
+                cookie: cookie,
+                userAgent: _headerValue(result.headers, 'user-agent'),
+              )
+            : null;
+        _commentAid = null;
       });
       unawaited(_loadDanmaku(result));
       unawaited(_loadInteractions());
@@ -215,7 +229,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
     try {
       final results = await Future.wait([
         api.videoRelation(bvid: widget.bvid),
-        api.videoComments(bvid: widget.bvid),
+        _fetchCommentPage(1),
         api.relatedVideos(bvid: widget.bvid),
       ]);
       if (!mounted) return;
@@ -233,15 +247,55 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
     }
   }
 
-  Future<void> _loadMoreComments() async {
+  /// Comment pages come from api.bilibili.com directly when the play-url
+  /// response handed us a cookie; otherwise fall back to the backend proxy.
+  Future<BilibiliCommentPage> _fetchCommentPage(int pn) async {
+    final direct = _commentDirect;
+    if (direct != null) {
+      try {
+        final aid = _commentAid ??= await direct.resolveAid(widget.bvid);
+        if (aid > 0) {
+          return await direct.videoComments(aid: aid, pn: pn);
+        }
+      } catch (_) {
+        // Fall through to the backend proxy below.
+      }
+    }
     final api = _api;
-    if (api == null || !_commentHasMore || _commentsLoadingMore) return;
+    if (api == null) return const BilibiliCommentPage();
+    return api.videoComments(bvid: widget.bvid, pn: pn);
+  }
+
+  Future<BilibiliCommentPage> _fetchReplyPage(int root, int pn) async {
+    final direct = _commentDirect;
+    if (direct != null) {
+      try {
+        final aid = _commentAid ??= await direct.resolveAid(widget.bvid);
+        if (aid > 0) {
+          return await direct.commentReplies(aid: aid, root: root, pn: pn);
+        }
+      } catch (_) {
+        // Fall through to the backend proxy below.
+      }
+    }
+    final api = _api;
+    if (api == null) return const BilibiliCommentPage();
+    return api.commentReplies(bvid: widget.bvid, root: root, pn: pn);
+  }
+
+  static String _headerValue(Map<String, String> headers, String name) {
+    final lower = name.toLowerCase();
+    for (final entry in headers.entries) {
+      if (entry.key.toLowerCase() == lower) return entry.value;
+    }
+    return '';
+  }
+
+  Future<void> _loadMoreComments() async {
+    if (!_commentHasMore || _commentsLoadingMore) return;
     setState(() => _commentsLoadingMore = true);
     try {
-      final page = await api.videoComments(
-        bvid: widget.bvid,
-        pn: _commentNextPn,
-      );
+      final page = await _fetchCommentPage(_commentNextPn);
       if (!mounted) return;
       setState(() {
         _comments = _mergeComments(_comments, page.items);
@@ -1102,8 +1156,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
   }
 
   Future<void> _openCommentReplies(BilibiliComment root) async {
-    final api = _api;
-    if (api == null || root.rpid == 0) return;
+    if (root.rpid == 0 || (_commentDirect == null && _api == null)) return;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -1114,10 +1167,9 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
         maxChildSize: 0.95,
         expand: false,
         builder: (context, scrollController) => _CommentRepliesSheet(
-          api: api,
-          bvid: widget.bvid,
           root: root,
           scrollController: scrollController,
+          loadPage: (pn) => _fetchReplyPage(root.rpid, pn),
         ),
       ),
     );
@@ -1125,19 +1177,19 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
 }
 
 /// Bottom sheet that shows the full reply thread of a top-level comment,
-/// paginated through `/api/bilibili/video/comment-replies`.
+/// paginated through the page's reply loader.
 class _CommentRepliesSheet extends StatefulWidget {
   const _CommentRepliesSheet({
-    required this.api,
-    required this.bvid,
     required this.root,
     required this.scrollController,
+    required this.loadPage,
   });
 
-  final BilibiliApi api;
-  final String bvid;
   final BilibiliComment root;
   final ScrollController scrollController;
+
+  /// Fetches one 1-based page of the reply thread.
+  final Future<BilibiliCommentPage> Function(int pn) loadPage;
 
   @override
   State<_CommentRepliesSheet> createState() => _CommentRepliesSheetState();
@@ -1165,11 +1217,7 @@ class _CommentRepliesSheetState extends State<_CommentRepliesSheet> {
       _failed = false;
     });
     try {
-      final page = await widget.api.commentReplies(
-        bvid: widget.bvid,
-        root: widget.root.rpid,
-        pn: _nextPn,
-      );
+      final page = await widget.loadPage(_nextPn);
       if (!mounted) return;
       setState(() {
         final seen = _replies.map(_replyKey).toSet();
