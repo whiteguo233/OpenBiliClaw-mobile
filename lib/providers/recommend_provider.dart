@@ -18,6 +18,22 @@ class RecommendProvider extends ChangeNotifier {
   final RecommendApi _api;
   final ApiClient _client;
 
+  /// 与桌面 Web（web/desktop sourceFilterDefinitions）一致的平台标签顺序。
+  static const List<(String, String)> _platformLabels = [
+    ('bilibili', 'B 站'),
+    ('xiaohongshu', '小红书'),
+    ('douyin', '抖音'),
+    ('weibo', '微博'),
+    ('youtube', 'YouTube'),
+    ('twitter', 'X (Twitter)'),
+    ('github', 'GitHub'),
+    ('zhihu', '知乎'),
+    ('reddit', 'Reddit'),
+    ('bangumi', 'Bangumi'),
+    ('linuxdo', 'Linux.do'),
+    ('v2ex', 'V2EX'),
+  ];
+
   List<Recommendation> _recommendations = [];
   List<Delight> _delights = [];
   int _delightIndex = 0;
@@ -27,6 +43,7 @@ class RecommendProvider extends ChangeNotifier {
   bool _online = false;
   bool _polling = false;
   String _error = '';
+  String _platformFilter = '';
   RuntimeStatus _runtimeStatus = const RuntimeStatus();
   ActivityFeed _activityFeed = const ActivityFeed();
   Timer? _pollTimer;
@@ -128,6 +145,7 @@ class RecommendProvider extends ChangeNotifier {
       final recs = await _api.fetch();
       _recommendations = recs;
       _online = true;
+      _prunePlatformFilter();
     } catch (error) {
       _online = false;
       _error = _message(error, '推荐加载失败');
@@ -136,6 +154,58 @@ class RecommendProvider extends ChangeNotifier {
       _safeNotify();
     }
     unawaited(_loadSideChannels());
+  }
+
+  /// 平台过滤（与桌面 Web 的「全部 / 平台」过滤一致，纯客户端过滤）：
+  /// 空字符串表示「全部」。
+  String get platformFilter => _platformFilter;
+
+  /// 当前过滤后应展示的推荐列表。
+  List<Recommendation> get visibleRecommendations {
+    if (_platformFilter.isEmpty) return _recommendations;
+    return _recommendations
+        .where((item) => item.sourcePlatform == _platformFilter)
+        .toList();
+  }
+
+  /// 推荐池中已出现的平台（按固定顺序去重）。
+  List<String> get availablePlatforms {
+    final seen = <String>{};
+    for (final item in _recommendations) {
+      final slug = item.sourcePlatform.trim().toLowerCase();
+      if (slug.isNotEmpty) seen.add(slug);
+    }
+    final known = _platformLabels.map((entry) => entry.$1);
+    final ordered = <String>[
+      ...known.where(seen.contains),
+      ...seen.difference(known.toSet()).toList()..sort(),
+    ];
+    return ordered;
+  }
+
+  /// 只有单一来源时不显示平台选择（用户要求：一个来源直接刷）。
+  bool get showPlatformChoice => availablePlatforms.length > 1;
+
+  void setPlatformFilter(String slug) {
+    final next = slug.trim().toLowerCase();
+    if (_platformFilter == next) return;
+    _platformFilter = next;
+    _safeNotify();
+  }
+
+  /// 与桌面 Web 一致的平台中文标签；未知平台原样显示 slug。
+  static String platformLabel(String slug) {
+    final key = slug.trim().toLowerCase();
+    for (final entry in _platformLabels) {
+      if (entry.$1 == key) return entry.$2;
+    }
+    return slug.trim();
+  }
+
+  void _prunePlatformFilter() {
+    if (_platformFilter.isEmpty) return;
+    if (availablePlatforms.contains(_platformFilter)) return;
+    _platformFilter = '';
   }
 
   Future<void> _loadSideChannels() async {

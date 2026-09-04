@@ -58,6 +58,10 @@ class _RecommendViewState extends State<RecommendView> {
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
                     SliverToBoxAdapter(child: _buildHeader(context, rp)),
+                    if (rp.showPlatformChoice)
+                      SliverToBoxAdapter(
+                        child: _buildPlatformFilter(context, rp),
+                      ),
                     if (rp.error.isNotEmpty)
                       SliverToBoxAdapter(
                         child: _statusBanner(
@@ -97,9 +101,9 @@ class _RecommendViewState extends State<RecommendView> {
                       )
                     else
                       SliverList.builder(
-                        itemCount: rp.recommendations.length,
+                        itemCount: rp.visibleRecommendations.length,
                         itemBuilder: (context, index) {
-                          final rec = rp.recommendations[index];
+                          final rec = rp.visibleRecommendations[index];
                           final watchLaterActive = sp.contains(
                             SavedListKind.watchLater,
                             rec,
@@ -476,6 +480,36 @@ class _RecommendViewState extends State<RecommendView> {
               delight.contentId.isNotEmpty ? delight.contentId : delight.bvid,
               delight.title,
             ),
+    );
+  }
+
+  /// 「全部 / 平台」横向过滤 chips，与桌面 Web 的平台过滤一致。
+  /// 仅当推荐池中出现多个来源时渲染（单一来源不显示选择）。
+  Widget _buildPlatformFilter(BuildContext context, RecommendProvider rp) {
+    final platforms = rp.availablePlatforms;
+    return SizedBox(
+      height: 44,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        itemCount: platforms.length + 1,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final isAll = index == 0;
+          final slug = isAll ? '' : platforms[index - 1];
+          final selected =
+              (isAll && rp.platformFilter.isEmpty) ||
+              (!isAll && rp.platformFilter == slug);
+          final label = isAll
+              ? '全部'
+              : RecommendProvider.platformLabel(slug);
+          return ChoiceChip(
+            label: Text(label),
+            selected: selected,
+            onSelected: (_) => rp.setPlatformFilter(slug),
+          );
+        },
+      ),
     );
   }
 
