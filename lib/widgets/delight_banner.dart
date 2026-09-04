@@ -4,7 +4,7 @@ import '../models/recommendation.dart';
 import '../theme/app_theme.dart';
 import 'cover_image.dart';
 
-class DelightBanner extends StatelessWidget {
+class DelightBanner extends StatefulWidget {
   final Delight delight;
   final int currentIndex;
   final int totalCount;
@@ -35,7 +35,28 @@ class DelightBanner extends StatelessWidget {
   });
 
   @override
+  State<DelightBanner> createState() => _DelightBannerState();
+}
+
+class _DelightBannerState extends State<DelightBanner> {
+  bool _expanded = false;
+
+  void _toggleExpanded() {
+    setState(() => _expanded = !_expanded);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final widget = this.widget;
+    final delight = widget.delight;
+    final totalCount = widget.totalCount;
+    final onView = widget.onView;
+    final onLike = widget.onLike;
+    final onDislike = widget.onDislike;
+    final onChat = widget.onChat;
+    final onDismiss = widget.onDismiss;
+    final onWatchLater = widget.onWatchLater;
+    final onFavorite = widget.onFavorite;
     final theme = Theme.of(context);
     final accessibilityLayout = MediaQuery.textScalerOf(context).scale(1) > 1.3;
     return Container(
@@ -141,8 +162,10 @@ class DelightBanner extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                           height: 1.35,
                         ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                        maxLines: _expanded ? null : 2,
+                        overflow: _expanded
+                            ? TextOverflow.visible
+                            : TextOverflow.ellipsis,
                       ),
                       if (delight.reason.isNotEmpty) ...[
                         const SizedBox(height: 4),
@@ -151,8 +174,10 @@ class DelightBanner extends StatelessWidget {
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                          maxLines: _expanded ? null : 2,
+                          overflow: _expanded
+                              ? TextOverflow.visible
+                              : TextOverflow.ellipsis,
                         ),
                       ],
                       if (delight.hook.isNotEmpty) ...[
@@ -163,8 +188,51 @@ class DelightBanner extends StatelessWidget {
                             color: theme.colorScheme.primary,
                             fontWeight: FontWeight.w700,
                           ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                          maxLines: _expanded ? null : 2,
+                          overflow: _expanded
+                              ? TextOverflow.visible
+                              : TextOverflow.ellipsis,
+                        ),
+                      ],
+                      if (_expanded && delight.bodyText.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          '详细内容',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          delight.bodyText,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
+                      if (delight.reason.isNotEmpty ||
+                          delight.hook.isNotEmpty ||
+                          delight.bodyText.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        TextButton.icon(
+                          onPressed: _toggleExpanded,
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 0,
+                            ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          icon: Icon(
+                            _expanded
+                                ? Icons.expand_less_rounded
+                                : Icons.expand_more_rounded,
+                            size: 17,
+                          ),
+                          label: Text(_expanded ? '收起详情' : '展开详情'),
                         ),
                       ],
                     ],
@@ -343,16 +411,16 @@ class DelightBanner extends StatelessWidget {
         children: [
           IconButton(
             tooltip: '上一条惊喜推荐',
-            onPressed: onPrev,
+            onPressed: widget.onPrev,
             icon: const Icon(Icons.chevron_left_rounded, size: 20),
           ),
           Text(
-            '${currentIndex + 1}/$totalCount',
+            '${widget.currentIndex + 1}/${widget.totalCount}',
             style: Theme.of(context).textTheme.labelMedium,
           ),
           IconButton(
             tooltip: '下一条惊喜推荐',
-            onPressed: onNext,
+            onPressed: widget.onNext,
             icon: const Icon(Icons.chevron_right_rounded, size: 20),
           ),
         ],

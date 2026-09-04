@@ -54,4 +54,45 @@ void main() {
     expect(find.text('15/20'), findsOneWidget);
     expect(find.text('惊喜推荐'), findsOneWidget);
   });
+
+  testWidgets('delight card expands to show full body text', (tester) async {
+    tester.view.physicalSize = const Size(375, 812);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: DelightBanner(
+              delight: Delight(
+                bvid: 'BV1test',
+                title: '惊喜推荐测试视频',
+                reason: '推荐原因',
+                hook: '这是一个钩子',
+                bodyText: '这是一段很长的详细内容，展开后应该完整展示出来。',
+              ),
+              onView: () {},
+              onLike: () {},
+              onDislike: () {},
+              onDismiss: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('详细内容'), findsNothing);
+    expect(find.text('展开详情'), findsOneWidget);
+
+    await tester.tap(find.text('展开详情'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('详细内容'), findsOneWidget);
+    expect(find.text('这是一段很长的详细内容，展开后应该完整展示出来。'), findsOneWidget);
+    expect(find.text('收起详情'), findsOneWidget);
+  });
 }
