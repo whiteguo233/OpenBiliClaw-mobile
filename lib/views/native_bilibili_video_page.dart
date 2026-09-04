@@ -675,6 +675,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
         builder: (_) => _DanmakuFullscreenPage(
           controller: controller,
           position: _player.stream.position,
+          playing: _player.stream.playing,
           items: _danmakuItems,
           danmakuEnabled: _danmakuEnabled,
           loadComments: _fetchCommentPage,
@@ -855,6 +856,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
                       IgnorePointer(
                         child: DanmakuOverlay(
                           position: _player.stream.position,
+                          playing: _player.stream.playing,
                           items: _danmakuItems,
                           enabled: _danmakuEnabled,
                         ),
@@ -1194,6 +1196,7 @@ class _DanmakuFullscreenPage extends StatefulWidget {
   const _DanmakuFullscreenPage({
     required this.controller,
     required this.position,
+    required this.playing,
     required this.items,
     required this.danmakuEnabled,
     required this.loadComments,
@@ -1203,6 +1206,7 @@ class _DanmakuFullscreenPage extends StatefulWidget {
 
   final VideoController controller;
   final Stream<Duration> position;
+  final Stream<bool>? playing;
   final List<DanmakuItem> items;
   final bool danmakuEnabled;
   final _CommentPageLoader loadComments;
@@ -1272,6 +1276,7 @@ class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
           IgnorePointer(
             child: DanmakuOverlay(
               position: widget.position,
+              playing: widget.playing,
               items: widget.items,
               enabled: widget.danmakuEnabled,
             ),

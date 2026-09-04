@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:canvas_danmaku/canvas_danmaku.dart';
 import 'package:flutter/material.dart';
 
 class DanmakuItem {
@@ -14,157 +15,213 @@ class DanmakuItem {
   final Color color;
 }
 
-/// Lightweight Bilibili-style scrolling danmaku overlay.
+/// Bilibili-style danmaku overlay backed by the same `canvas_danmaku` engine
+/// the PiliPlus (biliplus) reference client uses.
 ///
-/// It watches the player position stream and renders the comments whose
-/// timestamp has just passed and that are still within their scroll window.
-/// Each visible comment animates from the right edge of the video to the
-/// left, leaving the screen completely before it is removed.
+/// Lifecycle mirrors the reference implementation:
+/// - A comment is added exactly when playback crosses its timestamp (100 ms
+///   buckets). Comments whose timestamp already passed when the list arrives
+///   (late fetch) are skipped, never back-filled in a burst.
+/// - Scrolling, track collision and removal are engine-driven: an item is
+///   removed only after it has fully scrolled past the left edge, so it can
+///   never vanish mid-screen.
+/// - The engine pauses/resumes with the [playing] stream, so danmaku freeze
+///   together with the video.
 class DanmakuOverlay extends StatelessWidget {
   const DanmakuOverlay({
     super.key,
     required this.position,
     required this.items,
+    this.playing,
     this.enabled = true,
+    this.onControllerCreated,
   });
 
   final Stream<Duration> position;
+
+  /// Whether playback is currently running. When false the engine pauses and
+  /// position updates no longer spawn danmaku.
+  final Stream<bool>? playing;
+
   final List<DanmakuItem> items;
   final bool enabled;
 
-  /// How long a danmaku takes to cross the screen. A comment stays visible
-  /// for exactly this long after its timestamp passes.
-  static const Duration scrollDuration = Duration(seconds: 7);
+  /// Optional hook for tests/diagnostics to inspect the engine controller.
+  final ValueChanged<DanmakuController<Object?>>? onControllerCreated;
 
-  /// Maximum number of danmaku rendered at once.
-  static const int maxVisible = 20;
+  /// Engine options. Fixed-duration scroll mode (the engine default) so the
+  /// whole text always crosses in the same time.
+  static const DanmakuOption engineOption = DanmakuOption();
 
-  /// Number of vertical lanes the danmaku are distributed across.
-  static const int laneCount = 6;
+  /// Last engine controller created by an overlay instance. Test-only seam:
+  /// the E2E test observes engine state through the public controller API
+  /// instead of reaching into private widget state (Dart 3 forbids cross-
+  /// library dynamic access to private members).
+  @visibleForTesting
+  static DanmakuController<Object?>? debugLastController;
 
   @override
   Widget build(BuildContext context) {
     if (!enabled) return const SizedBox.shrink();
-    return StreamBuilder<Duration>(
-      stream: position,
-      builder: (context, snapshot) {
-        final current = snapshot.data ?? Duration.zero;
-        final visible = items
-            .where(
-              (item) =>
-                  item.time <= current &&
-                  item.time >= current - scrollDuration,
-            )
-            .toList();
-        final capped = visible.length > maxVisible
-            ? visible.sublist(visible.length - maxVisible)
-            : visible;
-        return ClipRect(
-          child: Stack(
-            children: [
-              for (final item in capped)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: _lane(item) * 26.0,
-                  child: _ScrollingDanmakuText(
-                    key: ValueKey(
-                      '${item.time.inMilliseconds}-${item.text}',
-                    ),
-                    item: item,
-                    scrollDuration: scrollDuration,
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
+    return _DanmakuEngine(
+      position: position,
+      playing: playing,
+      items: items,
+      onControllerCreated: onControllerCreated,
     );
   }
-
-  /// Stable lane assignment per danmaku, independent of how many other
-  /// danmaku are currently visible.
-  static int _lane(DanmakuItem item) {
-    return (item.time.inMilliseconds ~/ 1000 + item.text.hashCode).abs() %
-        laneCount;
-  }
 }
 
-class _ScrollingDanmakuText extends StatefulWidget {
-  const _ScrollingDanmakuText({
-    super.key,
-    required this.item,
-    required this.scrollDuration,
+class _DanmakuEngine extends StatefulWidget {
+  const _DanmakuEngine({
+    required this.position,
+    required this.items,
+    this.playing,
+    this.onControllerCreated,
   });
 
-  final DanmakuItem item;
-  final Duration scrollDuration;
+  final Stream<Duration> position;
+  final Stream<bool>? playing;
+  final List<DanmakuItem> items;
+  final ValueChanged<DanmakuController<Object?>>? onControllerCreated;
 
   @override
-  State<_ScrollingDanmakuText> createState() => _ScrollingDanmakuTextState();
+  State<_DanmakuEngine> createState() => _DanmakuEngineState();
 }
 
-class _ScrollingDanmakuTextState extends State<_ScrollingDanmakuText>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: widget.scrollDuration,
-  )..forward();
+class _DanmakuEngineState extends State<_DanmakuEngine> {
+  DanmakuController<Object?>? _controller;
+  StreamSubscription<Duration>? _positionSub;
+  StreamSubscription<bool>? _playingSub;
+  bool _playing = true;
+
+  /// Danmaku indexed by the 100 ms playback bucket they belong to, mirroring
+  /// PiliPlus's `_dmSegMap[progress ~/ 100]` lookup. Order-independent, so the
+  /// list does not need to be sorted.
+  Map<int, List<DanmakuItem>> _buckets = const {};
+
+  /// Last bucket that has been added, so a bucket is spawned at most once.
+  int _lastBucket = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    _rebuildBuckets();
+    _positionSub = widget.position.listen(_onPosition);
+    _playingSub = widget.playing?.listen(_onPlayingChanged);
+  }
+
+  @override
+  void didUpdateWidget(_DanmakuEngine oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(widget.items, oldWidget.items)) {
+      _rebuildBuckets();
+    }
+    if (widget.position != oldWidget.position) {
+      _positionSub?.cancel();
+      _positionSub = widget.position.listen(_onPosition);
+    }
+    if (widget.playing != oldWidget.playing) {
+      _playingSub?.cancel();
+      _playingSub = widget.playing?.listen(_onPlayingChanged);
+    }
+  }
+
+  void _rebuildBuckets() {
+    final buckets = <int, List<DanmakuItem>>{};
+    for (final item in widget.items) {
+      final bucket = item.time.inMilliseconds ~/ 100;
+      buckets.putIfAbsent(bucket, () => []).add(item);
+    }
+    _buckets = buckets;
+  }
+
+  void _onPlayingChanged(bool playing) {
+    _playing = playing;
+    final controller = _controller;
+    if (controller == null) return;
+    if (playing) {
+      controller.resume();
+    } else {
+      controller.pause();
+    }
+  }
+
+  void _onPosition(Duration position) {
+    // Track the bucket even while the danmaku list is still empty: the
+    // position cursor is about playback, not about the list, so a list that
+    // arrives later keeps the cursor where playback already is.
+    if (_controller == null) return;
+    if (!_playing) return;
+    final bucket = position.inMilliseconds ~/ 100;
+    if (_lastBucket == -1) {
+      // First position event: spawn this bucket only, never back-fill the
+      // history that played before the overlay started listening (late list
+      // load, fullscreen entry mid-video).
+      _lastBucket = bucket;
+      _addBucket(bucket);
+      return;
+    }
+    if (bucket == _lastBucket) return;
+    if (bucket > _lastBucket) {
+      // Catch up buckets the position stream skipped between updates
+      // (stream jitter or a brief stall), but not a large forward jump:
+      // that's a seek, where only new danmaku from the landing point should
+      // appear.
+      if (bucket - _lastBucket <= 50) {
+        // 50 buckets = 5 s
+        for (var b = _lastBucket + 1; b <= bucket; b++) {
+          _addBucket(b);
+        }
+      } else {
+        _addBucket(bucket);
+      }
+    } else {
+      // Seek backwards: re-show from the landing bucket, like bilibili.
+      _addBucket(bucket);
+    }
+    _lastBucket = bucket;
+  }
+
+  void _addBucket(int bucket) {
+    final list = _buckets[bucket];
+    if (list == null) return;
+    final controller = _controller;
+    if (controller == null) return;
+    for (final item in list) {
+      controller.addDanmaku(
+        DanmakuContentItem<Object?>(item.text, color: item.color),
+      );
+    }
+  }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _positionSub?.cancel();
+    _playingSub?.cancel();
+    _controller = null;
     super.dispose();
-  }
-
-  double _textWidth() {
-    final painter = TextPainter(
-      text: TextSpan(text: widget.item.text, style: _textStyle(widget.item)),
-      maxLines: 1,
-      textDirection: TextDirection.ltr,
-    )..layout();
-    return painter.width;
   }
 
   @override
   Widget build(BuildContext context) {
-    final textWidth = _textWidth();
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        return AnimatedBuilder(
-          animation: _controller,
-          builder: (context, child) {
-            // From fully off-screen right to fully off-screen left.
-            final dx = width + (-textWidth - width) * _controller.value;
-            return Transform.translate(offset: Offset(dx, 0), child: child);
+        final size = constraints.hasBoundedWidth &&
+                constraints.hasBoundedHeight
+            ? constraints.biggest
+            : Size.zero;
+        return DanmakuScreen<Object?>(
+          createdController: (controller) {
+            _controller = controller;
+            DanmakuOverlay.debugLastController = controller;
+            widget.onControllerCreated?.call(controller);
+            if (!_playing) controller.pause();
           },
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.35),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                widget.item.text,
-                maxLines: 1,
-                style: _textStyle(widget.item),
-              ),
-            ),
-          ),
+          option: DanmakuOverlay.engineOption,
+          size: size,
         );
       },
-    );
-  }
-
-  static TextStyle _textStyle(DanmakuItem item) {
-    return TextStyle(
-      color: item.color,
-      fontSize: 13,
-      fontWeight: FontWeight.w600,
-      shadows: const [Shadow(color: Colors.black, blurRadius: 2)],
     );
   }
 }
