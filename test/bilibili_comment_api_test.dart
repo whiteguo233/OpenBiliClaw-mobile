@@ -40,7 +40,10 @@ void main() {
                 {
                   'rpid': 11,
                   'mid': 22,
-                  'member': {'uname': '甲'},
+                  'member': {
+                    'uname': '甲',
+                    'avatar': 'https://i0.hdslb.com/avatar.jpg',
+                  },
                   'content': {'message': '前排 &amp; 合影'},
                   'like': 99,
                   'rcount': 3,
@@ -48,7 +51,10 @@ void main() {
                     {
                       'rpid': 12,
                       'mid': 23,
-                      'member': {'uname': '乙'},
+                      'member': {
+                        'uname': '乙',
+                        'avatar': 'https://i0.hdslb.com/reply.jpg',
+                      },
                       'content': {'message': '同感'},
                       'like': 4,
                     },
@@ -67,10 +73,15 @@ void main() {
       expect(page.hasMore, isTrue); // 2 * 20 = 40 < 45
       expect(page.items.single.rpid, 11);
       expect(page.items.single.uname, '甲');
+      expect(page.items.single.avatarUrl, 'https://i0.hdslb.com/avatar.jpg');
       expect(page.items.single.message, '前排 & 合影');
       expect(page.items.single.likeCount, 99);
       expect(page.items.single.replyCount, 3);
       expect(page.items.single.replies.single.uname, '乙');
+      expect(
+        page.items.single.replies.single.avatarUrl,
+        'https://i0.hdslb.com/reply.jpg',
+      );
     });
 
     test('hasMore turns false on the last page', () async {

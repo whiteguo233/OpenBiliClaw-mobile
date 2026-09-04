@@ -68,6 +68,7 @@ class BilibiliComment {
   final int rpid;
   final int mid;
   final String uname;
+  final String avatarUrl;
   final String message;
   final int likeCount;
   final int replyCount;
@@ -77,6 +78,7 @@ class BilibiliComment {
     this.rpid = 0,
     this.mid = 0,
     this.uname = '',
+    this.avatarUrl = '',
     this.message = '',
     this.likeCount = 0,
     this.replyCount = 0,
@@ -89,6 +91,7 @@ class BilibiliComment {
       rpid: _int(json['rpid']),
       mid: _int(json['mid']),
       uname: _text(json['uname']),
+      avatarUrl: _text(json['avatar'] ?? json['avatar_url']),
       message: decodeHtml(_text(json['message'])),
       likeCount: _int(json['like_count']),
       replyCount: _int(json['reply_count']),
@@ -114,6 +117,7 @@ class BilibiliComment {
       rpid: _int(json['rpid']),
       mid: _int(json['mid']),
       uname: member is Map ? _text(member['uname']) : '',
+      avatarUrl: member is Map ? _text(member['avatar']) : '',
       message: decodeHtml(content is Map ? _text(content['message']) : ''),
       likeCount: _int(json['like']),
       replyCount: _int(json['rcount']),

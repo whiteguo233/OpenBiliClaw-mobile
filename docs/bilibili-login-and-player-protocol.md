@@ -362,6 +362,7 @@ POST /api/bilibili/player/play-url
       "rpid": 123,
       "mid": 456,
       "uname": "某用户",
+      "avatar": "https://i0.hdslb.com/bfs/face/xxx.jpg",
       "message": "评论内容",
       "like_count": 10,
       "reply_count": 5,
@@ -376,6 +377,6 @@ POST /api/bilibili/player/play-url
 
 - `replies` 内嵌该评论的前几条回复；当 `reply_count > replies.length` 时，客户端按页拉取完整回复楼。
 - `has_more = page * pageSize < total`，为 `true` 时客户端展示“加载更多评论”。
-- 直连路径由 B 站原生响应解析（`member.uname` / `content.message` / `like` / `rcount` / `page.count`）；后端兜底路径按上表字段解析，旧版后端缺少的分页/回复字段按缺省值（0 / false）兼容。
+- 直连路径由 B 站原生响应解析（`member.uname` / `member.avatar` / `content.message` / `like` / `rcount` / `page.count`）；后端兜底路径按上表字段解析，头像字段兼容 `avatar` 或 `avatar_url`，旧版后端缺少的分页/回复/头像字段按缺省值兼容。
 
 除评论外，其余互动接口都复用同一个后端 B 站 Cookie；移动端不持久化任何 B 站凭据，播放会话结束即丢弃。

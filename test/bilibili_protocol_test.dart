@@ -129,6 +129,7 @@ void main() {
         'rpid': 100,
         'mid': 1,
         'uname': '用户',
+        'avatar': 'https://i0.hdslb.com/avatar.jpg',
         'message': '好看',
         'like_count': 10,
         'reply_count': 2,
@@ -137,6 +138,7 @@ void main() {
             'rpid': 101,
             'mid': 2,
             'uname': '层主',
+            'avatar_url': 'https://i0.hdslb.com/reply.jpg',
             'message': '同意',
             'like_count': 3,
           },
@@ -149,9 +151,14 @@ void main() {
       expect(related.bvid, 'BV1aa');
       expect(related.upName, 'UP');
       expect(comment.rpid, 100);
+      expect(comment.avatarUrl, 'https://i0.hdslb.com/avatar.jpg');
       expect(comment.likeCount, 10);
       expect(comment.replyCount, 2);
       expect(comment.replies.single.uname, '层主');
+      expect(
+        comment.replies.single.avatarUrl,
+        'https://i0.hdslb.com/reply.jpg',
+      );
     });
 
     test('parses comment page with pagination fields', () {

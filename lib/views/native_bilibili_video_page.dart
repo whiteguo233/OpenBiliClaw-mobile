@@ -127,6 +127,17 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
               )
             : null;
         _commentAid = null;
+        if (_selectedQn == null ||
+            !result.qualities.any((quality) => quality.qn == _selectedQn)) {
+          final actualQn = result.video?.qn;
+          _selectedQn =
+              actualQn != null &&
+                  result.qualities.any((quality) => quality.qn == actualQn)
+              ? actualQn
+              : (result.qualities.isNotEmpty
+                    ? result.qualities.first.qn
+                    : null);
+        }
       });
       unawaited(_loadDanmaku(result));
       unawaited(_loadInteractions());
@@ -712,6 +723,62 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
     await _load();
   }
 
+  /// Chooses the quality to show in the compact dropdown. Keeps the user's
+  /// explicit selection when it still exists in the current play response,
+  /// otherwise falls back to the stream's actual qn or the first option.
+  int? _selectedQualityQn(BilibiliPlayResult result) {
+    if (result.qualities.isEmpty) return null;
+    if (_selectedQn != null &&
+        result.qualities.any((quality) => quality.qn == _selectedQn)) {
+      return _selectedQn;
+    }
+    final actualQn = result.video?.qn;
+    if (actualQn != null && result.qualities.any((q) => q.qn == actualQn)) {
+      return actualQn;
+    }
+    return result.qualities.first.qn;
+  }
+
+  Widget _playerOptionDropdown<T>({
+    required String label,
+    required T value,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?>? onChanged,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white70, fontSize: 12),
+        ),
+        const SizedBox(width: 2),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<T>(
+              value: value,
+              items: items,
+              onChanged: onChanged,
+              dropdownColor: const Color(0xFF1B1B1B),
+              borderRadius: BorderRadius.circular(10),
+              icon: const Icon(
+                Icons.arrow_drop_down_rounded,
+                color: Colors.white70,
+              ),
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+              isDense: true,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final result = _result;
@@ -924,77 +991,71 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
                     ),
                     const SizedBox(height: 8),
                     Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: result.qualities
-                          .map(
-                            (quality) => ActionChip(
-                              label: Text(quality.label),
-                              labelStyle: const TextStyle(fontSize: 11),
-                              visualDensity: VisualDensity.compact,
-                              onPressed: _loading
-                                  ? null
-                                  : () => _switchQuality(quality),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
-                        for (final rate in const [0.5, 1.0, 1.25, 1.5, 2.0])
-                          ActionChip(
-                            label: Text(rate == 1.0 ? '1.0x' : '${rate}x'),
-                            labelStyle: const TextStyle(fontSize: 11),
-                            visualDensity: VisualDensity.compact,
-                            backgroundColor: _rate == rate
-                                ? Colors.white24
-                                : null,
-                            onPressed: _loading
+                        if (result.qualities.isNotEmpty)
+                          _playerOptionDropdown<int>(
+                            label: '清晰度',
+                            value:
+                                _selectedQualityQn(result) ??
+                                result.qualities.first.qn,
+                            items: [
+                              for (final quality in result.qualities)
+                                DropdownMenuItem<int>(
+                                  value: quality.qn,
+                                  child: Text(quality.label),
+                                ),
+                            ],
+                            onChanged: _loading
                                 ? null
-                                : () => _switchRate(rate),
+                                : (qn) {
+                                    if (qn == null) return;
+                                    final quality = result.qualities.firstWhere(
+                                      (item) => item.qn == qn,
+                                    );
+                                    unawaited(_switchQuality(quality));
+                                  },
                           ),
-                      ],
-                    ),
-                    if (result.subtitles.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          ActionChip(
-                            label: const Text('字幕'),
-                            labelStyle: const TextStyle(fontSize: 11),
-                            visualDensity: VisualDensity.compact,
-                            backgroundColor: _selectedSubtitle == -1
-                                ? Colors.white24
-                                : null,
-                            onPressed: _loading
+                        _playerOptionDropdown<double>(
+                          label: '倍速',
+                          value: _rate,
+                          items: [
+                            for (final rate in const [0.5, 1.0, 1.25, 1.5, 2.0])
+                              DropdownMenuItem<double>(
+                                value: rate,
+                                child: Text(rate == 1.0 ? '1.0x' : '${rate}x'),
+                              ),
+                          ],
+                          onChanged: _loading
+                              ? null
+                              : (rate) {
+                                  if (rate == null) return;
+                                  unawaited(_switchRate(rate));
+                                },
+                        ),
+                        if (result.subtitles.isNotEmpty)
+                          _playerOptionDropdown<int>(
+                            label: '字幕',
+                            value: _selectedSubtitle,
+                            items: [
+                              const DropdownMenuItem<int>(
+                                value: -1,
+                                child: Text('关闭'),
+                              ),
+                              for (var i = 0; i < result.subtitles.length; i++)
+                                DropdownMenuItem<int>(
+                                  value: i,
+                                  child: Text(result.subtitles[i].name),
+                                ),
+                            ],
+                            onChanged: _loading
                                 ? null
-                                : () => _selectSubtitle(-1),
+                                : (index) {
+                                    if (index == null) return;
+                                    unawaited(_selectSubtitle(index));
+                                  },
                           ),
-                          for (var i = 0; i < result.subtitles.length; i++)
-                            ActionChip(
-                              label: Text(result.subtitles[i].name),
-                              labelStyle: const TextStyle(fontSize: 11),
-                              visualDensity: VisualDensity.compact,
-                              backgroundColor: _selectedSubtitle == i
-                                  ? Colors.white24
-                                  : null,
-                              onPressed: _loading
-                                  ? null
-                                  : () => _selectSubtitle(i),
-                            ),
-                        ],
-                      ),
-                    ],
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
                         ActionChip(
                           label: Text(_danmakuEnabled ? '弹幕：开' : '弹幕：关'),
                           labelStyle: const TextStyle(fontSize: 11),
@@ -1027,6 +1088,50 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
                           ),
                         ),
                       ),
+                    ],
+                    if (_related.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        '相关视频',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      ..._related
+                          .take(8)
+                          .map(
+                            (item) => ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: SizedBox(
+                                width: 90,
+                                height: 56,
+                                child: CoverImage(
+                                  url: item.coverUrl,
+                                  width: 90,
+                                  height: 56,
+                                  borderRadius: 8,
+                                ),
+                              ),
+                              title: Text(
+                                item.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              subtitle: Text(
+                                '${item.upName} · ${item.view} 播放',
+                                style: const TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 11,
+                                ),
+                              ),
+                              onTap: () => _openRelated(item),
+                            ),
+                          ),
                     ],
                     if (_comments.isNotEmpty) ...[
                       const SizedBox(height: 16),
@@ -1072,50 +1177,6 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage> {
                                   child: const Text('加载更多评论'),
                                 ),
                         ),
-                    ],
-                    if (_related.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        '相关视频',
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      ..._related
-                          .take(8)
-                          .map(
-                            (item) => ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: SizedBox(
-                                width: 90,
-                                height: 56,
-                                child: CoverImage(
-                                  url: item.coverUrl,
-                                  width: 90,
-                                  height: 56,
-                                  borderRadius: 8,
-                                ),
-                              ),
-                              title: Text(
-                                item.title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              subtitle: Text(
-                                '${item.upName} · ${item.view} 播放',
-                                style: const TextStyle(
-                                  color: Colors.white54,
-                                  fontSize: 11,
-                                ),
-                              ),
-                              onTap: () => _openRelated(item),
-                            ),
-                          ),
                     ],
                   ],
                 ),
@@ -1321,91 +1382,155 @@ class _CommentTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            comment.uname,
-            style: const TextStyle(
-              color: Color(0xFFFB7299),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            comment.message,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            '👍 ${comment.likeCount}',
-            style: const TextStyle(color: Colors.white54, fontSize: 11),
-          ),
-          if (comment.replies.isNotEmpty || comment.replyCount > 0) ...[
-            const SizedBox(height: 6),
-            Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              padding: const EdgeInsets.all(8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (final reply in comment.replies)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Text.rich(
-                        TextSpan(
-                          children: [
-                            TextSpan(
-                              text: '${reply.uname}: ',
-                              style: const TextStyle(
-                                color: Color(0xFFFB7299),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            TextSpan(
-                              text: reply.message,
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
-                                height: 1.4,
-                              ),
-                            ),
-                          ],
-                        ),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+          _CommentAvatar(url: comment.avatarUrl, name: comment.uname, size: 34),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  comment.uname,
+                  style: const TextStyle(
+                    color: Color(0xFFFB7299),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  comment.message,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '👍 ${comment.likeCount}',
+                  style: const TextStyle(color: Colors.white54, fontSize: 11),
+                ),
+                if (comment.replies.isNotEmpty || comment.replyCount > 0) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                  if (comment.replyCount > comment.replies.length)
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: onOpenReplies,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          '共 ${comment.replyCount} 条回复 >',
-                          style: const TextStyle(
-                            color: Color(0xFF6D9EEB),
-                            fontSize: 12,
+                    padding: const EdgeInsets.all(8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final reply in comment.replies)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _CommentAvatar(
+                                  url: reply.avatarUrl,
+                                  name: reply.uname,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text.rich(
+                                    TextSpan(
+                                      children: [
+                                        TextSpan(
+                                          text: '${reply.uname}: ',
+                                          style: const TextStyle(
+                                            color: Color(0xFFFB7299),
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        TextSpan(
+                                          text: reply.message,
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 12,
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ),
+                        if (comment.replyCount > comment.replies.length)
+                          GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: onOpenReplies,
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                '共 ${comment.replyCount} 条回复 >',
+                                style: const TextStyle(
+                                  color: Color(0xFF6D9EEB),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
+                  ),
                 ],
-              ),
+              ],
             ),
-          ],
+          ),
         ],
+      ),
+    );
+  }
+}
+
+/// A small circular avatar for comment authors and replies.
+class _CommentAvatar extends StatelessWidget {
+  const _CommentAvatar({required this.url, required this.name, this.size = 32});
+
+  final String url;
+  final String name;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = url.startsWith('//') ? 'https:$url' : url;
+    if (normalized.isEmpty) {
+      final trimmedName = name.trim();
+      final initial = trimmedName.isEmpty ? '?' : trimmedName.substring(0, 1);
+      return CircleAvatar(
+        radius: size / 2,
+        backgroundColor: Colors.white12,
+        child: Text(
+          initial,
+          style: TextStyle(
+            color: Colors.white70,
+            fontSize: size * 0.45,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+    }
+    return ClipOval(
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: CoverImage(
+          url: normalized,
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+        ),
       ),
     );
   }
@@ -1738,30 +1863,43 @@ class _CommentRepliesSheetState extends State<_CommentRepliesSheet> {
   Widget _sheetComment(BilibiliComment comment, {bool isRoot = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            comment.uname,
-            style: TextStyle(
-              color: const Color(0xFFFB7299),
-              fontSize: 12,
-              fontWeight: isRoot ? FontWeight.w700 : FontWeight.w600,
-            ),
+          _CommentAvatar(
+            url: comment.avatarUrl,
+            name: comment.uname,
+            size: isRoot ? 38 : 30,
           ),
-          const SizedBox(height: 2),
-          Text(
-            comment.message,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              height: 1.4,
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  comment.uname,
+                  style: TextStyle(
+                    color: const Color(0xFFFB7299),
+                    fontSize: 12,
+                    fontWeight: isRoot ? FontWeight.w700 : FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  comment.message,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '👍 ${comment.likeCount}',
+                  style: const TextStyle(color: Colors.white54, fontSize: 11),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            '👍 ${comment.likeCount}',
-            style: const TextStyle(color: Colors.white54, fontSize: 11),
           ),
         ],
       ),
