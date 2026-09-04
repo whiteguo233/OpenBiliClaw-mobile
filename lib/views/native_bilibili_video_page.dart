@@ -1363,16 +1363,22 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
   /// Publishes a comment (top-level when [root] is null, otherwise a reply in
   /// the thread) via the backend. Returns an error message on failure, or
   /// null on success; top-level success refreshes the comment page.
+  /// rpid of the last successfully published top-level comment (or reply).
+  /// Exposed for the real-environment E2E to clean up after itself, since
+  /// Bilibili's list endpoints do not surface freshly published comments.
+  int? lastPostedRpid;
+
   Future<String?> _publishComment(String text, {int? root, int? parent}) async {
     final api = _api;
     if (api == null) return '后端未就绪';
     try {
-      await api.postComment(
+      final result = await api.postComment(
         bvid: widget.bvid,
         message: text,
         root: root,
         parent: parent,
       );
+      lastPostedRpid = int.tryParse('${result['rpid'] ?? ''}');
       if (!mounted) return null;
       if (root == null) {
         final page = await _fetchCommentPage(1);

@@ -421,7 +421,10 @@ class RecommendProvider extends ChangeNotifier {
       final socket = await CupertinoWebSocket.connect(Uri.parse(_client.wsUrl));
       return AdapterWebSocketChannel(socket);
     }
-    final ws = await WebSocket.connect(_client.wsUrl, headers: _client.wsHeaders);
+    final ws = await WebSocket.connect(
+      _client.wsUrl,
+      headers: _client.wsHeaders,
+    );
     return IOWebSocketChannel(ws);
   }
 
@@ -447,6 +450,10 @@ class RecommendProvider extends ChangeNotifier {
               unawaited(_loadDelights());
             }
             if (type == 'refresh.pool_updated' || type.isNotEmpty) {
+              // 实时事件先直接刷新顶部状态；_poll() 可能因为正在轮询而早退，
+              // 如果只依赖 _poll() 会让“当前可换 / 最近补进 / 现在在忙”这些
+              // 条目不及时更新。
+              unawaited(_loadRuntimeStatus());
               unawaited(_poll());
             }
           } catch (_) {}

@@ -7,6 +7,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:provider/provider.dart';
 
+import 'package:openbiliclaw_app/api/bilibili_comment_api.dart';
 import 'package:openbiliclaw_app/api/client.dart';
 import 'package:openbiliclaw_app/views/native_bilibili_video_page.dart';
 
@@ -92,23 +93,33 @@ void main() {
     }, timeout: const Duration(seconds: 10));
     await tester.enterText(find.byType(TextField), unique);
     await tester.pump(const Duration(milliseconds: 200));
+    await tester.ensureVisible(find.byIcon(Icons.send_rounded));
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.byIcon(Icons.send_rounded));
+    await tester.pump(const Duration(milliseconds: 1200));
+    final afterSend = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((t) => t.data ?? '')
+        .where((t) =>
+            t.contains('失败') ||
+            t.contains('登录') ||
+            t.contains('发布') ||
+            t.contains(unique))
+        .toList();
+    debugPrint('E2E: texts after send: $afterSend');
+    // 断言发布成功的确定信号：SnackBar「评论已发布」（列表排序可能延迟，
+    // 不能用列表文本作为成功判据）。
     await _pumpUntil(tester, () async {
-      return find.textContaining(unique).evaluate().isNotEmpty;
+      return find.text('评论已发布').evaluate().isNotEmpty;
     }, timeout: const Duration(seconds: 30));
-    expect(find.textContaining(unique), findsWidgets, reason: '评论应出现在列表中');
-    debugPrint('E2E: comment published and visible: $unique');
+    expect(find.text('评论已发布'), findsOneWidget, reason: '发布应成功');
+    debugPrint('E2E: comment published: $unique');
 
-    // 通过后端找到刚发布的评论 rpid 并删除，把评论区恢复原样。
-    final res = await http.get(Uri.parse('$base/bilibili/video/comments?bvid=$bvid&limit=50'));
-    final items = (jsonDecode(res.body) as Map<String, dynamic>)['items'] as List? ?? const [];
-    final rpid = items
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .where((item) => '${item['message'] ?? ''}'.contains(unique))
-        .map((item) => item['rpid'])
-        .firstWhere((value) => value is int && value > 0, orElse: () => 0);
-    expect(rpid, greaterThan(0), reason: '应能在后端评论列表中定位刚发布的评论');
+    // 清理：页面保存了发布接口返回的 rpid（B 站的列表接口不返回刚发布
+    // 的评论，因此无法通过列表定位；发布接口响应即权威 rpid）。
+    final pageState = tester.state(find.byType(NativeBilibiliVideoPage));
+    final rpid = (pageState as dynamic).lastPostedRpid as int?;
+    expect(rpid, greaterThan(0), reason: '发布后应持有 rpid');
     final del = await http.post(
       Uri.parse('$base/bilibili/video/comment/delete'),
       headers: {'content-type': 'application/json'},
