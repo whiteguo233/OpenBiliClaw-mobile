@@ -128,10 +128,26 @@ class _DelightBannerState extends State<DelightBanner> {
             ),
           ),
           const SizedBox(height: 8),
+          if (_expanded && delight.coverUrl.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: CoverImage(
+                    url: delight.coverUrl,
+                    width: double.infinity,
+                    height: double.infinity,
+                    borderRadius: 12,
+                  ),
+                ),
+              ),
+            ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (delight.coverUrl.isNotEmpty)
+              if (!_expanded && delight.coverUrl.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(left: 14, bottom: 12),
                   child: ClipRRect(
