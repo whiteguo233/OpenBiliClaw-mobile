@@ -49,6 +49,8 @@ class RecommendApi {
   Future<Map<String, dynamic>> submitFeedback(
     int recommendationId,
     String type, {
+    String bvid = '',
+    String itemKey = '',
     String? note,
   }) {
     return _client.post(
@@ -58,6 +60,8 @@ class RecommendApi {
         'feedback_type': type,
         'note': note ?? '',
         'request_id': _newRequestId('fb'),
+        'bvid': bvid,
+        'item_key': itemKey,
       },
       timeout: 35,
     );

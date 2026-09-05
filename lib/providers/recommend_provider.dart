@@ -314,7 +314,13 @@ class RecommendProvider extends ChangeNotifier {
   }) async {
     _error = '';
     try {
-      await _api.submitFeedback(rec.id, type, note: note);
+      await _api.submitFeedback(
+        rec.id,
+        type,
+        bvid: rec.bvid,
+        itemKey: rec.itemKey,
+        note: note,
+      );
       for (final item in _recommendations) {
         if (item.id == rec.id) item.feedbackType = type;
       }
