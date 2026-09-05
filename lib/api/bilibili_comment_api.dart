@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../models/bilibili_auth.dart';
 import '../models/bilibili_interaction.dart';
 
 /// Direct client for Bilibili's comment endpoints.
@@ -19,6 +20,14 @@ class BilibiliCommentApi {
     http.Client? client,
   }) : userAgent = userAgent ?? _defaultUserAgent,
        _client = client ?? http.Client();
+
+  /// 从后端导出的 [BilibiliCookieSession] 创建直连客户端。
+  factory BilibiliCommentApi.fromSession(BilibiliCookieSession session) {
+    return BilibiliCommentApi(
+      cookie: session.cookie,
+      userAgent: session.userAgent,
+    );
+  }
 
   static const String _defaultUserAgent =
       'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) '

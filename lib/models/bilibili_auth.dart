@@ -87,6 +87,41 @@ class BilibiliAuthInfo {
   bool get isLoggedIn => state == BilibiliAuthState.loggedIn;
 }
 
+/// 后端导出的 B 站会话 Cookie。
+///
+/// 移动端只把这份 Cookie 保存在内存中，用于当前播放会话内的 B 站直连
+/// （评论 / 视频详情等不需要 WBI 签名的接口）；不落盘、不持久化。
+class BilibiliCookieSession {
+  final String cookie;
+  final String userAgent;
+  final String buvid;
+  final String expiresAt;
+  final BilibiliUser? user;
+
+  const BilibiliCookieSession({
+    this.cookie = '',
+    this.userAgent = '',
+    this.buvid = '',
+    this.expiresAt = '',
+    this.user,
+  });
+
+  factory BilibiliCookieSession.fromJson(Map<String, dynamic> json) {
+    final rawUser = json['user'];
+    return BilibiliCookieSession(
+      cookie: _cookieString(json),
+      userAgent: _text(json['user_agent'] ?? json['userAgent']),
+      buvid: _text(json['buvid']),
+      expiresAt: _text(json['expires_at'] ?? json['expiresAt']),
+      user: rawUser is Map
+          ? BilibiliUser.fromJson(Map<String, dynamic>.from(rawUser))
+          : null,
+    );
+  }
+
+  bool get isLoggedIn => cookie.isNotEmpty;
+}
+
 class BilibiliQrLogin {
   final String qrcodeKey;
   final String qrcodeUrl;
@@ -130,6 +165,22 @@ class BilibiliQrPoll {
       message: _text(json['message']),
     );
   }
+}
+
+String _cookieString(Map<String, dynamic> json) {
+  final rawCookie = json['cookie'];
+  if (rawCookie is String && rawCookie.trim().isNotEmpty) {
+    return rawCookie.trim();
+  }
+  final rawCookies = json['cookies'];
+  if (rawCookies is Map) {
+    final pairs = rawCookies.entries
+        .map((entry) => '${entry.key}=${entry.value}')
+        .where((pair) => pair.isNotEmpty)
+        .toList();
+    if (pairs.isNotEmpty) return pairs.join('; ');
+  }
+  return '';
 }
 
 String _text(dynamic value) => value?.toString().trim() ?? '';

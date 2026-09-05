@@ -54,6 +54,20 @@ class BilibiliApi {
     await _client.delete('/bilibili/auth/session');
   }
 
+  /// `POST /api/bilibili/auth/export`
+  ///
+  /// 请求后端把已保存的 B 站 Cookie 导出给移动端。移动端仅在当前会话内
+  /// 使用这份 Cookie 直连 B 站，不落盘；后端未实现此接口时保持原有的
+  /// `play-url` 下发 Cookie 路径。
+  Future<BilibiliCookieSession> exportSession() async {
+    final data = await _client.post(
+      '/bilibili/auth/export',
+      body: const {},
+      timeout: 5,
+    );
+    return BilibiliCookieSession.fromJson(data);
+  }
+
   /// `POST /api/bilibili/player/play-url`
   Future<BilibiliPlayResult> playUrl({
     required String bvid,

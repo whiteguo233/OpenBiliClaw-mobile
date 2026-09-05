@@ -170,7 +170,48 @@ POST /api/bilibili/auth/import
 
 ---
 
-### 1.5 清除登录态
+### 1.5 导出 Cookie 到移动端（可选）
+
+如果 `play-url` 响应没有直接下发 `headers.cookie`，客户端也可以主动向后端请求一次当前 B 站 Cookie，用于端上直连不需要 WBI 签名的接口（如评论）。
+
+```
+POST /api/bilibili/auth/export
+```
+
+请求体：
+
+```json
+{}
+```
+
+响应示例：
+
+```json
+{
+  "ok": true,
+  "cookies": {
+    "SESSDATA": "...",
+    "bili_jct": "...",
+    "DedeUserID": "...",
+    "DedeUserID__ckMd5": "...",
+    "sid": "..."
+  },
+  "user_agent": "Mozilla/5.0 (iPhone; ...) AppleWebKit/...",
+  "buvid": "...",
+  "expires_at": "2026-01-01T00:10:00Z",
+  "user": {
+    "mid": 123456,
+    "name": "昵称",
+    "face": "https://i0.hdslb.com/..."
+  }
+}
+```
+
+移动端收到后只在当前页面/播放会话内存中使用，**不落盘**。后端如果不方便暴露 Cookie，可以不实现该接口，客户端继续依赖 `play-url` 的 `headers.cookie` 或后端代理。
+
+---
+
+### 1.6 清除登录态
 
 ```
 DELETE /api/bilibili/auth/session
@@ -313,9 +354,10 @@ POST /api/bilibili/player/play-url
 1. `GET /api/bilibili/auth/status`
 2. `POST /api/bilibili/auth/qrcode` + `GET /api/bilibili/auth/qrcode/poll`
 3. `POST /api/bilibili/auth/import`
-4. `DELETE /api/bilibili/auth/session`
-5. `POST /api/bilibili/player/play-url`
-6. 可选：`POST /api/bilibili/player/danmaku` 或直接返回弹幕 URL
+4. 可选：`POST /api/bilibili/auth/export`
+5. `DELETE /api/bilibili/auth/session`
+6. `POST /api/bilibili/player/play-url`
+7. 可选：`POST /api/bilibili/player/danmaku` 或直接返回弹幕 URL
 
 ---
 
@@ -347,7 +389,7 @@ POST /api/bilibili/player/play-url
 
 ### 评论区：端上直连优先，后端兜底
 
-`play-url` 响应的 `headers.cookie` 已经把后端的 B 站 Cookie 下发给播放器拉流用，因此客户端复用同一个 Cookie **直连** B 站官方评论接口，无需后端转发：
+`play-url` 响应的 `headers.cookie` 已经把后端的 B 站 Cookie 下发给播放器拉流用，因此客户端复用同一个 Cookie **直连** B 站官方评论接口，无需后端转发。如果后端没有通过 `play-url` 下发 Cookie，客户端会尝试 `POST /api/bilibili/auth/export`（见 1.5）单独获取一次，仍未成功才走后端代理。
 
 - `GET https://api.bilibili.com/x/web-interface/view?bvid=...` — 解析 `aid`（评论接口的 `oid`）
 - `GET https://api.bilibili.com/x/v2/reply?type=1&oid=<aid>&sort=2&pn=1&ps=20` — 热评分页（无需 WBI 签名；匿名翻页被 B 站上游限制，必须带 Cookie）

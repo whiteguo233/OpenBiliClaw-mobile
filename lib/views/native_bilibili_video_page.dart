@@ -72,6 +72,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
   bool _commentHasMore = false;
   bool _commentsLoadingMore = false;
   BilibiliCommentApi? _commentDirect;
+  bool _directSessionTried = false;
   int? _commentAid;
   List<BilibiliRelatedVideo> _related = const [];
   String _videoDescription = '';
@@ -284,9 +285,27 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
     } catch (_) {}
   }
 
+  /// 先尝试复用 `play-url` 下发的 Cookie；如果没有，再向后端单独导出一次
+  /// B 站 Cookie。两者都失败时回退到后端代理。结果只在当前页面内存中维护，
+  /// 不写入 SharedPreferences。
+  Future<void> _ensureDirectSession() async {
+    final api = _api;
+    if (api == null || _commentDirect != null || _directSessionTried) return;
+    _directSessionTried = true;
+    try {
+      final session = await api.exportSession();
+      if (!mounted || session.cookie.isEmpty) return;
+      _commentDirect = BilibiliCommentApi.fromSession(session);
+    } catch (_) {
+      // 后端未实现 auth/export 时不需要报错，直接走原有代理/play-url 路径。
+    }
+  }
+
   /// Comment pages come from api.bilibili.com directly when the play-url
-  /// response handed us a cookie; otherwise fall back to the backend proxy.
+  /// response handed us a cookie (or auth/export did); otherwise fall back
+  /// to the backend proxy.
   Future<BilibiliCommentPage> _fetchCommentPage(int pn) async {
+    await _ensureDirectSession();
     final direct = _commentDirect;
     if (direct != null) {
       try {
@@ -304,6 +323,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
   }
 
   Future<BilibiliCommentPage> _fetchReplyPage(int root, int pn) async {
+    await _ensureDirectSession();
     final direct = _commentDirect;
     if (direct != null) {
       try {
@@ -538,6 +558,10 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
       context,
     ).push<bool>(MaterialPageRoute(builder: (_) => const BilibiliLoginView()));
     if (loggedIn == true && mounted) {
+      // 登录成功后重新拉取 play-url，并允许再次尝试 auth/export。
+      _commentDirect = null;
+      _commentAid = null;
+      _directSessionTried = false;
       await _load();
     }
   }
