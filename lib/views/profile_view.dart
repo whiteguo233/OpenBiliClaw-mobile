@@ -16,6 +16,13 @@ class ProfileView extends StatefulWidget {
 class _ProfileViewState extends State<ProfileView> {
   final ScrollController _scrollController = ScrollController();
 
+  static const int _interestPageSize = 6;
+  static const int _avoidPageSize = 6;
+  static const int _upPageSize = 12;
+  int _interestVisible = _interestPageSize;
+  int _avoidVisible = _avoidPageSize;
+  int _upVisible = _upPageSize;
+
   @override
   void dispose() {
     _scrollController.dispose();
@@ -327,6 +334,19 @@ class _ProfileViewState extends State<ProfileView> {
   }
 
   Widget _interestSection(BuildContext context, ProfileSummary summary) {
+    final totalLikes = summary.totalLikes > summary.interests.length
+        ? summary.totalLikes
+        : summary.interests.length;
+    final totalAvoids = summary.totalDislikes > summary.avoidances.length
+        ? summary.totalDislikes
+        : summary.avoidances.length;
+    final totalUps =
+        summary.totalFavoriteUpUsers > summary.favoriteUpUsers.length
+        ? summary.totalFavoriteUpUsers
+        : summary.favoriteUpUsers.length;
+    final visibleInterests = summary.interests.take(_interestVisible).toList();
+    final visibleAvoids = summary.avoidances.take(_avoidVisible).toList();
+    final visibleUps = summary.favoriteUpUsers.take(_upVisible).toList();
     return _section(
       context,
       '兴趣领域',
@@ -334,35 +354,64 @@ class _ProfileViewState extends State<ProfileView> {
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (summary.interests.isNotEmpty) ...[
-            _label(context, '喜欢'),
-            ...summary.interests.map((item) => _interest(context, item)),
+          if (visibleInterests.isNotEmpty) ...[
+            _label(context, totalLikes > 0 ? '喜欢（$totalLikes）' : '喜欢'),
+            ...visibleInterests.map((item) => _interest(context, item)),
+            if (visibleInterests.length < summary.interests.length)
+              _loadMoreButton(
+                '加载更多喜欢',
+                () => setState(() => _interestVisible += _interestPageSize),
+              ),
           ],
-          if (summary.avoidances.isNotEmpty) ...[
+          if (visibleAvoids.isNotEmpty) ...[
             const SizedBox(height: 10),
             _label(
               context,
-              '明显会避开',
+              totalAvoids > 0 ? '明显会避开（$totalAvoids）' : '明显会避开',
               color: Theme.of(context).colorScheme.error,
             ),
-            ...summary.avoidances.map(
+            ...visibleAvoids.map(
               (item) => _interest(context, item, avoidance: true),
             ),
+            if (visibleAvoids.length < summary.avoidances.length)
+              _loadMoreButton(
+                '加载更多避开',
+                () => setState(() => _avoidVisible += _avoidPageSize),
+              ),
           ],
-          if (summary.favoriteUpUsers.isNotEmpty) ...[
+          if (visibleUps.isNotEmpty) ...[
             const SizedBox(height: 10),
             ExpansionTile(
               tilePadding: EdgeInsets.zero,
               childrenPadding: const EdgeInsets.only(bottom: 4),
               dense: true,
               initiallyExpanded: true,
-              title: Text('关注的创作者（${summary.favoriteUpUsers.length}）'),
+              title: Text(totalUps > 0 ? '关注的创作者（$totalUps）' : '关注的创作者'),
               children: [
-                _chips(context, summary.favoriteUpUsers.take(40), brand: true),
+                _chips(context, visibleUps, brand: true),
+                if (visibleUps.length < summary.favoriteUpUsers.length)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: _loadMoreButton(
+                      '加载更多创作者',
+                      () => setState(() => _upVisible += _upPageSize),
+                    ),
+                  ),
               ],
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _loadMoreButton(String label, VoidCallback onPressed) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: TextButton.icon(
+        onPressed: onPressed,
+        icon: const Icon(Icons.expand_more_rounded, size: 16),
+        label: Text(label),
       ),
     );
   }
@@ -1263,10 +1312,16 @@ class _ProfileEditSheet extends StatelessWidget {
     String path,
     Map<String, dynamic> field,
   ) {
-    final items = field['items'] is List
+    final rawItems = field['items'] is List
         ? (field['items'] as List).map((item) => item.toString()).toList()
         : const <String>[];
-    return _editableChips(context, provider, path, items);
+    final added = field['added'] is List
+        ? (field['added'] as List)
+              .map((item) => item.toString())
+              .where((item) => item.isNotEmpty)
+              .toList()
+        : const <String>[];
+    return _editableChips(context, provider, path, rawItems, addedItems: added);
   }
 
   Widget _interestEditor(
@@ -1278,19 +1333,35 @@ class _ProfileEditSheet extends StatelessWidget {
     final domains = field['domains'] is List
         ? (field['domains'] as List)
               .whereType<Map>()
-              .map((item) => item['domain']?.toString() ?? '')
-              .where((item) => item.isNotEmpty)
+              .map(
+                (item) => (
+                  name: item['domain']?.toString() ?? '',
+                  added: item['user_added'] == true,
+                ),
+              )
+              .where((item) => item.name.isNotEmpty)
               .toList()
-        : const <String>[];
-    return _editableChips(context, provider, path, domains);
+        : const <({String name, bool added})>[];
+    final added = domains
+        .where((item) => item.added)
+        .map((item) => item.name)
+        .toList();
+    final regular = domains
+        .where((item) => !item.added)
+        .map((item) => item.name)
+        .toList();
+    return _editableChips(context, provider, path, regular, addedItems: added);
   }
 
   Widget _editableChips(
     BuildContext context,
     ProfileProvider provider,
     String path,
-    List<String> items,
-  ) {
+    List<String> items, {
+    List<String> addedItems = const [],
+  }) {
+    final addedSet = addedItems.toSet();
+    final regular = items.where((item) => !addedSet.contains(item)).toList();
     return Column(
       children: [
         ConstrainedBox(
@@ -1299,16 +1370,12 @@ class _ProfileEditSheet extends StatelessWidget {
             child: Wrap(
               spacing: 6,
               runSpacing: 6,
-              children: items.take(80).map((item) {
-                return InputChip(
-                  label: Text(item, style: const TextStyle(fontSize: 11)),
-                  onDeleted: () => provider.applyEdit(
-                    target: path,
-                    operation: 'remove',
-                    value: item,
-                  ),
-                );
-              }).toList(),
+              children: [
+                for (final item in addedItems)
+                  _editableChip(context, provider, path, item, added: true),
+                for (final item in regular.take(80))
+                  _editableChip(context, provider, path, item),
+              ],
             ),
           ),
         ),
@@ -1322,6 +1389,42 @@ class _ProfileEditSheet extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _editableChip(
+    BuildContext context,
+    ProfileProvider provider,
+    String path,
+    String item, {
+    bool added = false,
+  }) {
+    if (!added) {
+      return InputChip(
+        label: Text(item, style: const TextStyle(fontSize: 11)),
+        onDeleted: () =>
+            provider.applyEdit(target: path, operation: 'remove', value: item),
+      );
+    }
+    return InputChip(
+      avatar: Icon(
+        Icons.new_releases_rounded,
+        size: 14,
+        color: Theme.of(context).colorScheme.primary,
+      ),
+      label: Text(item, style: const TextStyle(fontSize: 11)),
+      labelStyle: TextStyle(
+        color: Theme.of(context).colorScheme.primary,
+        fontWeight: FontWeight.w700,
+      ),
+      backgroundColor: Theme.of(
+        context,
+      ).colorScheme.primary.withValues(alpha: 0.12),
+      side: BorderSide(
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.35),
+      ),
+      onDeleted: () =>
+          provider.applyEdit(target: path, operation: 'remove', value: item),
     );
   }
 

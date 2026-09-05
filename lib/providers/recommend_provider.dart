@@ -156,6 +156,29 @@ class RecommendProvider extends ChangeNotifier {
     unawaited(_loadSideChannels());
   }
 
+  /// 下拉刷新 / 点击推荐 Tab 回顶刷新：先让后端真正刷新一次推荐池，
+  /// 再拉取最新列表。避免只重新 GET 当前列表导致内容看起来“没变化”。
+  Future<void> refresh() async {
+    if (_loading) return;
+    _loading = true;
+    _error = '';
+    _safeNotify();
+    try {
+      await _api.refresh();
+      final recs = await _api.fetch();
+      _recommendations = recs;
+      _online = true;
+      _prunePlatformFilter();
+    } catch (error) {
+      _online = false;
+      _error = _message(error, '推荐刷新失败');
+    } finally {
+      _loading = false;
+      _safeNotify();
+    }
+    unawaited(_loadSideChannels());
+  }
+
   /// 平台过滤（与桌面 Web 的「全部 / 平台」过滤一致，纯客户端过滤）：
   /// 空字符串表示「全部」。
   String get platformFilter => _platformFilter;

@@ -47,7 +47,7 @@ class RecommendViewState extends State<RecommendView> {
       );
     }
     if (!mounted) return;
-    await context.read<RecommendProvider>().load();
+    await context.read<RecommendProvider>().refresh();
   }
 
   @override
@@ -66,7 +66,7 @@ class RecommendViewState extends State<RecommendView> {
                 return false;
               },
               child: RefreshIndicator(
-                onRefresh: rp.load,
+                onRefresh: rp.refresh,
                 child: CustomScrollView(
                   controller: _scrollController,
                   physics: const AlwaysScrollableScrollPhysics(),

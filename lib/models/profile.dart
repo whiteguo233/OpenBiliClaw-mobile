@@ -10,6 +10,9 @@ class ProfileSummary {
   final List<ProfileInterest> interests;
   final List<ProfileInterest> avoidances;
   final List<String> favoriteUpUsers;
+  final int totalLikes;
+  final int totalDislikes;
+  final int totalFavoriteUpUsers;
   final String lifeStage;
   final String currentPhase;
   final List<String> cognitiveStyle;
@@ -36,6 +39,9 @@ class ProfileSummary {
     this.interests = const [],
     this.avoidances = const [],
     this.favoriteUpUsers = const [],
+    this.totalLikes = 0,
+    this.totalDislikes = 0,
+    this.totalFavoriteUpUsers = 0,
     this.lifeStage = '',
     this.currentPhase = '',
     this.cognitiveStyle = const [],
@@ -73,6 +79,9 @@ class ProfileSummary {
           ? legacyAvoidances
           : _parseDomains(json['dislikes']),
       favoriteUpUsers: _strings(json['favorite_up_users']),
+      totalLikes: _toInt(json['total_likes']),
+      totalDislikes: _toInt(json['total_dislikes']),
+      totalFavoriteUpUsers: _toInt(json['total_favorite_up_users']),
       lifeStage: _decode(json['life_stage']),
       currentPhase: _decode(json['current_phase']),
       cognitiveStyle: _strings(json['cognitive_style']),
@@ -365,6 +374,8 @@ double _toDouble(dynamic value, [double fallback = 0]) {
   if (value is num) return value.toDouble();
   return double.tryParse(value?.toString() ?? '') ?? fallback;
 }
+
+int _toInt(dynamic value) => _integer(value);
 
 int _integer(dynamic value, [int fallback = 0]) {
   if (value is num) return value.toInt();

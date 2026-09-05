@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
@@ -106,9 +108,10 @@ class _AppEntryState extends State<AppEntry> {
     final auth = context.read<AuthProvider>();
     await client.loadSettings();
     if (!mounted) return;
-    await auth.checkStatus();
-    if (!mounted) return;
     setState(() => _ready = true);
+    // 本地设置就绪后立即进入 App，认证状态在后台校验；如果后端要求登录，
+    // 校验完成后自动切到登录页。
+    unawaited(auth.checkStatus());
   }
 
   @override
@@ -120,11 +123,6 @@ class _AppEntryState extends State<AppEntry> {
     }
     return Consumer<AuthProvider>(
       builder: (context, auth, _) {
-        if (auth.loading) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator.adaptive()),
-          );
-        }
         if (auth.needsLogin) return const LoginView();
         return const HomeView();
       },

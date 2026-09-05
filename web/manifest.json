@@ -1,6 +1,6 @@
 {
-    "name": "openbiliclaw_app",
-    "short_name": "openbiliclaw_app",
+    "name": "openbiliclaw",
+    "short_name": "openbiliclaw",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
