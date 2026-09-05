@@ -417,14 +417,11 @@ class RecommendProvider extends ChangeNotifier {
       }
       _online = true;
       _error = '';
-      if (_delights.isEmpty) await _loadDelights();
-      if (_activityFeed.items.isEmpty &&
-          _activityFeed.headline.isEmpty &&
-          _activityFeed.liveSummary.isEmpty) {
-        await _loadActivityFeed();
-      }
-      await _loadRuntimeStatus();
+      // 先通知主列表，再异步加载侧栏状态；侧栏慢时不要拖慢首屏/轮询。
       _safeNotify();
+      unawaited(_loadDelights());
+      unawaited(_loadActivityFeed());
+      unawaited(_loadRuntimeStatus());
     } catch (_) {
       if (_online) {
         _online = false;
