@@ -27,6 +27,11 @@ class ProfileApi {
     return null;
   }
 
+  Future<List<Map<String, dynamic>>> fetchPendingCognitionUpdates() async {
+    final data = await _client.get('/cognition-updates/pending-list');
+    return _maps(data['items']);
+  }
+
   Future<void> markCognitionSeen(String id) async {
     await _client.post('/cognition-updates/seen', body: {'id': id});
   }

@@ -62,12 +62,12 @@ class _MessageInboxState extends State<MessageInbox> {
           builder: (context, profile, chat, _) {
             final probes = profile.probes;
             final avoidanceProbes = profile.avoidanceProbes;
-            final cognition = profile.cognitionNotification;
+            final cognitions = profile.cognitionNotifications;
             final pending = chat.pendingConfirmations;
             final hasAny =
                 probes.isNotEmpty ||
                 avoidanceProbes.isNotEmpty ||
-                cognition != null ||
+                cognitions.isNotEmpty ||
                 pending.isNotEmpty;
             return Column(
               mainAxisSize: MainAxisSize.min,
@@ -116,8 +116,8 @@ class _MessageInboxState extends State<MessageInbox> {
                                   domain,
                                 ),
                               ),
-                            if (cognition != null)
-                              _CognitionCard(notification: cognition),
+                            if (cognitions.isNotEmpty)
+                              _CognitionSection(notifications: cognitions),
                             if (pending.isNotEmpty)
                               _PendingConfirmations(items: pending),
                           ],
@@ -305,10 +305,50 @@ class _ProbeSection extends StatelessWidget {
   }
 }
 
+class _CognitionSection extends StatelessWidget {
+  const _CognitionSection({required this.notifications});
+
+  final List<Map<String, dynamic>> notifications;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Row(
+            children: [
+              Icon(Icons.auto_awesome, size: 17, color: context.appPositive),
+              const SizedBox(width: 6),
+              Text(
+                '画像变更（${notifications.length}）',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+        ...notifications.map(
+          (notification) => _CognitionCard(
+            notification: notification,
+            onSeen: () => context.read<ProfileProvider>().markCognitionSeen(
+              notification['id']?.toString() ?? '',
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _CognitionCard extends StatelessWidget {
-  const _CognitionCard({required this.notification});
+  const _CognitionCard({required this.notification, required this.onSeen});
 
   final Map<String, dynamic> notification;
+  final VoidCallback onSeen;
 
   @override
   Widget build(BuildContext context) {
@@ -337,7 +377,7 @@ class _CognitionCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  '画像有一条新认知',
+                  '画像变更',
                   style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                 ),
                 if (summary.isNotEmpty) ...[
@@ -347,12 +387,7 @@ class _CognitionCard extends StatelessWidget {
               ],
             ),
           ),
-          TextButton(
-            onPressed: () {
-              context.read<ProfileProvider>().markCognitionSeen();
-            },
-            child: const Text('知道了'),
-          ),
+          TextButton(onPressed: onSeen, child: const Text('知道了')),
         ],
       ),
     );

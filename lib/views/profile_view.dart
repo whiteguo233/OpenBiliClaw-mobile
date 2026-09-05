@@ -72,28 +72,12 @@ class _ProfileViewState extends State<ProfileView> {
                             children: [
                               if (provider.error.isNotEmpty)
                                 _errorBanner(context, provider),
-                              if (provider.cognitionNotification != null)
-                                _cognitionNotice(context, provider),
                               _portrait(context, summary),
                               _coreSection(context, summary),
                               _valuesSection(context, summary),
                               _interestSection(context, summary),
                               _roleSection(context, summary),
                               _surfaceSection(context, summary),
-                              if (summary.speculativeInterests.isNotEmpty)
-                                _speculationSection(
-                                  context,
-                                  provider,
-                                  summary.speculativeInterests,
-                                  avoidance: false,
-                                ),
-                              if (summary.speculativeAvoidances.isNotEmpty)
-                                _speculationSection(
-                                  context,
-                                  provider,
-                                  summary.speculativeAvoidances,
-                                  avoidance: true,
-                                ),
                               if (provider.cognitionUpdates.isNotEmpty)
                                 _cognitionSection(context, provider),
                               if (summary.activeInsights.isNotEmpty)
@@ -169,48 +153,6 @@ class _ProfileViewState extends State<ProfileView> {
             onPressed: provider.clearError,
             icon: const Icon(Icons.close, size: 17),
             visualDensity: VisualDensity.compact,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _cognitionNotice(BuildContext context, ProfileProvider provider) {
-    final item = provider.cognitionNotification!;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            context.appPositive.withValues(alpha: 0.12),
-            Theme.of(context).colorScheme.secondary.withValues(alpha: 0.08),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.auto_awesome, color: context.appPositive),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  '画像有一条新认知',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                Text(
-                  (item['summary'] ?? '').toString(),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-          TextButton(
-            onPressed: provider.markCognitionSeen,
-            child: const Text('知道了'),
           ),
         ],
       ),
@@ -470,135 +412,6 @@ class _ProfileViewState extends State<ProfileView> {
             _keyValue(context, '时间模式', summary.context.timeOfDayPatterns),
           if (summary.context.sessionType.isNotEmpty)
             _keyValue(context, '浏览会话', summary.context.sessionType),
-        ],
-      ),
-    );
-  }
-
-  Widget _speculationSection(
-    BuildContext context,
-    ProfileProvider provider,
-    List<ProfileSpeculation> items, {
-    required bool avoidance,
-  }) {
-    return _section(
-      context,
-      avoidance ? '待确认的避雷方向' : '推测性兴趣',
-      avoidance ? Icons.shield_outlined : Icons.travel_explore,
-      Column(
-        children: items
-            .map(
-              (item) => _speculationCard(
-                context,
-                provider,
-                item,
-                avoidance: avoidance,
-              ),
-            )
-            .toList(),
-      ),
-    );
-  }
-
-  Widget _speculationCard(
-    BuildContext context,
-    ProfileProvider provider,
-    ProfileSpeculation item, {
-    required bool avoidance,
-  }) {
-    final busy = provider.probeBusy(item.domain, avoidance: avoidance);
-    final progress = item.confirmationThreshold > 0
-        ? item.confirmationCount / item.confirmationThreshold
-        : 0.0;
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color:
-            (avoidance
-                    ? Theme.of(context).colorScheme.error
-                    : Theme.of(context).colorScheme.secondary)
-                .withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  item.domain,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-              _badge(
-                item.challenge ? '挑战方向' : '${(item.confidence * 100).round()}%',
-                item.challenge
-                    ? Theme.of(context).colorScheme.tertiary
-                    : Theme.of(context).colorScheme.secondary,
-              ),
-            ],
-          ),
-          if (item.reason.isNotEmpty) ...[
-            const SizedBox(height: 5),
-            Text(item.reason, style: Theme.of(context).textTheme.bodySmall),
-          ],
-          if (item.specifics.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            _chips(context, item.specifics.take(5)),
-          ],
-          const SizedBox(height: 8),
-          LinearProgressIndicator(
-            value: progress.clamp(0, 1),
-            minHeight: 3,
-            borderRadius: BorderRadius.circular(2),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: [
-              FilledButton.tonal(
-                onPressed: busy
-                    ? null
-                    : () => _probeAction(
-                        context,
-                        provider,
-                        item.domain,
-                        'confirm',
-                        avoidance,
-                      ),
-                child: Text(avoidance ? '是雷点' : '喜欢'),
-              ),
-              OutlinedButton(
-                onPressed: busy
-                    ? null
-                    : () => _probeAction(
-                        context,
-                        provider,
-                        item.domain,
-                        'reject',
-                        avoidance,
-                      ),
-                child: Text(avoidance ? '不是' : '不喜欢'),
-              ),
-              TextButton(
-                onPressed: busy
-                    ? null
-                    : () => _probeAction(
-                        context,
-                        provider,
-                        item.domain,
-                        'defer',
-                        avoidance,
-                      ),
-                child: const Text('稍后再说'),
-              ),
-            ],
-          ),
-          if (busy) const LinearProgressIndicator(minHeight: 2),
         ],
       ),
     );
@@ -1065,25 +878,6 @@ class _ProfileViewState extends State<ProfileView> {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(value, style: TextStyle(fontSize: 10, color: color)),
-    );
-  }
-
-  Future<void> _probeAction(
-    BuildContext context,
-    ProfileProvider provider,
-    String domain,
-    String action,
-    bool avoidance,
-  ) async {
-    final ok = avoidance
-        ? await provider.respondToAvoidanceProbe(domain, action)
-        : await provider.respondToProbe(domain, action);
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(ok ? '已记下你的选择' : provider.error),
-        backgroundColor: ok ? null : Colors.red[700],
-      ),
     );
   }
 

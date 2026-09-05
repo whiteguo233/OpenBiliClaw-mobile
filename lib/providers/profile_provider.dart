@@ -13,7 +13,7 @@ class ProfileProvider extends ChangeNotifier {
   bool _loadingMoreCognition = false;
   bool _loadingEditState = false;
   String _error = '';
-  Map<String, dynamic>? _cognitionNotification;
+  List<Map<String, dynamic>> _cognitionNotifications = [];
   List<Map<String, dynamic>> _probes = [];
   List<Map<String, dynamic>> _avoidanceProbes = [];
   Map<String, dynamic>? _editState;
@@ -28,7 +28,8 @@ class ProfileProvider extends ChangeNotifier {
   bool get loadingMoreCognition => _loadingMoreCognition;
   bool get loadingEditState => _loadingEditState;
   String get error => _error;
-  Map<String, dynamic>? get cognitionNotification => _cognitionNotification;
+  List<Map<String, dynamic>> get cognitionNotifications =>
+      List.unmodifiable(_cognitionNotifications);
   List<Map<String, dynamic>> get probes => List.unmodifiable(_probes);
   List<Map<String, dynamic>> get avoidanceProbes =>
       List.unmodifiable(_avoidanceProbes);
@@ -65,7 +66,7 @@ class ProfileProvider extends ChangeNotifier {
       ]);
       _probes = results[0];
       _avoidanceProbes = results[1];
-      _cognitionNotification = await _api.fetchPendingCognitionUpdate();
+      _cognitionNotifications = await _api.fetchPendingCognitionUpdates();
       notifyListeners();
     } catch (error) {
       _error = _message(error, '画像待确认信息加载失败');
@@ -73,12 +74,21 @@ class ProfileProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> markCognitionSeen() async {
-    final id = _cognitionNotification?['id']?.toString() ?? '';
-    if (id.isEmpty) return true;
+  Future<bool> markCognitionSeen(String id) async {
+    final normalized = id.trim();
+    if (normalized.isEmpty) {
+      // 没有 id 的旧数据也能在本地直接消除，避免“知道了”后通知不消失。
+      if (_cognitionNotifications.isNotEmpty) {
+        _cognitionNotifications.removeAt(0);
+        notifyListeners();
+      }
+      return true;
+    }
     try {
-      await _api.markCognitionSeen(id);
-      _cognitionNotification = null;
+      await _api.markCognitionSeen(normalized);
+      _cognitionNotifications.removeWhere(
+        (item) => (item['id']?.toString() ?? '') == normalized,
+      );
       notifyListeners();
       return true;
     } catch (error) {

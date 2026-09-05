@@ -150,7 +150,7 @@ class _HomeViewState extends State<HomeView> {
         final profilePending =
             profile.probes.length +
             profile.avoidanceProbes.length +
-            (profile.cognitionNotification == null ? 0 : 1);
+            profile.cognitionNotifications.length;
         final inboxCount = profilePending + chat.pendingCount;
         return Scaffold(
           backgroundColor: palette.background,
