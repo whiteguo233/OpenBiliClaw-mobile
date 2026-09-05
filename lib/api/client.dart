@@ -15,6 +15,7 @@ class ApiClient {
   static const String _portKey = 'api_port';
   static const String _sessionKey = 'session_token';
   static const String _connectionModeKey = 'connection_mode';
+  static const String _basePathKey = 'api_base_path';
   static const int _defaultPort = 8420;
 
   // Android emulators expose the host machine as 10.0.2.2. A physical
@@ -27,6 +28,7 @@ class ApiClient {
   String _scheme;
   String _host;
   int _port;
+  String _basePath = '';
   String _sessionToken = '';
   ConnectionMode _connectionMode;
   final TailnetService? _tailnetService;
@@ -37,6 +39,7 @@ class ApiClient {
     String? host,
     int port = _defaultPort,
     ConnectionMode connectionMode = ConnectionMode.direct,
+    String basePath = '',
     TailnetService? tailnetService,
     http.Client Function()? directClientFactory,
   }) : _scheme = _normalizeScheme(scheme),
@@ -44,13 +47,15 @@ class ApiClient {
        // Keep the public named argument `port` instead of exposing `_port`.
        // ignore: prefer_initializing_formals
        _port = port,
+       _basePath = _normalizeBasePath(basePath),
        // Keep the public named argument `connectionMode`.
        // ignore: prefer_initializing_formals
        _connectionMode = connectionMode,
        // Keep the public named argument `tailnetService`.
        // ignore: prefer_initializing_formals
        _tailnetService = tailnetService,
-       _directClientFactory = directClientFactory ?? _defaultDirectClientFactory;
+       _directClientFactory =
+           directClientFactory ?? _defaultDirectClientFactory;
 
   /// dart:io's raw sockets fight iOS Local Network privacy (release-mode
   /// `errno = 65`); use the NSURLSession-backed client on iOS so the same
@@ -63,16 +68,18 @@ class ApiClient {
   }
 
   Uri get _originUri => Uri(scheme: _scheme, host: _host, port: _port);
-  String get baseUrl => _originUri.replace(path: '/api').toString();
+  String get _apiPathPrefix => _basePath.isEmpty ? '/api' : '/$_basePath/api';
+  String get baseUrl => _originUri.replace(path: _apiPathPrefix).toString();
   String get wsUrl => _originUri
       .replace(
         scheme: _scheme == 'https' ? 'wss' : 'ws',
-        path: '/api/runtime-stream',
+        path: '$_apiPathPrefix/runtime-stream',
       )
       .toString();
   String get scheme => _scheme;
   String get host => _host;
   int get port => _port;
+  String get basePath => _basePath;
   ConnectionMode get connectionMode => _connectionMode;
   bool get usesTailscale => _connectionMode == ConnectionMode.tailscale;
   bool get supportsWebSocket => !usesTailscale;
@@ -89,6 +96,7 @@ class ApiClient {
     _scheme = _normalizeScheme(prefs.getString(_schemeKey) ?? _scheme);
     _host = _normalizeHost(prefs.getString(_hostKey) ?? _host);
     _port = prefs.getInt(_portKey) ?? _defaultPort;
+    _basePath = _normalizeBasePath(prefs.getString(_basePathKey) ?? '');
     _sessionToken = prefs.getString(_sessionKey) ?? '';
     final savedMode = prefs.getString(_connectionModeKey);
     _connectionMode =
@@ -103,10 +111,12 @@ class ApiClient {
     String host,
     int port, {
     String? scheme,
+    String basePath = '',
     ConnectionMode? connectionMode,
   }) async {
     final nextScheme = _normalizeScheme(scheme ?? _scheme);
     final nextHost = _normalizeHost(host);
+    final nextBasePath = _normalizeBasePath(basePath);
     final requestedMode = connectionMode ?? _connectionMode;
     final nextMode =
         requestedMode == ConnectionMode.tailscale &&
@@ -117,16 +127,19 @@ class ApiClient {
         nextScheme != _scheme ||
         nextHost != _host ||
         port != _port ||
+        nextBasePath != _basePath ||
         nextMode != _connectionMode;
     _scheme = nextScheme;
     _host = nextHost;
     _port = port;
+    _basePath = nextBasePath;
     _connectionMode = nextMode;
     if (changed) clearSession();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_schemeKey, _scheme);
     await prefs.setString(_hostKey, _host);
     await prefs.setInt(_portKey, port);
+    await prefs.setString(_basePathKey, _basePath);
     await prefs.setString(_connectionModeKey, _connectionMode.name);
   }
 
@@ -134,9 +147,20 @@ class ApiClient {
     final normalizedPath = path.startsWith('/') ? path : '/$path';
     final relative = Uri.parse(normalizedPath);
     return _originUri.replace(
-      path: '/api${relative.path}',
+      path: '$_apiPathPrefix${relative.path}',
       query: relative.hasQuery ? relative.query : null,
     );
+  }
+
+  static String _normalizeBasePath(String value) {
+    var path = value.trim();
+    if (path.isEmpty) return '';
+    if (path == '/') return '';
+    if (path.startsWith('/')) path = path.substring(1);
+    while (path.endsWith('/')) {
+      path = path.substring(0, path.length - 1);
+    }
+    return path;
   }
 
   void clearSession() {
@@ -264,23 +288,36 @@ class ApiClient {
   Future<bool> checkHealth({
     String? overrideHost,
     int? overridePort,
+    String? overrideBasePath,
     ConnectionMode? overrideConnectionMode,
   }) async {
     try {
       var nextScheme = _scheme;
       var nextHost = overrideHost ?? _host;
+      var nextBasePath = _normalizeBasePath(overrideBasePath ?? _basePath);
       final parsed = Uri.tryParse(nextHost);
       if (parsed != null && parsed.hasScheme && parsed.host.isNotEmpty) {
         nextScheme = _normalizeScheme(parsed.scheme);
         nextHost = parsed.host;
+        final parsedPath = parsed.path.replaceFirst(RegExp(r'^/'), '');
+        if (parsedPath.isNotEmpty) {
+          // Support pasting the full backend URL, including an optional path
+          // segment before the API root (e.g. /openbiliclaw/api).
+          nextBasePath = parsedPath == 'api' ? '' : parsedPath;
+          if (nextBasePath.endsWith('/api')) {
+            nextBasePath = nextBasePath.substring(0, nextBasePath.length - 4);
+          }
+          nextBasePath = _normalizeBasePath(nextBasePath);
+        }
       }
       final h = _normalizeHost(nextHost);
       final p = overridePort ?? _port;
+      final prefix = nextBasePath.isEmpty ? '/api' : '/$nextBasePath/api';
       final uri = Uri(
         scheme: nextScheme,
         host: h,
         port: p,
-        path: '/api/health',
+        path: '$prefix/health',
       );
       final selectedMode = overrideConnectionMode ?? _connectionMode;
       final res = await _getWithRetry(

@@ -15,8 +15,7 @@ class SettingsView extends StatefulWidget {
 }
 
 class _SettingsViewState extends State<SettingsView> {
-  final _hostController = TextEditingController();
-  final _portController = TextEditingController();
+  final _urlController = TextEditingController();
   final _authKeyController = TextEditingController();
   bool _saving = false;
   bool _testing = false;
@@ -37,8 +36,7 @@ class _SettingsViewState extends State<SettingsView> {
     final client = context.read<ApiClient>();
     _scheme = client.scheme;
     _connectionMode = client.connectionMode;
-    _hostController.text = client.host;
-    _portController.text = client.port.toString();
+    _urlController.text = _formatBackendUrl(client);
     _configApi = ConfigApi(client);
     _loadAutoSync();
   }
@@ -108,21 +106,20 @@ class _SettingsViewState extends State<SettingsView> {
 
   @override
   void dispose() {
-    _hostController.dispose();
-    _portController.dispose();
+    _urlController.dispose();
     _authKeyController.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
-    final host = _hostController.text.trim();
-    final port = int.tryParse(_portController.text.trim()) ?? 8420;
+    final parsed = _parseBackendUrl(_urlController.text);
     setState(() => _saving = true);
     final client = context.read<ApiClient>();
     await client.saveSettings(
-      host,
-      port,
-      scheme: _schemeFor(host),
+      parsed.host,
+      parsed.port,
+      scheme: parsed.scheme,
+      basePath: parsed.basePath,
       connectionMode: _connectionMode,
     );
     if (!mounted) return;
@@ -140,8 +137,7 @@ class _SettingsViewState extends State<SettingsView> {
   }
 
   Future<void> _testConnection() async {
-    final host = _hostController.text.trim();
-    final port = int.tryParse(_portController.text.trim()) ?? 8420;
+    final parsed = _parseBackendUrl(_urlController.text);
 
     setState(() {
       _testing = true;
@@ -162,12 +158,10 @@ class _SettingsViewState extends State<SettingsView> {
         return;
       }
     }
-    final testHost = host.contains('://')
-        ? host
-        : '${_schemeFor(host)}://$host';
     final ok = await client.checkHealth(
-      overrideHost: testHost,
-      overridePort: port,
+      overrideHost: parsed.host,
+      overridePort: parsed.port,
+      overrideBasePath: parsed.basePath,
       overrideConnectionMode: _connectionMode,
     );
 
@@ -179,10 +173,44 @@ class _SettingsViewState extends State<SettingsView> {
     });
   }
 
-  String _schemeFor(String host) {
-    final parsed = Uri.tryParse(host);
-    if (parsed != null && parsed.hasScheme) return parsed.scheme;
-    return _scheme;
+  String _formatBackendUrl(ApiClient client) {
+    final defaultPath = client.basePath;
+    if (defaultPath.isEmpty) {
+      return '${client.scheme}://${client.host}:${client.port}';
+    }
+    return '${client.scheme}://${client.host}:${client.port}/$defaultPath';
+  }
+
+  ({String scheme, String host, int port, String basePath}) _parseBackendUrl(
+    String input,
+  ) {
+    var value = input.trim();
+    if (value.isEmpty) {
+      return (scheme: _scheme, host: '', port: 8420, basePath: '');
+    }
+    if (!value.contains('://')) {
+      value = '$_scheme://$value';
+    }
+    var uri = Uri.tryParse(value);
+    if (uri == null || uri.host.isEmpty) {
+      // Keep parsing simple: fall back to current host/port on malformed input.
+      return (scheme: _scheme, host: value, port: 8420, basePath: '');
+    }
+    var basePath = uri.path.replaceFirst(RegExp(r'^/'), '');
+    if (basePath == 'api') {
+      basePath = '';
+    } else if (basePath.endsWith('/api')) {
+      basePath = basePath.substring(0, basePath.length - 4);
+    }
+    while (basePath.endsWith('/')) {
+      basePath = basePath.substring(0, basePath.length - 1);
+    }
+    return (
+      scheme: uri.scheme,
+      host: uri.host,
+      port: uri.hasPort ? uri.port : 8420,
+      basePath: basePath,
+    );
   }
 
   Future<bool> _connectTailnet() async {
@@ -307,54 +335,24 @@ class _SettingsViewState extends State<SettingsView> {
                     ),
               ),
               const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                initialValue: _scheme,
-                decoration: InputDecoration(
-                  labelText: '协议',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  filled: true,
-                  fillColor: context.appColors.surface,
-                  prefixIcon: const Icon(Icons.security_outlined),
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'http', child: Text('HTTP（局域网）')),
-                  DropdownMenuItem(value: 'https', child: Text('HTTPS')),
-                ],
-                onChanged: (value) => setState(() => _scheme = value ?? 'http'),
-              ),
               const SizedBox(height: 16),
               TextField(
-                controller: _hostController,
+                controller: _urlController,
                 decoration: InputDecoration(
-                  labelText: '主机地址',
+                  labelText: '后端 URL',
                   hintText: _connectionMode == ConnectionMode.tailscale
-                      ? '例如 openbiliclaw-server 或 100.x.x.x'
-                      : '例如 192.168.1.100',
+                      ? '例如 http://openbiliclaw-server:8420'
+                      : '例如 http://192.168.1.100:8420',
+                  helperText:
+                      '支持 http/https，可带自定义路径，如 https://example.com/openbiliclaw',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                   filled: true,
                   fillColor: context.appColors.surface,
-                  prefixIcon: const Icon(Icons.computer),
+                  prefixIcon: const Icon(Icons.link),
                 ),
                 keyboardType: TextInputType.url,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _portController,
-                decoration: InputDecoration(
-                  labelText: '端口',
-                  hintText: '8420',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  filled: true,
-                  fillColor: context.appColors.surface,
-                  prefixIcon: const Icon(Icons.numbers),
-                ),
-                keyboardType: TextInputType.number,
               ),
               if (_connectionMode == ConnectionMode.tailscale) ...[
                 const SizedBox(height: 16),

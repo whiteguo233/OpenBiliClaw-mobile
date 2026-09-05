@@ -32,6 +32,25 @@ void main() {
     expect(client.apiUri('profile-summary').scheme, 'https');
   });
 
+  test('supports a custom base path before the api prefix', () {
+    final client = ApiClient(
+      scheme: 'https',
+      host: 'example.test',
+      port: 9443,
+      basePath: 'openbiliclaw',
+    );
+
+    expect(client.baseUrl, 'https://example.test:9443/openbiliclaw/api');
+    expect(
+      client.wsUrl,
+      'wss://example.test:9443/openbiliclaw/api/runtime-stream',
+    );
+    expect(
+      client.apiUri('recommendations').path,
+      '/openbiliclaw/api/recommendations',
+    );
+  });
+
   test('accepts an IPv4 host pasted with its port', () {
     final client = ApiClient(host: '100.100.100.100:8420', port: 8420);
 
