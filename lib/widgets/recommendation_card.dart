@@ -233,15 +233,7 @@ class RecommendationCard extends StatelessWidget {
           ],
           if (rec.expression.isNotEmpty) ...[
             const SizedBox(height: 9),
-            Text(
-              rec.expression,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: context.appColors.inkMuted,
-                height: 1.5,
-              ),
-            ),
+            _ExpandableExpression(text: rec.expression),
           ],
         ],
       ),
@@ -426,6 +418,56 @@ class _CardAction extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ExpandableExpression extends StatefulWidget {
+  const _ExpandableExpression({required this.text});
+
+  final String text;
+
+  @override
+  State<_ExpandableExpression> createState() => _ExpandableExpressionState();
+}
+
+class _ExpandableExpressionState extends State<_ExpandableExpression> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = widget.text.trim();
+    final shouldShowToggle = text.length > 40;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          text,
+          maxLines: _expanded ? null : 3,
+          overflow: _expanded ? null : TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: context.appColors.inkMuted,
+            height: 1.5,
+          ),
+        ),
+        if (shouldShowToggle) ...[
+          const SizedBox(height: 2),
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Text(
+                _expanded ? '收起' : '展开看全',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.secondary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
