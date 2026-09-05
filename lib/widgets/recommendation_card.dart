@@ -249,53 +249,59 @@ class RecommendationCard extends StatelessWidget {
   }
 
   Widget _actionBar(BuildContext context) {
-    return SizedBox(
-      height: 50,
-      child: Row(
-        children: [
-          Expanded(
-            child: _CardAction(
-              icon: Icons.link_rounded,
-              label: '打开',
-              onTap: onTap,
+    // 整条 action bar 用空手势兜底：即使点到分隔线/按钮间隙，也不会穿透到
+    // 外层卡片 InkWell 去打开内容；具体按钮仍由内层 _CardAction 处理。
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {},
+      child: SizedBox(
+        height: 50,
+        child: Row(
+          children: [
+            Expanded(
+              child: _CardAction(
+                icon: Icons.link_rounded,
+                label: '打开',
+                onTap: onTap,
+              ),
             ),
-          ),
-          const VerticalDivider(),
-          Expanded(
-            child: _CardAction(
-              icon: rec.feedbackType == 'like'
-                  ? Icons.thumb_up_rounded
-                  : Icons.thumb_up_outlined,
-              label: '喜欢',
-              active: rec.feedbackType == 'like',
-              onTap: onLike,
-            ),
-          ),
-          const VerticalDivider(),
-          Expanded(
-            child: _CardAction(
-              icon: rec.feedbackType == 'dislike'
-                  ? Icons.thumb_down_rounded
-                  : Icons.thumb_down_outlined,
-              label: '不喜欢',
-              active: rec.feedbackType == 'dislike',
-              onTap: onDislike,
-            ),
-          ),
-          if (onComment != null) ...[
             const VerticalDivider(),
             Expanded(
               child: _CardAction(
-                icon: rec.feedbackType == 'comment'
-                    ? Icons.chat_bubble_rounded
-                    : Icons.chat_bubble_outline_rounded,
-                label: '聊一聊',
-                active: rec.feedbackType == 'comment',
-                onTap: onComment,
+                icon: rec.feedbackType == 'like'
+                    ? Icons.thumb_up_rounded
+                    : Icons.thumb_up_outlined,
+                label: '喜欢',
+                active: rec.feedbackType == 'like',
+                onTap: onLike,
               ),
             ),
+            const VerticalDivider(),
+            Expanded(
+              child: _CardAction(
+                icon: rec.feedbackType == 'dislike'
+                    ? Icons.thumb_down_rounded
+                    : Icons.thumb_down_outlined,
+                label: '不喜欢',
+                active: rec.feedbackType == 'dislike',
+                onTap: onDislike,
+              ),
+            ),
+            if (onComment != null) ...[
+              const VerticalDivider(),
+              Expanded(
+                child: _CardAction(
+                  icon: rec.feedbackType == 'comment'
+                      ? Icons.chat_bubble_rounded
+                      : Icons.chat_bubble_outline_rounded,
+                  label: '聊一聊',
+                  active: rec.feedbackType == 'comment',
+                  onTap: onComment,
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -396,24 +402,28 @@ class _CardAction extends StatelessWidget {
       selected: active,
       child: InkWell(
         onTap: onTap,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 17, color: color),
-            const SizedBox(width: 5),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.fade,
-                softWrap: false,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: color,
-                  fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+        child: SizedBox.expand(
+          child: Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 17, color: color),
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.fade,
+                    softWrap: false,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: color,
+                      fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
