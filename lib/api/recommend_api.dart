@@ -16,19 +16,31 @@ class RecommendApi {
     return _recommendations(data['items']);
   }
 
-  Future<List<Recommendation>> reshuffle(List<String> excludedBvids) async {
+  Future<List<Recommendation>> reshuffle(
+    List<String> excludedBvids, {
+    String sourcePlatform = '',
+  }) async {
     final data = await _client.post(
       '/recommendations/reshuffle',
-      body: {'excluded_bvids': excludedBvids},
+      body: {
+        'excluded_bvids': excludedBvids,
+        if (sourcePlatform.isNotEmpty) 'source_platform': sourcePlatform,
+      },
       timeout: 30,
     );
     return _recommendations(data['items']);
   }
 
-  Future<List<Recommendation>> append(List<String> excludedBvids) async {
+  Future<List<Recommendation>> append(
+    List<String> excludedBvids, {
+    String sourcePlatform = '',
+  }) async {
     final data = await _client.post(
       '/recommendations/append',
-      body: {'excluded_bvids': excludedBvids},
+      body: {
+        'excluded_bvids': excludedBvids,
+        if (sourcePlatform.isNotEmpty) 'source_platform': sourcePlatform,
+      },
       timeout: 30,
     );
     return _recommendations(data['items']);
@@ -69,6 +81,14 @@ class RecommendApi {
 
   Future<Map<String, dynamic>> refresh() =>
       _client.post('/recommendations/refresh', timeout: 60);
+
+  Future<PlatformAvailability> fetchPlatformAvailability() async {
+    final data = await _client.get(
+      '/recommendations/platform-availability',
+      timeout: 8,
+    );
+    return PlatformAvailability.fromJson(data);
+  }
 
   Future<RuntimeStatus> fetchRuntimeStatus() async {
     final data = await _client.get('/runtime-status', timeout: 8);

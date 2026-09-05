@@ -67,6 +67,8 @@ class CoverImage extends StatelessWidget {
               width: width,
               height: height,
               fit: BoxFit.cover,
+              memCacheWidth: 640,
+              filterQuality: FilterQuality.medium,
               fadeInDuration: MediaQuery.disableAnimationsOf(context)
                   ? Duration.zero
                   : const Duration(milliseconds: 220),
@@ -174,6 +176,8 @@ class _TailnetImageState extends State<_TailnetImage> {
           height: widget.height,
           fit: BoxFit.cover,
           gaplessPlayback: true,
+          cacheWidth: 640,
+          filterQuality: FilterQuality.medium,
           errorBuilder: (context, error, stackTrace) =>
               widget.placeholder(context, Icons.broken_image_outlined),
         );

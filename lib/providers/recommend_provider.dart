@@ -45,6 +45,7 @@ class RecommendProvider extends ChangeNotifier {
   String _error = '';
   String _platformFilter = '';
   RuntimeStatus _runtimeStatus = const RuntimeStatus();
+  PlatformAvailability _platformAvailability = const PlatformAvailability();
   ActivityFeed _activityFeed = const ActivityFeed();
   Timer? _pollTimer;
   WebSocketChannel? _ws;
@@ -78,6 +79,9 @@ class RecommendProvider extends ChangeNotifier {
   bool get online => _online;
   String get error => _error;
   RuntimeStatus get runtimeStatus => _runtimeStatus;
+  PlatformAvailability get platformAvailability => _platformAvailability;
+  Map<String, int> get platformAvailabilityBySource =>
+      _platformAvailability.byPlatform;
   ActivityFeed get activityFeed => _activityFeed;
 
   void nextDelight() {
@@ -236,12 +240,20 @@ class RecommendProvider extends ChangeNotifier {
       _loadRuntimeStatus(),
       _loadActivityFeed(),
       _loadDelights(),
+      _loadPlatformAvailability(),
     ]);
   }
 
   Future<void> _loadRuntimeStatus() async {
     try {
       _runtimeStatus = await _api.fetchRuntimeStatus();
+      _safeNotify();
+    } catch (_) {}
+  }
+
+  Future<void> _loadPlatformAvailability() async {
+    try {
+      _platformAvailability = await _api.fetchPlatformAvailability();
       _safeNotify();
     } catch (_) {}
   }
@@ -272,7 +284,10 @@ class RecommendProvider extends ChangeNotifier {
     _safeNotify();
     try {
       final excluded = _recommendations.map((item) => item.bvid).toList();
-      final next = await _api.reshuffle(excluded);
+      final next = await _api.reshuffle(
+        excluded,
+        sourcePlatform: _platformFilter,
+      );
       if (next.isNotEmpty) _recommendations = next;
       _online = true;
       unawaited(_loadRuntimeStatus());
@@ -291,7 +306,10 @@ class RecommendProvider extends ChangeNotifier {
     _safeNotify();
     try {
       final excluded = _recommendations.map((item) => item.bvid).toList();
-      final newItems = await _api.append(excluded);
+      final newItems = await _api.append(
+        excluded,
+        sourcePlatform: _platformFilter,
+      );
       final identities = _recommendations
           .map((item) => item.savedIdentity)
           .toSet();
@@ -428,6 +446,7 @@ class RecommendProvider extends ChangeNotifier {
       unawaited(_loadDelights());
       unawaited(_loadActivityFeed());
       unawaited(_loadRuntimeStatus());
+      unawaited(_loadPlatformAvailability());
     } catch (_) {
       if (_online) {
         _online = false;

@@ -45,6 +45,34 @@ class RuntimeStatus {
   String get topicSummary => recentPoolTopics.join(' / ');
 }
 
+class PlatformAvailability {
+  final int totalAvailable;
+  final Map<String, int> byPlatform;
+
+  const PlatformAvailability({
+    this.totalAvailable = 0,
+    this.byPlatform = const {},
+  });
+
+  factory PlatformAvailability.fromJson(Map<String, dynamic> json) {
+    final raw = json['by_platform'];
+    final map = raw is Map
+        ? raw.map(
+            (key, value) => MapEntry(
+              key.toString(),
+              value is num
+                  ? value.toInt()
+                  : int.tryParse(value.toString()) ?? 0,
+            ),
+          )
+        : const <String, int>{};
+    return PlatformAvailability(
+      totalAvailable: _integer(json['total_available']),
+      byPlatform: Map<String, int>.unmodifiable(map),
+    );
+  }
+}
+
 class ActivityFeed {
   final String headline;
   final String liveSummary;

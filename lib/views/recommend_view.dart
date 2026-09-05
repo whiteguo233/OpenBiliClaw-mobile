@@ -514,7 +514,9 @@ class RecommendViewState extends State<RecommendView> {
           final selected =
               (isAll && rp.platformFilter.isEmpty) ||
               (!isAll && rp.platformFilter == slug);
-          final label = isAll ? '全部' : RecommendProvider.platformLabel(slug);
+          final label = isAll
+              ? '全部 ${rp.platformAvailability.totalAvailable}'
+              : '${RecommendProvider.platformLabel(slug)} ${rp.platformAvailabilityBySource[slug] ?? 0}';
           return ChoiceChip(
             label: Text(label),
             selected: selected,
