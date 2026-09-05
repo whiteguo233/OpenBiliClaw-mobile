@@ -90,6 +90,17 @@ class RecommendApi {
     return PlatformAvailability.fromJson(data);
   }
 
+  Future<Set<String>> fetchEnabledSources() async {
+    final data = await _client.get('/sources/status', timeout: 8);
+    final enabled = <String>{};
+    data.forEach((key, value) {
+      if (value is Map && value['enabled'] == true) {
+        enabled.add(key);
+      }
+    });
+    return enabled;
+  }
+
   Future<RuntimeStatus> fetchRuntimeStatus() async {
     final data = await _client.get('/runtime-status', timeout: 8);
     return RuntimeStatus.fromJson(data);

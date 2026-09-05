@@ -46,6 +46,7 @@ class RecommendProvider extends ChangeNotifier {
   String _platformFilter = '';
   RuntimeStatus _runtimeStatus = const RuntimeStatus();
   PlatformAvailability _platformAvailability = const PlatformAvailability();
+  Set<String> _enabledSources = {};
   ActivityFeed _activityFeed = const ActivityFeed();
   Timer? _pollTimer;
   WebSocketChannel? _ws;
@@ -82,6 +83,7 @@ class RecommendProvider extends ChangeNotifier {
   PlatformAvailability get platformAvailability => _platformAvailability;
   Map<String, int> get platformAvailabilityBySource =>
       _platformAvailability.byPlatform;
+  Set<String> get enabledSources => Set.unmodifiable(_enabledSources);
   ActivityFeed get activityFeed => _activityFeed;
 
   void nextDelight() {
@@ -195,22 +197,30 @@ class RecommendProvider extends ChangeNotifier {
         .toList();
   }
 
-  /// 推荐池中已出现的平台（按固定顺序去重）。
+  /// 可选来源：优先按后端“是否启用该来源”展示；启用过的来源即使当前
+  /// 候选池为 0 也保留 tab。旧后端/接口异常时回退为当前列表已出现的来源。
   List<String> get availablePlatforms {
+    if (_enabledSources.isNotEmpty) {
+      final known = _platformLabels.map((entry) => entry.$1);
+      final ordered = <String>[
+        ...known.where(_enabledSources.contains),
+        ..._enabledSources.difference(known.toSet()).toList()..sort(),
+      ];
+      return ordered;
+    }
     final seen = <String>{};
     for (final item in _recommendations) {
       final slug = item.sourcePlatform.trim().toLowerCase();
       if (slug.isNotEmpty) seen.add(slug);
     }
     final known = _platformLabels.map((entry) => entry.$1);
-    final ordered = <String>[
+    return <String>[
       ...known.where(seen.contains),
       ...seen.difference(known.toSet()).toList()..sort(),
     ];
-    return ordered;
   }
 
-  /// 只有单一来源时不显示平台选择（用户要求：一个来源直接刷）。
+  /// 只要启用了多个来源就显示平台选择（即使某个来源当前没有库存）。
   bool get showPlatformChoice => availablePlatforms.length > 1;
 
   void setPlatformFilter(String slug) {
@@ -241,6 +251,7 @@ class RecommendProvider extends ChangeNotifier {
       _loadActivityFeed(),
       _loadDelights(),
       _loadPlatformAvailability(),
+      _loadEnabledSources(),
     ]);
   }
 
@@ -254,6 +265,13 @@ class RecommendProvider extends ChangeNotifier {
   Future<void> _loadPlatformAvailability() async {
     try {
       _platformAvailability = await _api.fetchPlatformAvailability();
+      _safeNotify();
+    } catch (_) {}
+  }
+
+  Future<void> _loadEnabledSources() async {
+    try {
+      _enabledSources = await _api.fetchEnabledSources();
       _safeNotify();
     } catch (_) {}
   }
@@ -447,6 +465,7 @@ class RecommendProvider extends ChangeNotifier {
       unawaited(_loadActivityFeed());
       unawaited(_loadRuntimeStatus());
       unawaited(_loadPlatformAvailability());
+      unawaited(_loadEnabledSources());
     } catch (_) {
       if (_online) {
         _online = false;
