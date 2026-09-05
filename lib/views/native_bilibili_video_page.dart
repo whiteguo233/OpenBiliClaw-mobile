@@ -34,12 +34,14 @@ class NativeBilibiliVideoPage extends StatefulWidget {
     this.title = '',
     this.contentUrl = '',
     this.coverUrl = '',
+    this.recommendationReason = '',
   });
 
   final String bvid;
   final String title;
   final String contentUrl;
   final String coverUrl;
+  final String recommendationReason;
 
   @override
   State<NativeBilibiliVideoPage> createState() =>
@@ -72,6 +74,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
   BilibiliCommentApi? _commentDirect;
   int? _commentAid;
   List<BilibiliRelatedVideo> _related = const [];
+  String _videoDescription = '';
   bool _playerCompact = false;
 
   late final TabController _tabController = TabController(
@@ -268,6 +271,16 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
     try {
       final related = await api.relatedVideos(bvid: widget.bvid);
       if (mounted) setState(() => _related = related);
+    } catch (_) {}
+    try {
+      final direct = _commentDirect;
+      if (direct != null) {
+        final info = await direct.videoInfo(widget.bvid);
+        final desc = info['desc']?.toString().trim() ?? '';
+        if (desc.isNotEmpty && mounted) {
+          setState(() => _videoDescription = desc);
+        }
+      }
     } catch (_) {}
   }
 
@@ -642,18 +655,18 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
     }
   }
 
-  Future<void> _openExternal() async {
-    final uri = Uri.parse(
-      widget.contentUrl.isNotEmpty
-          ? widget.contentUrl
-          : 'https://www.bilibili.com/video/${widget.bvid}',
-    );
+  /// 通过 B 站官方 `bilibili://` scheme 直接唤起已安装的 B 站 App。
+  Future<void> _openBilibiliApp() async {
+    final bvid = widget.bvid.trim();
+    if (bvid.isEmpty) return;
+    final uri = Uri.tryParse('bilibili://video/$bvid');
+    if (uri == null) return;
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!mounted) return;
     if (!ok) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('无法打开外部链接')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('未能拉起 B 站 App，可试试右上角“评论/完整页”')),
+      );
     }
   }
 
@@ -814,6 +827,43 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
     );
   }
 
+  Widget _videoInfoBlock(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required Widget child,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: Colors.white70),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          child,
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final result = _result;
@@ -835,9 +885,9 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
             icon: const Icon(Icons.forum_outlined),
           ),
           IconButton(
-            tooltip: '用浏览器打开',
-            onPressed: _openExternal,
-            icon: const Icon(Icons.open_in_browser_rounded),
+            tooltip: '用B站App打开',
+            onPressed: _openBilibiliApp,
+            icon: const Icon(Icons.ondemand_video_rounded),
           ),
         ],
       ),
@@ -1060,6 +1110,32 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
+                                if (_videoDescription.isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  _videoInfoBlock(
+                                    context,
+                                    icon: Icons.subject_rounded,
+                                    label: '简介',
+                                    child: _ExpandableText(
+                                      text: _videoDescription,
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(color: Colors.white70),
+                                    ),
+                                  ),
+                                ],
+                                if (widget.recommendationReason.isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  _videoInfoBlock(
+                                    context,
+                                    icon: Icons.lightbulb_outline_rounded,
+                                    label: '推荐理由',
+                                    child: _ExpandableText(
+                                      text: widget.recommendationReason,
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(color: Colors.white70),
+                                    ),
+                                  ),
+                                ],
                                 const SizedBox(height: 8),
                                 Wrap(
                                   spacing: 8,
@@ -1234,76 +1310,96 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
                             ),
                           ),
                           // ── Tab 2: 评论 ──
-                          SingleChildScrollView(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _CommentComposer(
-                                  hint: '发一条友善的评论…',
-                                  onSubmit: (text) => _publishComment(text),
-                                ),
-                                const SizedBox(height: 12),
-                                if (_comments.isNotEmpty) ...[
-                                  const SizedBox(height: 4),
-                                  Row(
+                          Column(
+                            children: [
+                              Expanded(
+                                child: SingleChildScrollView(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    16,
+                                    12,
+                                    16,
+                                    24,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      const Icon(
-                                        Icons.mode_comment_outlined,
-                                        color: Colors.white70,
-                                        size: 16,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        _commentTotal > 0
-                                            ? '评论 $_commentTotal'
-                                            : '评论',
-                                        style: theme.textTheme.labelLarge
-                                            ?.copyWith(color: Colors.white),
-                                      ),
+                                      if (_comments.isNotEmpty) ...[
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.mode_comment_outlined,
+                                              color: Colors.white70,
+                                              size: 16,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              _commentTotal > 0
+                                                  ? '评论 $_commentTotal'
+                                                  : '评论',
+                                              style: theme.textTheme.labelLarge
+                                                  ?.copyWith(
+                                                    color: Colors.white,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        ..._comments.map(
+                                          (comment) => _CommentTile(
+                                            comment: comment,
+                                            onOpenReplies: () =>
+                                                _openCommentReplies(comment),
+                                          ),
+                                        ),
+                                        if (_commentHasMore ||
+                                            _commentsLoadingMore)
+                                          Center(
+                                            child: _commentsLoadingMore
+                                                ? const Padding(
+                                                    padding: EdgeInsets.all(10),
+                                                    child: SizedBox(
+                                                      width: 20,
+                                                      height: 20,
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                            strokeWidth: 2,
+                                                            color:
+                                                                Colors.white70,
+                                                          ),
+                                                    ),
+                                                  )
+                                                : TextButton(
+                                                    onPressed:
+                                                        _loadMoreComments,
+                                                    child: const Text('加载更多评论'),
+                                                  ),
+                                          ),
+                                      ] else ...[
+                                        const Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            vertical: 48,
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              '还没有评论',
+                                              style: TextStyle(
+                                                color: Colors.white54,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ],
                                   ),
-                                  const SizedBox(height: 4),
-                                  ..._comments.map(
-                                    (comment) => _CommentTile(
-                                      comment: comment,
-                                      onOpenReplies: () =>
-                                          _openCommentReplies(comment),
-                                    ),
-                                  ),
-                                  if (_commentHasMore || _commentsLoadingMore)
-                                    Center(
-                                      child: _commentsLoadingMore
-                                          ? const Padding(
-                                              padding: EdgeInsets.all(10),
-                                              child: SizedBox(
-                                                width: 20,
-                                                height: 20,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                      color: Colors.white70,
-                                                    ),
-                                              ),
-                                            )
-                                          : TextButton(
-                                              onPressed: _loadMoreComments,
-                                              child: const Text('加载更多评论'),
-                                            ),
-                                    ),
-                                ] else ...[
-                                  const Padding(
-                                    padding: EdgeInsets.symmetric(vertical: 48),
-                                    child: Center(
-                                      child: Text(
-                                        '还没有评论',
-                                        style: TextStyle(color: Colors.white54),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
+                                ),
+                              ),
+                              _CommentComposer(
+                                hint: '发一条友善的评论…',
+                                onSubmit: (text) => _publishComment(text),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -2240,6 +2336,75 @@ class _CommentComposerState extends State<_CommentComposer> {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// 可展开/收起的文本块：默认最多显示 2 行，长文本可展开看全文。
+class _ExpandableText extends StatefulWidget {
+  const _ExpandableText({required this.text, this.style});
+
+  final String text;
+  final TextStyle? style;
+
+  @override
+  State<_ExpandableText> createState() => _ExpandableTextState();
+}
+
+class _ExpandableTextState extends State<_ExpandableText> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final painter = TextPainter(
+          text: TextSpan(text: widget.text, style: widget.style),
+          maxLines: 2,
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: constraints.maxWidth);
+        final overflow = painter.didExceedMaxLines;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.text,
+              style: widget.style,
+              maxLines: _expanded ? null : 2,
+              overflow: _expanded
+                  ? TextOverflow.visible
+                  : TextOverflow.ellipsis,
+            ),
+            if (overflow)
+              GestureDetector(
+                onTap: () => setState(() => _expanded = !_expanded),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _expanded
+                            ? Icons.expand_less_rounded
+                            : Icons.expand_more_rounded,
+                        size: 14,
+                        color: Colors.white70,
+                      ),
+                      Text(
+                        _expanded ? '收起' : '展开',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

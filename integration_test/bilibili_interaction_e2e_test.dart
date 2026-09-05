@@ -7,7 +7,6 @@ import 'package:integration_test/integration_test.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:provider/provider.dart';
 
-import 'package:openbiliclaw_app/api/bilibili_comment_api.dart';
 import 'package:openbiliclaw_app/api/client.dart';
 import 'package:openbiliclaw_app/views/native_bilibili_video_page.dart';
 

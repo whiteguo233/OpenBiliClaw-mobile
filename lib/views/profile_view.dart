@@ -791,8 +791,8 @@ class _ProfileViewState extends State<ProfileView> {
               context,
               icon: Icons.lightbulb_outline_rounded,
               label: '推荐理由',
-              child: Text(
-                item.reason,
+              child: _ExpandableText(
+                text: item.reason,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
@@ -1423,5 +1423,73 @@ class _ProfileEditSheet extends StatelessWidget {
     if (value != null && value.isNotEmpty) {
       await provider.applyEdit(target: path, operation: 'add', value: value);
     }
+  }
+}
+
+/// 可展开/收起的文本块：默认最多显示 2 行，长文本可展开看全文。
+class _ExpandableText extends StatefulWidget {
+  const _ExpandableText({required this.text, this.style});
+
+  final String text;
+  final TextStyle? style;
+
+  @override
+  State<_ExpandableText> createState() => _ExpandableTextState();
+}
+
+class _ExpandableTextState extends State<_ExpandableText> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final painter = TextPainter(
+          text: TextSpan(text: widget.text, style: widget.style),
+          maxLines: 2,
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: constraints.maxWidth);
+        final overflow = painter.didExceedMaxLines;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.text,
+              style: widget.style,
+              maxLines: _expanded ? null : 2,
+              overflow: _expanded
+                  ? TextOverflow.visible
+                  : TextOverflow.ellipsis,
+            ),
+            if (overflow)
+              GestureDetector(
+                onTap: () => setState(() => _expanded = !_expanded),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _expanded
+                            ? Icons.expand_less_rounded
+                            : Icons.expand_more_rounded,
+                        size: 14,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      Text(
+                        _expanded ? '收起' : '展开',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
   }
 }

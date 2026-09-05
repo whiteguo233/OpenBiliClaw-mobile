@@ -41,6 +41,13 @@ class BilibiliCommentApi {
     return _int(data['aid']);
   }
 
+  /// Returns Bilibili's `/x/web-interface/view` payload for [bvid].
+  /// The response contains the video `desc`, title, owner, stat and other
+  /// metadata used by the native player's intro tab.
+  Future<Map<String, dynamic>> videoInfo(String bvid) async {
+    return _getData('/x/web-interface/view', {'bvid': bvid});
+  }
+
   /// `/x/v2/reply` — hot-sorted top-level comments, page-numbered.
   Future<BilibiliCommentPage> videoComments({
     required int aid,

@@ -22,6 +22,9 @@ class ContentLauncher {
       title: item.displayTitle,
       coverUrl: item.coverUrl,
       contentType: item.contentType,
+      recommendationReason: item.expression.isNotEmpty
+          ? item.expression
+          : item.bodyText,
       context: context,
     );
   }
@@ -35,6 +38,7 @@ class ContentLauncher {
       title: item.title,
       coverUrl: item.coverUrl,
       contentType: item.contentType,
+      recommendationReason: item.reason,
       context: context,
     );
   }
@@ -59,6 +63,7 @@ class ContentLauncher {
     String title = '',
     String coverUrl = '',
     String contentType = 'video',
+    String recommendationReason = '',
     BuildContext? context,
   }) async {
     final source = normalizeSourcePlatform(
@@ -76,6 +81,7 @@ class ContentLauncher {
             title: title,
             contentUrl: contentUrl,
             coverUrl: coverUrl,
+            recommendationReason: recommendationReason,
           ),
         ),
       );
