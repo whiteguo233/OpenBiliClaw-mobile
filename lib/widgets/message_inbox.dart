@@ -462,10 +462,17 @@ class _PendingConfirmations extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 FilledButton.tonal(
-                  onPressed: () {
+                  onPressed: () async {
                     final chat = context.read<ChatProvider>();
-                    unawaited(chat.openPendingConfirmation(item));
-                    Navigator.pop(context);
+                    final ok = await chat.openPendingConfirmation(item);
+                    if (!context.mounted) return;
+                    if (ok) {
+                      Navigator.pop(context);
+                    } else {
+                      ScaffoldMessenger.of(context)
+                        ..hideCurrentSnackBar()
+                        ..showSnackBar(SnackBar(content: Text(chat.error)));
+                    }
                   },
                   child: const Text('打开'),
                 ),

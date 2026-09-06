@@ -191,9 +191,11 @@ class _HomeViewState extends State<HomeView> with WidgetsBindingObserver {
                 onPressed: () async {
                   await MessageInbox.show(context);
                   if (!_disposed && mounted && context.mounted) {
-                    // A probe "多聊聊" may have started a contextual chat.
+                    // A probe "多聊聊" or a pending "打开" may have started
+                    // a contextual chat / dialogue context.
                     final chat = context.read<ChatProvider>();
-                    if (chat.composeContext.active) {
+                    if (chat.composeContext.active ||
+                        chat.dialogueContext != null) {
                       _selectTab(3);
                     }
                   }
