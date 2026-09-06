@@ -1593,9 +1593,12 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
                                   ),
                                 ),
                               ),
-                              _CommentComposer(
-                                hint: '发一条友善的评论…',
-                                onSubmit: (text) => _publishComment(text),
+                              SafeArea(
+                                top: false,
+                                child: _CommentComposer(
+                                  hint: '发一条友善的评论…',
+                                  onSubmit: (text) => _publishComment(text),
+                                ),
                               ),
                             ],
                           ),
@@ -2360,13 +2363,16 @@ class _CommentRepliesSheetState extends State<_CommentRepliesSheet> {
                 ),
         ),
         if (widget.onPost != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: _CommentComposer(
-              hint: _replyTarget == null
-                  ? '回复 @${widget.root.uname}…'
-                  : '回复 @${_replyTarget!.uname}…',
-              onSubmit: (text) => _postReply(text),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: _CommentComposer(
+                hint: _replyTarget == null
+                    ? '回复 @${widget.root.uname}…'
+                    : '回复 @${_replyTarget!.uname}…',
+                onSubmit: (text) => _postReply(text),
+              ),
             ),
           ),
       ],
