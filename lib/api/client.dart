@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:cupertino_http/cupertino_http.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/tailnet_service.dart';
@@ -15,6 +16,7 @@ class ApiClient {
   static const String _portKey = 'api_port';
   static const String _sessionKey = 'session_token';
   static const String _connectionModeKey = 'connection_mode';
+  static const String _backendConfigKey = 'backend_url_config';
   static const String _basePathKey = 'api_base_path';
   static const int _defaultPort = 8420;
 
@@ -33,6 +35,7 @@ class ApiClient {
   ConnectionMode _connectionMode;
   final TailnetService? _tailnetService;
   final http.Client Function() _directClientFactory;
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   ApiClient({
     String scheme = 'http',
@@ -104,6 +107,39 @@ class ApiClient {
             _tailnetService?.supported == true
         ? ConnectionMode.tailscale
         : ConnectionMode.direct;
+    // 重装 App 后 SharedPreferences 会被清空，但 iOS Keychain / Android
+    // Keystore 可能仍保留上次配置。这里用于恢复后端地址，避免每次重装都重填。
+    if (_host == _defaultHost) {
+      try {
+        final stored = await _secureStorage.read(key: _backendConfigKey);
+        if (stored != null && stored.isNotEmpty) {
+          final decoded = jsonDecode(stored);
+          if (decoded is Map) {
+            final storedHost = decoded['host']?.toString().trim() ?? '';
+            if (storedHost.isNotEmpty) {
+              _scheme = _normalizeScheme(
+                decoded['scheme']?.toString() ?? _scheme,
+              );
+              _host = _normalizeHost(storedHost);
+              _port = decoded['port'] is num
+                  ? (decoded['port'] as num).toInt()
+                  : _defaultPort;
+              _basePath = _normalizeBasePath(
+                decoded['base_path']?.toString() ?? '',
+              );
+              final storedMode = decoded['connection_mode']?.toString();
+              _connectionMode =
+                  storedMode == ConnectionMode.tailscale.name &&
+                      _tailnetService?.supported == true
+                  ? ConnectionMode.tailscale
+                  : ConnectionMode.direct;
+            }
+          }
+        }
+      } catch (_) {
+        // 读不到安全存储时继续使用默认/普通配置。
+      }
+    }
     if (usesTailscale) await _tailnetService?.connect();
   }
 
@@ -141,6 +177,20 @@ class ApiClient {
     await prefs.setInt(_portKey, port);
     await prefs.setString(_basePathKey, _basePath);
     await prefs.setString(_connectionModeKey, _connectionMode.name);
+    try {
+      await _secureStorage.write(
+        key: _backendConfigKey,
+        value: jsonEncode({
+          'scheme': _scheme,
+          'host': _host,
+          'port': _port,
+          'base_path': _basePath,
+          'connection_mode': _connectionMode.name,
+        }),
+      );
+    } catch (_) {
+      // Keychain/Keystore failure must not block normal setting saves.
+    }
   }
 
   Uri apiUri(String path) {
