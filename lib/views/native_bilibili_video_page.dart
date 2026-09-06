@@ -1249,14 +1249,66 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
                                 ],
                                 if (widget.recommendationReason.isNotEmpty) ...[
                                   const SizedBox(height: 10),
-                                  _videoInfoBlock(
-                                    context,
-                                    icon: Icons.lightbulb_outline_rounded,
-                                    label: '推荐理由',
-                                    child: _ExpandableText(
-                                      text: widget.recommendationReason,
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(color: Colors.white70),
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.fromLTRB(
+                                      12,
+                                      10,
+                                      12,
+                                      10,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          const Color(
+                                            0xFFFF7E5F,
+                                          ).withValues(alpha: 0.22),
+                                          const Color(
+                                            0xFFFB7299,
+                                          ).withValues(alpha: 0.12),
+                                        ],
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border(
+                                        left: const BorderSide(
+                                          color: Color(0xFFFB7299),
+                                          width: 3,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Row(
+                                          children: [
+                                            Icon(
+                                              Icons.auto_awesome_rounded,
+                                              size: 15,
+                                              color: Color(0xFFFF9A8C),
+                                            ),
+                                            SizedBox(width: 6),
+                                            Text(
+                                              '推荐理由',
+                                              style: TextStyle(
+                                                color: Color(0xFFFFB4A6),
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        _ExpandableText(
+                                          text: widget.recommendationReason,
+                                          defaultExpanded: true,
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                                color: Colors.white,
+                                                height: 1.5,
+                                              ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ],
@@ -2486,17 +2538,22 @@ class _CommentComposerState extends State<_CommentComposer> {
 
 /// 可展开/收起的文本块：默认最多显示 2 行，长文本可展开看全文。
 class _ExpandableText extends StatefulWidget {
-  const _ExpandableText({required this.text, this.style});
+  const _ExpandableText({
+    required this.text,
+    this.style,
+    this.defaultExpanded = false,
+  });
 
   final String text;
   final TextStyle? style;
+  final bool defaultExpanded;
 
   @override
   State<_ExpandableText> createState() => _ExpandableTextState();
 }
 
 class _ExpandableTextState extends State<_ExpandableText> {
-  bool _expanded = false;
+  late bool _expanded = widget.defaultExpanded;
 
   @override
   Widget build(BuildContext context) {
