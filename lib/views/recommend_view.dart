@@ -73,7 +73,8 @@ class RecommendViewState extends State<RecommendView> {
             NotificationListener<ScrollNotification>(
               onNotification: (notification) {
                 if (notification.metrics.extentAfter < 1000 &&
-                    rp.recommendations.isNotEmpty) {
+                    rp.recommendations.isNotEmpty &&
+                    !rp.autoLoadExhausted) {
                   _scheduleAutoLoad(rp);
                 }
                 return false;
@@ -190,6 +191,14 @@ class RecommendViewState extends State<RecommendView> {
                                     height: 22,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
+                                    ),
+                                  )
+                                : rp.autoLoadExhausted
+                                ? const Text(
+                                    '已经到底啦',
+                                    style: TextStyle(
+                                      color: Colors.white38,
+                                      fontSize: 13,
                                     ),
                                   )
                                 : TextButton.icon(

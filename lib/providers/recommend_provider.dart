@@ -40,6 +40,7 @@ class RecommendProvider extends ChangeNotifier {
   bool _loading = false;
   bool _loadingMore = false;
   bool _reshuffling = false;
+  bool _autoLoadExhausted = false;
   bool _online = false;
   bool _polling = false;
   String _error = '';
@@ -77,6 +78,7 @@ class RecommendProvider extends ChangeNotifier {
   bool get loading => _loading;
   bool get loadingMore => _loadingMore;
   bool get reshuffling => _reshuffling;
+  bool get autoLoadExhausted => _autoLoadExhausted;
   bool get online => _online;
   String get error => _error;
   RuntimeStatus get runtimeStatus => _runtimeStatus;
@@ -151,6 +153,7 @@ class RecommendProvider extends ChangeNotifier {
       final recs = await _api.fetch();
       _recommendations = recs;
       _online = true;
+      _autoLoadExhausted = false;
       _prunePlatformFilter();
     } catch (error) {
       _online = false;
@@ -178,6 +181,7 @@ class RecommendProvider extends ChangeNotifier {
       );
       if (next.isNotEmpty) _recommendations = next;
       _online = true;
+      _autoLoadExhausted = false;
       _prunePlatformFilter();
     } catch (error) {
       // 用户触发的刷新失败不能代表整体掉线；真正的在线状态由轮询维护。
@@ -231,6 +235,7 @@ class RecommendProvider extends ChangeNotifier {
     final next = slug.trim().toLowerCase();
     if (_platformFilter == next) return;
     _platformFilter = next;
+    _autoLoadExhausted = false;
     _safeNotify();
   }
 
@@ -247,6 +252,7 @@ class RecommendProvider extends ChangeNotifier {
     if (_platformFilter.isEmpty) return;
     if (availablePlatforms.contains(_platformFilter)) return;
     _platformFilter = '';
+    _autoLoadExhausted = false;
   }
 
   Future<void> _loadSideChannels() async {
@@ -312,6 +318,7 @@ class RecommendProvider extends ChangeNotifier {
       );
       if (next.isNotEmpty) _recommendations = next;
       _online = true;
+      _autoLoadExhausted = false;
       unawaited(_loadRuntimeStatus());
     } catch (error) {
       _error = _message(error, '换一批失败');
@@ -335,10 +342,15 @@ class RecommendProvider extends ChangeNotifier {
       final identities = _recommendations
           .map((item) => item.savedIdentity)
           .toSet();
+      var addedCount = 0;
       for (final item in newItems) {
-        if (identities.add(item.savedIdentity)) _recommendations.add(item);
+        if (identities.add(item.savedIdentity)) {
+          _recommendations.add(item);
+          addedCount += 1;
+        }
       }
       _online = true;
+      _autoLoadExhausted = addedCount == 0;
     } catch (error) {
       _error = _message(error, '加载更多失败');
     } finally {
