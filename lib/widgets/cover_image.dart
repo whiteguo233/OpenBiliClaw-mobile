@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -53,40 +54,45 @@ class CoverImage extends StatelessWidget {
     final headers = token.isEmpty ? null : {'Cookie': 'obc_session=$token'};
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
-      child: client.usesTailscale
-          ? _TailnetImage(
-              client: client,
-              imageUrl: proxyUrl,
-              headers: headers,
-              width: width,
-              height: height,
-              placeholder: _placeholder,
-            )
-          : canDirect
-          ? _DirectFirstImage(
-              directUrl: normalizedUrl,
-              proxyUrl: proxyUrl,
-              headers: headers,
-              width: width,
-              height: height,
-              placeholder: _placeholder,
-            )
-          : CachedNetworkImage(
-              imageUrl: proxyUrl,
-              httpHeaders: headers,
-              width: width,
-              height: height,
-              fit: BoxFit.cover,
-              memCacheWidth: 640,
-              filterQuality: FilterQuality.medium,
-              fadeInDuration: MediaQuery.disableAnimationsOf(context)
-                  ? Duration.zero
-                  : const Duration(milliseconds: 220),
-              placeholder: (_, _) =>
-                  _placeholder(context, Icons.image_outlined),
-              errorWidget: (_, _, _) =>
-                  _placeholder(context, Icons.broken_image_outlined),
-            ),
+      child: _LimitedImage(
+        width: width,
+        height: height,
+        placeholder: _placeholder,
+        child: client.usesTailscale
+            ? _TailnetImage(
+                client: client,
+                imageUrl: proxyUrl,
+                headers: headers,
+                width: width,
+                height: height,
+                placeholder: _placeholder,
+              )
+            : canDirect
+            ? _DirectFirstImage(
+                directUrl: normalizedUrl,
+                proxyUrl: proxyUrl,
+                headers: headers,
+                width: width,
+                height: height,
+                placeholder: _placeholder,
+              )
+            : CachedNetworkImage(
+                imageUrl: proxyUrl,
+                httpHeaders: headers,
+                width: width,
+                height: height,
+                fit: BoxFit.cover,
+                memCacheWidth: 640,
+                filterQuality: FilterQuality.medium,
+                fadeInDuration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 220),
+                placeholder: (_, _) =>
+                    _placeholder(context, Icons.image_outlined),
+                errorWidget: (_, _, _) =>
+                    _placeholder(context, Icons.broken_image_outlined),
+              ),
+      ),
     );
   }
 
@@ -119,6 +125,95 @@ class CoverImage extends StatelessWidget {
       ),
       child: Center(child: Icon(icon, size: 32, color: palette.lineStrong)),
     );
+  }
+}
+
+/// Limits simultaneous cover image downloads so API/refresh requests keep
+/// enough phone network/CPU headroom. This is a client-side complement to the
+/// server-side Image Proxy split.
+class _ImageLimiter {
+  _ImageLimiter._();
+
+  static final _ImageLimiter instance = _ImageLimiter._();
+
+  static const int maxConcurrent = 4;
+  int _active = 0;
+  final List<Completer<void>> _waiters = [];
+
+  Future<void> acquire() {
+    if (_active < maxConcurrent) {
+      _active += 1;
+      return Future.value();
+    }
+    final completer = Completer<void>();
+    _waiters.add(completer);
+    return completer.future;
+  }
+
+  void release() {
+    if (_waiters.isNotEmpty) {
+      final next = _waiters.removeAt(0);
+      // The waiter takes this slot immediately.
+      next.complete();
+    } else if (_active > 0) {
+      _active -= 1;
+    }
+  }
+}
+
+class _LimitedImage extends StatefulWidget {
+  const _LimitedImage({
+    required this.width,
+    required this.height,
+    required this.placeholder,
+    required this.child,
+  });
+
+  final double width;
+  final double height;
+  final Widget Function(BuildContext, IconData) placeholder;
+  final Widget child;
+
+  @override
+  State<_LimitedImage> createState() => _LimitedImageState();
+}
+
+class _LimitedImageState extends State<_LimitedImage> {
+  bool _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _acquire();
+  }
+
+  Future<void> _acquire() async {
+    await _ImageLimiter.instance.acquire();
+    if (!mounted) {
+      _ImageLimiter.instance.release();
+      return;
+    }
+    setState(() => _ready = true);
+  }
+
+  @override
+  void dispose() {
+    if (_ready) {
+      _ImageLimiter.instance.release();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_ready) {
+      return SizedBox(
+        width: widget.width,
+        height: widget.height,
+        child: widget.placeholder(context, Icons.image_outlined),
+      );
+    }
+    return widget.child;
   }
 }
 
