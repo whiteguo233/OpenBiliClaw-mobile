@@ -2083,6 +2083,26 @@ class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
     });
   }
 
+  String _formatFullscreenDuration(Duration duration) {
+    final seconds = duration.inSeconds;
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
+    final secs = seconds % 60;
+    if (hours > 0) {
+      return '$hours:${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+    }
+    return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _seekFraction(double value) async {
+    final duration = widget.controller.player.state.duration;
+    if (duration.inMilliseconds <= 0) return;
+    await widget.controller.player.seek(
+      Duration(milliseconds: (duration.inMilliseconds * value).round()),
+    );
+    if (mounted) _showControls();
+  }
+
   Future<void> _togglePlayback() async {
     await widget.controller.player.playOrPause();
     if (!mounted) return;
@@ -2269,42 +2289,127 @@ class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
                         colors: [Colors.black87, Colors.transparent],
                       ),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        _FullscreenActionButton(
-                          icon: (widget.videoState?.like ?? false)
-                              ? Icons.thumb_up_rounded
-                              : Icons.thumb_up_outlined,
-                          label: '点赞',
-                          active: widget.videoState?.like ?? false,
-                          count: widget.videoState?.likeCount ?? 0,
-                          onTap: widget.onLike,
+                        Row(
+                          children: [
+                            IconButton(
+                              tooltip: _playing ? '暂停' : '播放',
+                              onPressed: () => _togglePlayback(),
+                              icon: Icon(
+                                _playing
+                                    ? Icons.pause_rounded
+                                    : Icons.play_arrow_rounded,
+                                color: Colors.white,
+                              ),
+                            ),
+                            Expanded(
+                              child: StreamBuilder<Duration>(
+                                stream:
+                                    widget.controller.player.stream.duration,
+                                builder: (context, durationSnapshot) {
+                                  final duration =
+                                      durationSnapshot.data ?? Duration.zero;
+                                  return StreamBuilder<Duration>(
+                                    stream: widget.position,
+                                    builder: (context, positionSnapshot) {
+                                      final position =
+                                          positionSnapshot.data ??
+                                          Duration.zero;
+                                      final progress =
+                                          duration.inMilliseconds > 0
+                                          ? (position.inMilliseconds /
+                                                    duration.inMilliseconds)
+                                                .clamp(0.0, 1.0)
+                                          : 0.0;
+                                      return SliderTheme(
+                                        data: SliderThemeData(
+                                          trackHeight: 2,
+                                          thumbShape: RoundSliderThumbShape(
+                                            enabledThumbRadius: 5,
+                                          ),
+                                          overlayShape: RoundSliderOverlayShape(
+                                            overlayRadius: 12,
+                                          ),
+                                          activeTrackColor: const Color(
+                                            0xFFFB7299,
+                                          ),
+                                          inactiveTrackColor: Colors.white24,
+                                          thumbColor: const Color(0xFFFB7299),
+                                        ),
+                                        child: Slider(
+                                          value: progress,
+                                          onChanged: (value) =>
+                                              _seekFraction(value),
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                              ),
+                              child: StreamBuilder<Duration>(
+                                stream: widget.position,
+                                builder: (context, snapshot) {
+                                  final position =
+                                      snapshot.data ?? Duration.zero;
+                                  final duration =
+                                      widget.controller.player.state.duration;
+                                  return Text(
+                                    '${_formatFullscreenDuration(position)} / ${_formatFullscreenDuration(duration)}',
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 11,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
                         ),
-                        _FullscreenActionButton(
-                          icon: Icons.monetization_on_outlined,
-                          label: '投币',
-                          count: widget.videoState?.coinCount ?? 0,
-                          onTap: widget.onCoin,
-                        ),
-                        _FullscreenActionButton(
-                          icon: (widget.videoState?.favorite ?? false)
-                              ? Icons.star_rounded
-                              : Icons.star_border_rounded,
-                          label: '收藏',
-                          active: widget.videoState?.favorite ?? false,
-                          count: widget.videoState?.favoriteCount ?? 0,
-                          onTap: widget.onFavorite,
-                        ),
-                        _FullscreenActionButton(
-                          icon: Icons.auto_awesome_rounded,
-                          label: '三连',
-                          onTap: widget.onTriple,
-                        ),
-                        _FullscreenActionButton(
-                          icon: Icons.share_outlined,
-                          label: '分享',
-                          onTap: _share,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            _FullscreenActionButton(
+                              icon: (widget.videoState?.like ?? false)
+                                  ? Icons.thumb_up_rounded
+                                  : Icons.thumb_up_outlined,
+                              label: '点赞',
+                              active: widget.videoState?.like ?? false,
+                              count: widget.videoState?.likeCount ?? 0,
+                              onTap: widget.onLike,
+                            ),
+                            _FullscreenActionButton(
+                              icon: Icons.monetization_on_outlined,
+                              label: '投币',
+                              count: widget.videoState?.coinCount ?? 0,
+                              onTap: widget.onCoin,
+                            ),
+                            _FullscreenActionButton(
+                              icon: (widget.videoState?.favorite ?? false)
+                                  ? Icons.star_rounded
+                                  : Icons.star_border_rounded,
+                              label: '收藏',
+                              active: widget.videoState?.favorite ?? false,
+                              count: widget.videoState?.favoriteCount ?? 0,
+                              onTap: widget.onFavorite,
+                            ),
+                            _FullscreenActionButton(
+                              icon: Icons.auto_awesome_rounded,
+                              label: '三连',
+                              onTap: widget.onTriple,
+                            ),
+                            _FullscreenActionButton(
+                              icon: Icons.share_outlined,
+                              label: '分享',
+                              onTap: _share,
+                            ),
+                          ],
                         ),
                       ],
                     ),
