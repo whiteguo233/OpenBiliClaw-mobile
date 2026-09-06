@@ -282,11 +282,28 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
         final replyTotal = stat is Map
             ? int.tryParse((stat['reply'] ?? '').toString()) ?? 0
             : 0;
-        if (mounted && replyTotal > 0 && _commentTotal <= 0) {
-          setState(() => _commentTotal = replyTotal);
-        }
-        if (desc.isNotEmpty && mounted) {
-          setState(() => _videoDescription = desc);
+        final likeTotal = stat is Map
+            ? int.tryParse((stat['like'] ?? '').toString()) ?? 0
+            : 0;
+        final coinTotal = stat is Map
+            ? int.tryParse((stat['coin'] ?? '').toString()) ?? 0
+            : 0;
+        final favoriteTotal = stat is Map
+            ? int.tryParse((stat['favorite'] ?? '').toString()) ?? 0
+            : 0;
+        if (mounted) {
+          setState(() {
+            if (replyTotal > 0 && _commentTotal <= 0) {
+              _commentTotal = replyTotal;
+            }
+            final current = _videoState ?? const BilibiliVideoState();
+            _videoState = current.copyWith(
+              likeCount: likeTotal,
+              coinCount: coinTotal,
+              favoriteCount: favoriteTotal,
+            );
+            if (desc.isNotEmpty) _videoDescription = desc;
+          });
         }
       }
     } catch (_) {}
@@ -408,7 +425,19 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
     try {
       final next = await api.likeVideo(widget.bvid, like: !state.like);
       if (!mounted) return;
-      setState(() => _videoState = next);
+      setState(() {
+        final current = _videoState ?? state ?? const BilibiliVideoState();
+        final changed = next.like != current.like;
+        _videoState = current.copyWith(
+          like: next.like,
+          coin: next.coin,
+          favorite: next.favorite,
+          watchLater: next.watchLater,
+          likeCount: current.likeCount > 0
+              ? current.likeCount + (changed ? (next.like ? 1 : -1) : 0)
+              : current.likeCount,
+        );
+      });
     } catch (error) {
       if (!mounted) return;
       _showSnack('点赞失败：$error');
@@ -420,9 +449,15 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
     if (api == null) return;
     try {
       await api.coinVideo(widget.bvid, multiply: 1);
-      final state = await api.videoRelation(bvid: widget.bvid);
       if (!mounted) return;
-      setState(() => _videoState = state);
+      setState(() {
+        final current = _videoState ?? const BilibiliVideoState();
+        _videoState = current.copyWith(
+          coinCount: current.coinCount > 0
+              ? current.coinCount + 1
+              : current.coinCount,
+        );
+      });
       _showSnack('投币成功');
     } catch (error) {
       if (!mounted) return;
@@ -449,7 +484,19 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
         favorite: !state.favorite,
       );
       if (!mounted) return;
-      setState(() => _videoState = next);
+      setState(() {
+        final current = _videoState ?? state ?? const BilibiliVideoState();
+        final changed = next.favorite != current.favorite;
+        _videoState = current.copyWith(
+          like: next.like,
+          coin: next.coin,
+          favorite: next.favorite,
+          watchLater: next.watchLater,
+          favoriteCount: current.favoriteCount > 0
+              ? current.favoriteCount + (changed ? (next.favorite ? 1 : -1) : 0)
+              : current.favoriteCount,
+        );
+      });
       _showSnack(next.favorite ? '已收藏' : '已取消收藏');
     } catch (error) {
       if (!mounted) return;
@@ -476,7 +523,15 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
         add: !state.watchLater,
       );
       if (!mounted) return;
-      setState(() => _videoState = next);
+      setState(() {
+        final current = _videoState ?? state ?? const BilibiliVideoState();
+        _videoState = current.copyWith(
+          like: next.like,
+          coin: next.coin,
+          favorite: next.favorite,
+          watchLater: next.watchLater,
+        );
+      });
       _showSnack(next.watchLater ? '已加入稍后再看' : '已移出稍后再看');
     } catch (error) {
       if (!mounted) return;
@@ -490,7 +545,24 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
     try {
       final state = await api.tripleVideo(widget.bvid);
       if (!mounted) return;
-      setState(() => _videoState = state);
+      setState(() {
+        final current = _videoState ?? const BilibiliVideoState();
+        _videoState = current.copyWith(
+          like: state.like,
+          coin: state.coin,
+          favorite: state.favorite,
+          watchLater: state.watchLater,
+          likeCount: current.likeCount > 0
+              ? current.likeCount + 1
+              : current.likeCount,
+          coinCount: current.coinCount > 0
+              ? current.coinCount + 1
+              : current.coinCount,
+          favoriteCount: current.favoriteCount > 0
+              ? current.favoriteCount + 1
+              : current.favoriteCount,
+        );
+      });
       _showSnack('三连成功');
     } catch (error) {
       if (!mounted) return;
@@ -509,7 +581,11 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
     required String label,
     required VoidCallback onPressed,
     bool active = false,
+    int? count,
   }) {
+    final display = count != null && count > 0
+        ? '${_shortCount(count)} $label'
+        : label;
     return InkWell(
       onTap: onPressed,
       borderRadius: BorderRadius.circular(10),
@@ -525,7 +601,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
             ),
             const SizedBox(height: 2),
             Text(
-              label,
+              display,
               style: TextStyle(
                 fontSize: 10,
                 color: active ? const Color(0xFFFB7299) : Colors.white70,
@@ -535,6 +611,16 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
         ),
       ),
     );
+  }
+
+  static String _shortCount(int value) {
+    if (value >= 100000000) {
+      return '${(value / 100000000).toStringAsFixed(value % 100000000 == 0 ? 0 : 1)}亿';
+    }
+    if (value >= 10000) {
+      return '${(value / 10000).toStringAsFixed(value % 10000 == 0 ? 0 : 1)}万';
+    }
+    return '$value';
   }
 
   /// PiliPlus-style separate video/audio URL joining. If the backend only
@@ -1065,11 +1151,13 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
                         : Icons.thumb_up_outlined,
                     label: '点赞',
                     active: _videoState?.like ?? false,
+                    count: _videoState?.likeCount ?? 0,
                     onPressed: _toggleLike,
                   ),
                   _actionButton(
                     icon: Icons.monetization_on_outlined,
                     label: '投币',
+                    count: _videoState?.coinCount ?? 0,
                     onPressed: _toggleCoin,
                   ),
                   _actionButton(
@@ -1078,6 +1166,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
                         : Icons.star_border_rounded,
                     label: '收藏',
                     active: _videoState?.favorite ?? false,
+                    count: _videoState?.favoriteCount ?? 0,
                     onPressed: _toggleFavorite,
                   ),
                   _actionButton(

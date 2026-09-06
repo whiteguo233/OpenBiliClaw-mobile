@@ -5,12 +5,18 @@ class BilibiliVideoState {
   final int coin;
   final bool favorite;
   final bool watchLater;
+  final int likeCount;
+  final int coinCount;
+  final int favoriteCount;
 
   const BilibiliVideoState({
     this.like = false,
     this.coin = 0,
     this.favorite = false,
     this.watchLater = false,
+    this.likeCount = 0,
+    this.coinCount = 0,
+    this.favoriteCount = 0,
   });
 
   factory BilibiliVideoState.fromJson(Map<String, dynamic> json) =>
@@ -19,6 +25,9 @@ class BilibiliVideoState {
         coin: _int(json['coin']),
         favorite: json['favorite'] == true,
         watchLater: json['watch_later'] == true,
+        likeCount: _int(json['like_count'] ?? json['stat_like']),
+        coinCount: _int(json['coin_count'] ?? json['stat_coin']),
+        favoriteCount: _int(json['favorite_count'] ?? json['stat_favorite']),
       );
 
   BilibiliVideoState copyWith({
@@ -26,11 +35,17 @@ class BilibiliVideoState {
     int? coin,
     bool? favorite,
     bool? watchLater,
+    int? likeCount,
+    int? coinCount,
+    int? favoriteCount,
   }) => BilibiliVideoState(
     like: like ?? this.like,
     coin: coin ?? this.coin,
     favorite: favorite ?? this.favorite,
     watchLater: watchLater ?? this.watchLater,
+    likeCount: likeCount ?? this.likeCount,
+    coinCount: coinCount ?? this.coinCount,
+    favoriteCount: favoriteCount ?? this.favoriteCount,
   );
 }
 
