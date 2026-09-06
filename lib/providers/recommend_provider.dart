@@ -169,27 +169,36 @@ class RecommendProvider extends ChangeNotifier {
   /// 下拉刷新 / 点击推荐 Tab 回顶刷新：先让后端真正刷新一次推荐池，
   /// 再换一批新内容，避免只重新 GET 当前列表导致内容看起来“没变化”。
   Future<void> refresh() async {
-    if (_loading) return;
+    if (_loading) {
+      debugPrint('[RecommendProvider] refresh skipped: already loading');
+      return;
+    }
     _loading = true;
     _error = '';
     _safeNotify();
+    debugPrint('[RecommendProvider] refresh start');
     try {
-      await _api.refresh();
+      await _api.refresh().timeout(const Duration(seconds: 15));
+      debugPrint('[RecommendProvider] refresh: POST /refresh done');
       final excluded = _recommendations.map((item) => item.bvid).toList();
-      final next = await _api.reshuffle(
-        excluded,
-        sourcePlatform: _platformFilter,
+      final next = await _api
+          .reshuffle(excluded, sourcePlatform: _platformFilter)
+          .timeout(const Duration(seconds: 20));
+      debugPrint(
+        '[RecommendProvider] refresh: reshuffle done, items=${next.length}',
       );
       if (next.isNotEmpty) _recommendations = next;
       _online = true;
       _autoLoadExhausted = false;
       _prunePlatformFilter();
     } catch (error) {
+      debugPrint('[RecommendProvider] refresh error: $error');
       // 用户触发的刷新失败不能代表整体掉线；真正的在线状态由轮询维护。
       _error = _message(error, '推荐刷新失败');
     } finally {
       _loading = false;
       _safeNotify();
+      debugPrint('[RecommendProvider] refresh finished');
     }
     unawaited(_loadSideChannels());
   }
