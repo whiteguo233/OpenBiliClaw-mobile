@@ -627,6 +627,16 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
     return '$value';
   }
 
+  static String _formatPPageDuration(int seconds) {
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
+    final secs = seconds % 60;
+    if (hours > 0) {
+      return '$hours:${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+    }
+    return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+  }
+
   /// PiliPlus-style separate video/audio URL joining. If the backend only
   /// returns one stream, it falls back to that single URL.
   static String _mediaUri(String videoUrl, String audioUrl) {
@@ -1531,28 +1541,170 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
                                 ],
                                 const SizedBox(height: 8),
                                 if (result.pages.length > 1) ...[
-                                  const SizedBox(height: 10),
-                                  Text('分P', style: theme.textTheme.labelLarge),
-                                  const SizedBox(height: 6),
-                                  ...result.pages.map(
-                                    (page) => ListTile(
-                                      dense: true,
-                                      contentPadding: EdgeInsets.zero,
-                                      onTap: _loading
-                                          ? null
-                                          : () => _switchPage(page),
-                                      leading: CircleAvatar(
-                                        radius: 14,
-                                        child: Text('${page.page}'),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        '选集',
+                                        style: theme.textTheme.titleSmall
+                                            ?.copyWith(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w800,
+                                            ),
                                       ),
-                                      title: Text(
-                                        page.part,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: Colors.white,
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 7,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(
+                                            0xFFFB7299,
+                                          ).withValues(alpha: 0.16),
+                                          borderRadius: BorderRadius.circular(
+                                            999,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '${result.pages.length}P',
+                                          style: const TextStyle(
+                                            color: Color(0xFFFF8FA5),
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                          ),
                                         ),
                                       ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Container(
+                                    width: double.infinity,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.04,
+                                      ),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.08,
+                                        ),
+                                      ),
+                                    ),
+                                    clipBehavior: Clip.antiAlias,
+                                    child: Column(
+                                      children: result.pages.map((page) {
+                                        final active = page.cid == _selectedCid;
+                                        return Material(
+                                          color: Colors.transparent,
+                                          child: InkWell(
+                                            onTap: _loading
+                                                ? null
+                                                : () => unawaited(
+                                                    _switchPage(page),
+                                                  ),
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 12,
+                                                    vertical: 10,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: active
+                                                    ? const Color(
+                                                        0xFFFB7299,
+                                                      ).withValues(alpha: 0.14)
+                                                    : null,
+                                                border: Border(
+                                                  bottom: const BorderSide(
+                                                    color: Colors.white12,
+                                                  ),
+                                                ),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Container(
+                                                    width: 28,
+                                                    height: 28,
+                                                    alignment: Alignment.center,
+                                                    decoration: BoxDecoration(
+                                                      color: active
+                                                          ? const Color(
+                                                              0xFFFB7299,
+                                                            )
+                                                          : Colors.white
+                                                                .withValues(
+                                                                  alpha: 0.08,
+                                                                ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                    ),
+                                                    child: Text(
+                                                      '${page.page}',
+                                                      style: TextStyle(
+                                                        color: active
+                                                            ? Colors.white
+                                                            : Colors.white70,
+                                                        fontSize: 12,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 10),
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        Text(
+                                                          page.part,
+                                                          maxLines: 2,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                          style:
+                                                              const TextStyle(
+                                                                color: Colors
+                                                                    .white,
+                                                                fontSize: 13,
+                                                              ),
+                                                        ),
+                                                        if (page.duration >
+                                                            0) ...[
+                                                          const SizedBox(
+                                                            height: 2,
+                                                          ),
+                                                          Text(
+                                                            _formatPPageDuration(
+                                                              page.duration,
+                                                            ),
+                                                            style:
+                                                                const TextStyle(
+                                                                  color: Colors
+                                                                      .white54,
+                                                                  fontSize: 11,
+                                                                ),
+                                                          ),
+                                                        ],
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  if (active)
+                                                    const Icon(
+                                                      Icons
+                                                          .check_circle_rounded,
+                                                      color: Color(0xFFFB7299),
+                                                      size: 18,
+                                                    ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
                                     ),
                                   ),
                                 ],
