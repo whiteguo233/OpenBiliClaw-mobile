@@ -432,7 +432,7 @@ class _ExpandableExpression extends StatefulWidget {
 }
 
 class _ExpandableExpressionState extends State<_ExpandableExpression> {
-  bool _expanded = false;
+  bool _expanded = true;
 
   @override
   Widget build(BuildContext context) {
