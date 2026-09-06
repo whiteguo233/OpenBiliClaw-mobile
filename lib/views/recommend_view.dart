@@ -70,6 +70,22 @@ class RecommendViewState extends State<RecommendView> {
     await context.read<RecommendProvider>().refresh();
   }
 
+  Future<void> _refreshWithFeedback(RecommendProvider rp) async {
+    final previousError = rp.error;
+    await rp.refresh();
+    if (!mounted) return;
+    if (rp.error.isNotEmpty && rp.error != previousError) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(rp.error),
+            backgroundColor: Theme.of(context).colorScheme.errorContainer,
+          ),
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer2<RecommendProvider, SavedProvider>(
@@ -87,7 +103,7 @@ class RecommendViewState extends State<RecommendView> {
                 return false;
               },
               child: RefreshIndicator(
-                onRefresh: rp.refresh,
+                onRefresh: () => _refreshWithFeedback(rp),
                 child: CustomScrollView(
                   controller: _scrollController,
                   physics: const AlwaysScrollableScrollPhysics(),
