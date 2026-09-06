@@ -306,6 +306,14 @@ class ChatProvider extends ChangeNotifier {
           reply += delta;
           _upsertTurn(started.copyWith(reply: reply, status: 'pending'));
           _safeNotify();
+        } else if (event.type == 'tool_call') {
+          final name = event.data['name']?.toString() ?? '工具';
+          if (reply.isEmpty || !reply.endsWith('\n')) {
+            reply += '\n';
+          }
+          reply += '\n> 🔧 调用工具：`$name`\n';
+          _upsertTurn(started.copyWith(reply: reply, status: 'pending'));
+          _safeNotify();
         } else if (event.type == 'done') {
           final finalReply = event.data['reply']?.toString() ?? reply;
           _upsertTurn(started.copyWith(reply: finalReply, status: 'done'));
