@@ -30,6 +30,7 @@ class RecommendView extends StatefulWidget {
 class RecommendViewState extends State<RecommendView> {
   final ScrollController _scrollController = ScrollController();
   bool _autoLoadScheduled = false;
+  DateTime? _lastAutoLoadAt;
 
   @override
   void dispose() {
@@ -39,7 +40,13 @@ class RecommendViewState extends State<RecommendView> {
 
   void _scheduleAutoLoad(RecommendProvider rp) {
     if (_autoLoadScheduled) return;
+    final now = DateTime.now();
+    if (_lastAutoLoadAt != null &&
+        now.difference(_lastAutoLoadAt!) < const Duration(seconds: 5)) {
+      return;
+    }
     _autoLoadScheduled = true;
+    _lastAutoLoadAt = now;
     Future<void>.delayed(const Duration(milliseconds: 350), () {
       if (!mounted) return;
       _autoLoadScheduled = false;
