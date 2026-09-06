@@ -176,7 +176,7 @@ class RecommendProvider extends ChangeNotifier {
       _online = true;
       _prunePlatformFilter();
     } catch (error) {
-      _online = false;
+      // 用户触发的刷新失败不能代表整体掉线；真正的在线状态由轮询维护。
       _error = _message(error, '推荐刷新失败');
     } finally {
       _loading = false;
