@@ -347,6 +347,7 @@ class RecommendProvider extends ChangeNotifier {
       _online = true;
       _autoLoadExhausted = next.isEmpty;
       unawaited(_loadRuntimeStatus());
+      unawaited(_loadPlatformAvailability());
     } catch (error) {
       debugPrint('[RecommendProvider] reshuffle error: $error');
       _error = _message(error, '换一批失败');
@@ -387,6 +388,7 @@ class RecommendProvider extends ChangeNotifier {
       }
       _online = true;
       _autoLoadExhausted = addedCount == 0 || !result.hasMore;
+      unawaited(_loadPlatformAvailability());
     } catch (error) {
       _error = _message(error, '加载更多失败');
     } finally {
