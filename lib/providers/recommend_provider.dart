@@ -189,15 +189,23 @@ class RecommendProvider extends ChangeNotifier {
       );
       debugPrint('[RecommendProvider] refresh: POST /refresh fired');
       final excluded = _recommendations.map((item) => item.bvid).toList();
-      final next = await _api
-          .reshuffle(excluded, sourcePlatform: _platformFilter)
-          .timeout(const Duration(seconds: 30));
-      debugPrint(
-        '[RecommendProvider] refresh: reshuffle done, items=${next.length}',
-      );
-      if (next.isNotEmpty) _recommendations = next;
-      _online = true;
-      _autoLoadExhausted = false;
+      if (_autoLoadExhausted) {
+        // 已经到底了：只触发后台补池，不阻塞用户刷新。
+        debugPrint(
+          '[RecommendProvider] refresh: already exhausted, skip reshuffle',
+        );
+        _online = true;
+      } else {
+        final next = await _api
+            .reshuffle(excluded, sourcePlatform: _platformFilter)
+            .timeout(const Duration(seconds: 30));
+        debugPrint(
+          '[RecommendProvider] refresh: reshuffle done, items=${next.length}',
+        );
+        if (next.isNotEmpty) _recommendations = next;
+        _online = true;
+        _autoLoadExhausted = next.isEmpty;
+      }
       _prunePlatformFilter();
     } catch (error) {
       debugPrint('[RecommendProvider] refresh error: $error');
@@ -324,7 +332,7 @@ class RecommendProvider extends ChangeNotifier {
   }
 
   Future<void> reshuffle() async {
-    if (_reshuffling || _loading) return;
+    if (_reshuffling || _loading || _autoLoadExhausted) return;
     _reshuffling = true;
     _error = '';
     _safeNotify();
@@ -337,11 +345,12 @@ class RecommendProvider extends ChangeNotifier {
       debugPrint('[RecommendProvider] reshuffle done items=${next.length}');
       if (next.isNotEmpty) _recommendations = next;
       _online = true;
-      _autoLoadExhausted = false;
+      _autoLoadExhausted = next.isEmpty;
       unawaited(_loadRuntimeStatus());
     } catch (error) {
       debugPrint('[RecommendProvider] reshuffle error: $error');
       _error = _message(error, '换一批失败');
+      _autoLoadExhausted = true;
     } finally {
       _reshuffling = false;
       _safeNotify();
