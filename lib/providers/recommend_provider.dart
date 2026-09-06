@@ -198,7 +198,7 @@ class RecommendProvider extends ChangeNotifier {
       } else {
         final next = await _api
             .reshuffle(excluded, sourcePlatform: _platformFilter)
-            .timeout(const Duration(seconds: 30));
+            .timeout(const Duration(seconds: 45));
         debugPrint(
           '[RecommendProvider] refresh: reshuffle done, items=${next.length}',
         );
@@ -341,7 +341,7 @@ class RecommendProvider extends ChangeNotifier {
       final excluded = _recommendations.map((item) => item.bvid).toList();
       final next = await _api
           .reshuffle(excluded, sourcePlatform: _platformFilter)
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 45));
       debugPrint('[RecommendProvider] reshuffle done items=${next.length}');
       if (next.isNotEmpty) _recommendations = next;
       _online = true;
@@ -373,7 +373,7 @@ class RecommendProvider extends ChangeNotifier {
       final excluded = _recommendations.map((item) => item.bvid).toList();
       final result = await _api
           .append(excluded, sourcePlatform: _platformFilter)
-          .timeout(const Duration(seconds: 12));
+          .timeout(const Duration(seconds: 30));
       final newItems = result.items;
       final identities = _recommendations
           .map((item) => item.savedIdentity)
