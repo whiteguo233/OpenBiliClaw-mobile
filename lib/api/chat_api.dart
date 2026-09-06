@@ -1,5 +1,14 @@
+import 'dart:convert';
+
 import '../models/chat.dart';
 import 'client.dart';
+
+class ChatStreamEvent {
+  const ChatStreamEvent({required this.type, required this.data});
+
+  final String type;
+  final Map<String, dynamic> data;
+}
 
 class ChatApi {
   final ApiClient _client;
@@ -12,6 +21,7 @@ class ChatApi {
     String subjectId = '',
     String subjectTitle = '',
     String replyToTurnId = '',
+    bool streaming = false,
     required String message,
   }) async {
     final data = await _client.post(
@@ -24,10 +34,49 @@ class ChatApi {
         'subject_title': subjectTitle,
         'reply_to_turn_id': replyToTurnId,
         'message': message,
+        'streaming': streaming,
       },
       timeout: 35,
     );
     return ChatTurn.fromJson(data);
+  }
+
+  Stream<ChatStreamEvent> streamChat({
+    required String turnId,
+    required String message,
+    String session = 'popup',
+    String scope = 'chat',
+    String subjectId = '',
+    String subjectTitle = '',
+    String replyToTurnId = '',
+  }) async* {
+    String? event;
+    await for (final line in _client.streamPostLines(
+      '/chat/stream',
+      body: {
+        'turn_id': turnId,
+        'session': session,
+        'scope': scope,
+        'subject_id': subjectId,
+        'subject_title': subjectTitle,
+        'reply_to_turn_id': replyToTurnId,
+        'message': message,
+      },
+    )) {
+      final trimmed = line.trim();
+      if (trimmed.startsWith('event:')) {
+        event = trimmed.substring(6).trim();
+      } else if (trimmed.startsWith('data:')) {
+        final raw = trimmed.substring(5).trim();
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          yield ChatStreamEvent(
+            type: event ?? 'message',
+            data: Map<String, dynamic>.from(decoded),
+          );
+        }
+      }
+    }
   }
 
   Future<ChatTurn> fetchTurn(String turnId) async {

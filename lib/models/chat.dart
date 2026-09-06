@@ -77,6 +77,7 @@ class ChatTurn {
   ChatTurn copyWith({
     String? status,
     String? error,
+    String? reply,
     Map<String, dynamic>? payload,
   }) => ChatTurn(
     turnId: turnId,
@@ -86,7 +87,7 @@ class ChatTurn {
     subjectTitle: subjectTitle,
     replyToTurnId: replyToTurnId,
     message: message,
-    reply: reply,
+    reply: reply ?? this.reply,
     status: status ?? this.status,
     error: error ?? this.error,
     payload: payload ?? this.payload,

@@ -257,11 +257,12 @@ class ChatProvider extends ChangeNotifier {
         subjectTitle: subjectTitle,
         replyToTurnId: replyContext?.replyToTurnId ?? '',
         message: value,
+        streaming: true,
       );
       _upsertTurn(started);
       _safeNotify();
       if (started.isPending) {
-        await _pollForResponse(started.turnId, generation);
+        await _streamResponse(started, generation);
       }
       if (generation == _responseGeneration) {
         await loadPendingConfirmations(notify: false);
@@ -287,22 +288,42 @@ class ChatProvider extends ChangeNotifier {
     _safeNotify();
   }
 
-  Future<void> _pollForResponse(String turnId, int generation) async {
-    const backoff = [1, 2, 2, 5, 5, 5, 5, 5];
-    for (final seconds in backoff) {
-      if (generation != _responseGeneration) return;
-      await Future<void>.delayed(Duration(seconds: seconds));
-      if (generation != _responseGeneration) return;
-      try {
-        final turn = await _api.fetchTurn(turnId);
-        _upsertTurn(turn);
-        _safeNotify();
-        if (turn.isDone || turn.hasError) return;
-      } catch (_) {
-        // A transient read failure is retried inside the fixed 30s window.
+  Future<void> _streamResponse(ChatTurn started, int generation) async {
+    var reply = '';
+    try {
+      await for (final event in _api.streamChat(
+        turnId: started.turnId,
+        session: started.session,
+        scope: started.scope,
+        subjectId: started.subjectId,
+        subjectTitle: started.subjectTitle,
+        replyToTurnId: started.replyToTurnId,
+        message: started.message,
+      )) {
+        if (generation != _responseGeneration) return;
+        if (event.type == 'content') {
+          final delta = event.data['delta']?.toString() ?? '';
+          reply += delta;
+          _upsertTurn(started.copyWith(reply: reply, status: 'pending'));
+          _safeNotify();
+        } else if (event.type == 'done') {
+          final finalReply = event.data['reply']?.toString() ?? reply;
+          _upsertTurn(started.copyWith(reply: finalReply, status: 'done'));
+          _safeNotify();
+          return;
+        }
       }
+      if (generation == _responseGeneration && reply.isNotEmpty) {
+        _upsertTurn(started.copyWith(reply: reply, status: 'done'));
+        _safeNotify();
+      }
+    } catch (error) {
+      if (generation != _responseGeneration) return;
+      final message = _message(error, '流式回复失败');
+      _upsertTurn(started.copyWith(status: 'failed', error: message));
+      _error = message;
+      _safeNotify();
     }
-    _error = '回复仍在后台处理中，稍后会从共享历史自动恢复。';
   }
 
   Future<bool> openPendingConfirmation(PendingConfirmation item) async {

@@ -218,7 +218,7 @@ class ApiClient {
     SharedPreferences.getInstance().then((prefs) => prefs.remove(_sessionKey));
   }
 
-  void _captureSession(http.Response res) {
+  void _captureSession(http.BaseResponse res) {
     final setCookie = res.headers['set-cookie'];
     if (setCookie == null) return;
     final match = RegExp(r'obc_session=([^;]*)').firstMatch(setCookie);
@@ -278,6 +278,34 @@ class ApiClient {
       if (res.statusCode == 401) clearSession();
       if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
       return _decodeMap(res.body);
+    } finally {
+      lease.close();
+    }
+  }
+
+  Stream<String> streamPostLines(
+    String path, {
+    Map<String, dynamic>? body,
+  }) async* {
+    final uri = apiUri(path);
+    final lease = _openClient();
+    try {
+      final request = http.Request('POST', uri)
+        ..headers.addAll(_headers())
+        ..body = jsonEncode(body ?? {});
+      final response = await lease.client.send(request);
+      _captureSession(response);
+      if (response.statusCode == 401) clearSession();
+      if (response.statusCode >= 400) {
+        final text = await response.stream.bytesToString();
+        throw ApiException(response.statusCode, text);
+      }
+      await for (final line
+          in response.stream
+              .transform(utf8.decoder)
+              .transform(const LineSplitter())) {
+        yield line;
+      }
     } finally {
       lease.close();
     }
