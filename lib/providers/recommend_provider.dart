@@ -178,12 +178,19 @@ class RecommendProvider extends ChangeNotifier {
     _safeNotify();
     debugPrint('[RecommendProvider] refresh start');
     try {
-      await _api.refresh().timeout(const Duration(seconds: 15));
+      try {
+        await _api.refresh().timeout(const Duration(seconds: 30));
+      } on TimeoutException {
+        debugPrint(
+          '[RecommendProvider] refresh: POST /refresh timeout, retrying once',
+        );
+        await _api.refresh().timeout(const Duration(seconds: 30));
+      }
       debugPrint('[RecommendProvider] refresh: POST /refresh done');
       final excluded = _recommendations.map((item) => item.bvid).toList();
       final next = await _api
           .reshuffle(excluded, sourcePlatform: _platformFilter)
-          .timeout(const Duration(seconds: 20));
+          .timeout(const Duration(seconds: 30));
       debugPrint(
         '[RecommendProvider] refresh: reshuffle done, items=${next.length}',
       );
