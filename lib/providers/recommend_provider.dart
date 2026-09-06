@@ -336,9 +336,10 @@ class RecommendProvider extends ChangeNotifier {
     _safeNotify();
     try {
       final excluded = _recommendations.map((item) => item.bvid).toList();
-      final newItems = await _api
+      final result = await _api
           .append(excluded, sourcePlatform: _platformFilter)
           .timeout(const Duration(seconds: 12));
+      final newItems = result.items;
       final identities = _recommendations
           .map((item) => item.savedIdentity)
           .toSet();
@@ -350,7 +351,7 @@ class RecommendProvider extends ChangeNotifier {
         }
       }
       _online = true;
-      _autoLoadExhausted = addedCount == 0;
+      _autoLoadExhausted = addedCount == 0 || !result.hasMore;
     } catch (error) {
       _error = _message(error, '加载更多失败');
     } finally {

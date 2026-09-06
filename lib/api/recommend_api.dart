@@ -7,6 +7,13 @@ import 'client.dart';
 String _newRequestId(String prefix) =>
     '$prefix-${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 32)}';
 
+class RecommendAppendResult {
+  const RecommendAppendResult({required this.items, required this.hasMore});
+
+  final List<Recommendation> items;
+  final bool hasMore;
+}
+
 class RecommendApi {
   final ApiClient _client;
   RecommendApi(this._client);
@@ -31,7 +38,7 @@ class RecommendApi {
     return _recommendations(data['items']);
   }
 
-  Future<List<Recommendation>> append(
+  Future<RecommendAppendResult> append(
     List<String> excludedBvids, {
     String sourcePlatform = '',
   }) async {
@@ -43,7 +50,10 @@ class RecommendApi {
       },
       timeout: 30,
     );
-    return _recommendations(data['items']);
+    return RecommendAppendResult(
+      items: _recommendations(data['items']),
+      hasMore: data['has_more'] != false,
+    );
   }
 
   Future<bool> reportClick(Map<String, dynamic> payload) async {
