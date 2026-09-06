@@ -328,21 +328,24 @@ class RecommendProvider extends ChangeNotifier {
     _reshuffling = true;
     _error = '';
     _safeNotify();
+    debugPrint('[RecommendProvider] reshuffle start');
     try {
       final excluded = _recommendations.map((item) => item.bvid).toList();
-      final next = await _api.reshuffle(
-        excluded,
-        sourcePlatform: _platformFilter,
-      );
+      final next = await _api
+          .reshuffle(excluded, sourcePlatform: _platformFilter)
+          .timeout(const Duration(seconds: 30));
+      debugPrint('[RecommendProvider] reshuffle done items=${next.length}');
       if (next.isNotEmpty) _recommendations = next;
       _online = true;
       _autoLoadExhausted = false;
       unawaited(_loadRuntimeStatus());
     } catch (error) {
+      debugPrint('[RecommendProvider] reshuffle error: $error');
       _error = _message(error, '换一批失败');
     } finally {
       _reshuffling = false;
       _safeNotify();
+      debugPrint('[RecommendProvider] reshuffle finished');
     }
   }
 
