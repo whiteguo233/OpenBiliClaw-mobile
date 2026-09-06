@@ -323,7 +323,7 @@ class _CognitionSection extends StatelessWidget {
               Icon(Icons.auto_awesome, size: 17, color: context.appPositive),
               const SizedBox(width: 6),
               Text(
-                '画像变更（${notifications.length}）',
+                '阿B刚记下（${notifications.length}）',
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
@@ -350,10 +350,33 @@ class _CognitionCard extends StatelessWidget {
   final Map<String, dynamic> notification;
   final VoidCallback onSeen;
 
+  String _kindLabel(String kind) {
+    return switch (kind) {
+      'profile_shift' => '画像变化',
+      'interest_added' => '新兴趣',
+      'interest_removed' => '兴趣调整',
+      'dislike_added' => '新避雷',
+      'dislike_removed' => '避雷调整',
+      'profile_consolidation' => '画像整理',
+      'awareness' => '观察',
+      _ => '画像变更',
+    };
+  }
+
+  IconData _kindIcon(String kind) {
+    return switch (kind) {
+      'interest_added' => Icons.favorite_rounded,
+      'dislike_added' => Icons.shield_outlined,
+      'profile_consolidation' => Icons.auto_awesome_rounded,
+      _ => Icons.auto_awesome_rounded,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final summary = notification['summary']?.toString() ?? '';
+    final kind = notification['kind']?.toString() ?? '';
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 12),
@@ -370,18 +393,36 @@ class _CognitionCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.auto_awesome, color: context.appPositive),
+          Icon(_kindIcon(kind), color: context.appPositive),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  '画像变更',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: context.appPositive.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        _kindLabel(kind),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: context.appPositive,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 if (summary.isNotEmpty) ...[
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 5),
                   Text(summary, style: theme.textTheme.bodySmall),
                 ],
               ],
@@ -440,6 +481,48 @@ class _PendingConfirmations extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (item.kind.isNotEmpty || item.confidence > 0) ...[
+                        Row(
+                          children: [
+                            if (item.kind.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.secondary.withValues(
+                                    alpha: 0.12,
+                                  ),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  item.kind == 'hypothesis'
+                                      ? '假设'
+                                      : item.kind == 'confusion'
+                                      ? '迷惑'
+                                      : item.kind,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: theme.colorScheme.secondary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            if (item.kind.isNotEmpty && item.confidence > 0)
+                              const SizedBox(width: 6),
+                            if (item.confidence > 0)
+                              Text(
+                                '置信度 ${(item.confidence * 100).round()}%',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: theme.textTheme.bodySmall?.color,
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 5),
+                      ],
                       Text(
                         item.title,
                         maxLines: 2,
