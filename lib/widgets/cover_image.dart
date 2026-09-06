@@ -36,17 +36,11 @@ class CoverImage extends StatelessWidget {
     }
     final client = context.read<ApiClient>();
     final token = client.sessionToken;
-    // Keep native and web on the same backend-proxied image path. Direct CDN
-    // requests can be rejected on mobile networks because of hotlink, DNS, or
-    // TLS policy differences, while the backend proxy also provides caching.
-    //
-    // Keep the proxy URL stable (no per-session token query) so CachedNetworkImage
-    // and the tailnet in-memory cache can reuse cached bytes across rebuilds.
-    // Authentication still travels in the Cookie header below.
-    // Browsers cannot carry the session Cookie through CachedNetworkImage on
-    // web, so keep the query token there. Native/tailnet clients send the
-    // Cookie header and benefit from a stable cache URL.
-    final imageUrl = kIsWeb
+    // Native first tries the original CDN URL directly — this avoids the
+    // backend round-trip when the image is not cached there. If the direct
+    // request fails (hotlink/TLS/network policy), it falls back to the
+    // backend image proxy automatically.
+    final proxyUrl = kIsWeb
         ? proxyImageUrl(url, client.baseUrl, token: token)
         : proxyImageUrl(url, client.baseUrl);
     final headers = token.isEmpty ? null : {'Cookie': 'obc_session=$token'};
@@ -55,27 +49,19 @@ class CoverImage extends StatelessWidget {
       child: client.usesTailscale
           ? _TailnetImage(
               client: client,
-              imageUrl: imageUrl,
+              imageUrl: proxyUrl,
               headers: headers,
               width: width,
               height: height,
               placeholder: _placeholder,
             )
-          : CachedNetworkImage(
-              imageUrl: imageUrl,
-              httpHeaders: headers,
+          : _DirectFirstImage(
+              directUrl: kIsWeb ? proxyUrl : url,
+              proxyUrl: proxyUrl,
+              headers: headers,
               width: width,
               height: height,
-              fit: BoxFit.cover,
-              memCacheWidth: 640,
-              filterQuality: FilterQuality.medium,
-              fadeInDuration: MediaQuery.disableAnimationsOf(context)
-                  ? Duration.zero
-                  : const Duration(milliseconds: 220),
-              placeholder: (_, _) =>
-                  _placeholder(context, Icons.image_outlined),
-              errorWidget: (_, _, _) =>
-                  _placeholder(context, Icons.broken_image_outlined),
+              placeholder: _placeholder,
             ),
     );
   }
@@ -91,6 +77,67 @@ class CoverImage extends StatelessWidget {
         ),
       ),
       child: Center(child: Icon(icon, size: 32, color: palette.lineStrong)),
+    );
+  }
+}
+
+class _DirectFirstImage extends StatefulWidget {
+  const _DirectFirstImage({
+    required this.directUrl,
+    required this.proxyUrl,
+    required this.headers,
+    required this.width,
+    required this.height,
+    required this.placeholder,
+  });
+
+  final String directUrl;
+  final String proxyUrl;
+  final Map<String, String>? headers;
+  final double width;
+  final double height;
+  final Widget Function(BuildContext, IconData) placeholder;
+
+  @override
+  State<_DirectFirstImage> createState() => _DirectFirstImageState();
+}
+
+class _DirectFirstImageState extends State<_DirectFirstImage> {
+  bool _useDirect = true;
+
+  @override
+  void didUpdateWidget(covariant _DirectFirstImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.directUrl != widget.directUrl ||
+        oldWidget.proxyUrl != widget.proxyUrl) {
+      _useDirect = true;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CachedNetworkImage(
+      imageUrl: _useDirect ? widget.directUrl : widget.proxyUrl,
+      httpHeaders: _useDirect ? null : widget.headers,
+      width: widget.width,
+      height: widget.height,
+      fit: BoxFit.cover,
+      memCacheWidth: 640,
+      filterQuality: FilterQuality.medium,
+      fadeInDuration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 220),
+      placeholder: (_, _) => widget.placeholder(context, Icons.image_outlined),
+      errorWidget: (_, _, _) {
+        if (_useDirect) {
+          // Direct CDN failed; switch to the backend proxy on the next frame.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _useDirect = false);
+          });
+          return widget.placeholder(context, Icons.image_outlined);
+        }
+        return widget.placeholder(context, Icons.broken_image_outlined);
+      },
     );
   }
 }
