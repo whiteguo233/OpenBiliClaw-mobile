@@ -56,6 +56,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
   BilibiliApi? _api;
   BilibiliPlayResult? _result;
   bool _loading = true;
+  bool _switchingStream = false;
   String? _error;
   bool _loadStarted = false;
   int? _selectedQn;
@@ -878,10 +879,41 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
     if (!mounted) return;
     setState(() {
       _selectedQn = quality.qn;
-      _loading = true;
+      _switchingStream = true;
       _error = null;
     });
-    await _load();
+    try {
+      final api = _api;
+      if (api == null) return;
+      final result = await api.playUrl(
+        bvid: widget.bvid,
+        cid: _selectedCid,
+        qn: _selectedQn,
+      );
+      if (!mounted) return;
+      setState(() {
+        _result = result;
+        _switchingStream = false;
+        if (_selectedQn == null ||
+            !result.qualities.any((quality) => quality.qn == _selectedQn)) {
+          final actualQn = result.video?.qn;
+          _selectedQn =
+              actualQn != null &&
+                  result.qualities.any((quality) => quality.qn == actualQn)
+              ? actualQn
+              : (result.qualities.isNotEmpty
+                    ? result.qualities.first.qn
+                    : null);
+        }
+      });
+      await _openPlayer(result);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _switchingStream = false;
+        _error = error.toString();
+      });
+    }
   }
 
   Future<void> _switchPage(BilibiliPlayPage page) async {
@@ -1137,6 +1169,12 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
                                 child: Video(controller: _videoController!),
                               ),
                             ),
+                      if (_switchingStream)
+                        const Center(
+                          child: CircularProgressIndicator(
+                            color: Colors.white70,
+                          ),
+                        ),
                       IgnorePointer(
                         child: DanmakuOverlay(
                           position: _player.stream.position,
