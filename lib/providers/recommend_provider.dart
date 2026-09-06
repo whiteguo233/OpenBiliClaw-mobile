@@ -178,15 +178,16 @@ class RecommendProvider extends ChangeNotifier {
     _safeNotify();
     debugPrint('[RecommendProvider] refresh start');
     try {
-      try {
-        await _api.refresh().timeout(const Duration(seconds: 30));
-      } on TimeoutException {
-        debugPrint(
-          '[RecommendProvider] refresh: POST /refresh timeout, retrying once',
-        );
-        await _api.refresh().timeout(const Duration(seconds: 30));
-      }
-      debugPrint('[RecommendProvider] refresh: POST /refresh done');
+      // POST /refresh is only a background pool-replenishment trigger. It must
+      // not gate the user-visible refresh: if the response is lost on the
+      // physical device, fire-and-forget it and continue to 换一批.
+      unawaited(
+        _api.refresh().catchError((Object error) {
+          debugPrint('[RecommendProvider] refresh POST ignored: $error');
+          return <String, dynamic>{};
+        }),
+      );
+      debugPrint('[RecommendProvider] refresh: POST /refresh fired');
       final excluded = _recommendations.map((item) => item.bvid).toList();
       final next = await _api
           .reshuffle(excluded, sourcePlatform: _platformFilter)
