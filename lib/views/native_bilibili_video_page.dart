@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -857,6 +858,14 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
           loadComments: _fetchCommentPage,
           loadReplies: _fetchReplyPage,
           portrait: portrait,
+          videoState: _videoState,
+          onLike: _toggleLike,
+          onCoin: _toggleCoin,
+          onFavorite: _toggleFavorite,
+          onTriple: _triple,
+          shareUrl: widget.contentUrl.isNotEmpty
+              ? widget.contentUrl
+              : 'https://www.bilibili.com/video/${widget.bvid}',
         ),
       ),
     );
@@ -1734,6 +1743,12 @@ class _DanmakuFullscreenPage extends StatefulWidget {
     required this.loadComments,
     required this.loadReplies,
     required this.portrait,
+    required this.videoState,
+    required this.onLike,
+    required this.onCoin,
+    required this.onFavorite,
+    required this.onTriple,
+    required this.shareUrl,
   });
 
   final VideoController controller;
@@ -1747,12 +1762,22 @@ class _DanmakuFullscreenPage extends StatefulWidget {
   /// Portrait (竖屏) videos stay upright in fullscreen instead of being
   /// letterboxed inside a forced-landscape screen.
   final bool portrait;
+  final BilibiliVideoState? videoState;
+  final VoidCallback onLike;
+  final VoidCallback onCoin;
+  final VoidCallback onFavorite;
+  final VoidCallback onTriple;
+  final String shareUrl;
 
   @override
   State<_DanmakuFullscreenPage> createState() => _DanmakuFullscreenPageState();
 }
 
 class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
+  late bool _playing = widget.controller.player.state.playing;
+  bool _showPlaybackIcon = false;
+  Timer? _iconTimer;
+
   @override
   void initState() {
     super.initState();
@@ -1769,6 +1794,7 @@ class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
 
   @override
   void dispose() {
+    _iconTimer?.cancel();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations(const [
       DeviceOrientation.portraitUp,
@@ -1776,6 +1802,29 @@ class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
       DeviceOrientation.landscapeRight,
     ]);
     super.dispose();
+  }
+
+  Future<void> _togglePlayback() async {
+    await widget.controller.player.playOrPause();
+    if (!mounted) return;
+    setState(() {
+      _playing = !_playing;
+      _showPlaybackIcon = true;
+    });
+    _iconTimer?.cancel();
+    _iconTimer = Timer(const Duration(milliseconds: 600), () {
+      if (mounted) setState(() => _showPlaybackIcon = false);
+    });
+  }
+
+  Future<void> _share() async {
+    await SharePlus.instance.share(
+      ShareParams(
+        title: '分享 B 站视频',
+        text: widget.shareUrl,
+        subject: widget.shareUrl,
+      ),
+    );
   }
 
   Future<void> _openComments() async {
@@ -1806,10 +1855,20 @@ class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
         children: [
           GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () => widget.controller.player.playOrPause(),
-            child: Video(
-              controller: widget.controller,
-              controls: NoVideoControls,
+            onTap: _togglePlayback,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Video(controller: widget.controller, controls: NoVideoControls),
+                if (_showPlaybackIcon)
+                  Center(
+                    child: Icon(
+                      _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                      size: 72,
+                      color: Colors.white.withValues(alpha: 0.85),
+                    ),
+                  ),
+              ],
             ),
           ),
           IgnorePointer(
@@ -1841,7 +1900,117 @@ class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
               onPressed: _openComments,
             ),
           ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: SafeArea(
+              top: false,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Colors.black87, Colors.transparent],
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _FullscreenActionButton(
+                      icon: (widget.videoState?.like ?? false)
+                          ? Icons.thumb_up_rounded
+                          : Icons.thumb_up_outlined,
+                      label: '点赞',
+                      active: widget.videoState?.like ?? false,
+                      count: widget.videoState?.likeCount ?? 0,
+                      onTap: widget.onLike,
+                    ),
+                    _FullscreenActionButton(
+                      icon: Icons.monetization_on_outlined,
+                      label: '投币',
+                      count: widget.videoState?.coinCount ?? 0,
+                      onTap: widget.onCoin,
+                    ),
+                    _FullscreenActionButton(
+                      icon: (widget.videoState?.favorite ?? false)
+                          ? Icons.star_rounded
+                          : Icons.star_border_rounded,
+                      label: '收藏',
+                      active: widget.videoState?.favorite ?? false,
+                      count: widget.videoState?.favoriteCount ?? 0,
+                      onTap: widget.onFavorite,
+                    ),
+                    _FullscreenActionButton(
+                      icon: Icons.auto_awesome_rounded,
+                      label: '三连',
+                      onTap: widget.onTriple,
+                    ),
+                    _FullscreenActionButton(
+                      icon: Icons.share_outlined,
+                      label: '分享',
+                      onTap: _share,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+String _compactCount(int value) {
+  if (value >= 100000000) {
+    return '${(value / 100000000).toStringAsFixed(value % 100000000 == 0 ? 0 : 1)}亿';
+  }
+  if (value >= 10000) {
+    return '${(value / 10000).toStringAsFixed(value % 10000 == 0 ? 0 : 1)}万';
+  }
+  return '$value';
+}
+
+class _FullscreenActionButton extends StatelessWidget {
+  const _FullscreenActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.active = false,
+    this.count = 0,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool active;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = active ? const Color(0xFFFB7299) : Colors.white;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 20, color: color),
+            const SizedBox(height: 2),
+            Text(
+              count > 0 ? '${_compactCount(count)} $label' : label,
+              style: TextStyle(
+                fontSize: 10,
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
