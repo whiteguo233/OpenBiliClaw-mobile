@@ -1198,9 +1198,13 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
                         setState(() => _playerCompact = true);
                       }
                     },
-                    tabs: const [
-                      Tab(text: '简介'),
-                      Tab(text: '评论'),
+                    tabs: [
+                      const Tab(text: '简介'),
+                      Tab(
+                        text: _commentTotal > 0
+                            ? '评论 ${_shortCount(_commentTotal)}'
+                            : '评论',
+                      ),
                     ],
                   ),
                   Expanded(
