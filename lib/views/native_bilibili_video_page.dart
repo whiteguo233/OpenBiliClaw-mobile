@@ -278,6 +278,13 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
       if (direct != null) {
         final info = await direct.videoInfo(widget.bvid);
         final desc = info['desc']?.toString().trim() ?? '';
+        final stat = info['stat'];
+        final replyTotal = stat is Map
+            ? int.tryParse((stat['reply'] ?? '').toString()) ?? 0
+            : 0;
+        if (mounted && replyTotal > 0 && _commentTotal <= 0) {
+          setState(() => _commentTotal = replyTotal);
+        }
         if (desc.isNotEmpty && mounted) {
           setState(() => _videoDescription = desc);
         }
@@ -1348,7 +1355,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      if (_comments.isNotEmpty) ...[
+                                      if (_commentTotal > 0) ...[
                                         const SizedBox(height: 4),
                                         Row(
                                           children: [
@@ -1359,9 +1366,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
                                             ),
                                             const SizedBox(width: 6),
                                             Text(
-                                              _commentTotal > 0
-                                                  ? '评论 $_commentTotal'
-                                                  : '评论',
+                                              '评论 $_commentTotal',
                                               style: theme.textTheme.labelLarge
                                                   ?.copyWith(
                                                     color: Colors.white,
@@ -1370,6 +1375,28 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
                                           ],
                                         ),
                                         const SizedBox(height: 4),
+                                      ] else ...[
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.mode_comment_outlined,
+                                              color: Colors.white70,
+                                              size: 16,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              '评论',
+                                              style: theme.textTheme.labelLarge
+                                                  ?.copyWith(
+                                                    color: Colors.white,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                      ],
+                                      if (_comments.isNotEmpty) ...[
                                         ..._comments.map(
                                           (comment) => _CommentTile(
                                             comment: comment,
