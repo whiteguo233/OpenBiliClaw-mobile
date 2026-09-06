@@ -66,6 +66,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
   List<String> _danmakuBlockWords = const [];
   double _rate = 1.0;
   int _selectedSubtitle = -1;
+  List<_BilibiliSubtitle> _subtitles = const [];
   TapDownDetails? _doubleTapDetails;
   BilibiliVideoState? _videoState;
   List<BilibiliComment> _comments = const [];
@@ -153,6 +154,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
         }
       });
       unawaited(_loadDanmaku(result));
+      unawaited(_loadSubtitles(result));
       unawaited(_loadInteractions());
       await _openPlayer(result);
     } catch (error) {
@@ -661,6 +663,110 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
     }
   }
 
+  Future<void> _openPlayerSettings() async {
+    final result = _result;
+    if (result == null) return;
+    var selectedQn = _selectedQualityQn(result) ?? result.qualities.first.qn;
+    var rate = _rate;
+    var subtitleIndex = _selectedSubtitle;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('播放设置', style: Theme.of(sheetContext).textTheme.titleLarge),
+              const SizedBox(height: 12),
+              if (result.qualities.isNotEmpty) ...[
+                DropdownButtonFormField<int>(
+                  initialValue: selectedQn,
+                  decoration: const InputDecoration(
+                    labelText: '清晰度',
+                    isDense: true,
+                  ),
+                  items: [
+                    for (final quality in result.qualities)
+                      DropdownMenuItem<int>(
+                        value: quality.qn,
+                        child: Text(quality.label),
+                      ),
+                  ],
+                  onChanged: (qn) {
+                    if (qn == null) return;
+                    selectedQn = qn;
+                    unawaited(
+                      _switchQuality(
+                        result.qualities.firstWhere((item) => item.qn == qn),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+              DropdownButtonFormField<double>(
+                initialValue: rate,
+                decoration: const InputDecoration(
+                  labelText: '倍速',
+                  isDense: true,
+                ),
+                items: [
+                  for (final item in const [0.5, 1.0, 1.25, 1.5, 2.0])
+                    DropdownMenuItem<double>(
+                      value: item,
+                      child: Text(item == 1.0 ? '1.0x' : '${item}x'),
+                    ),
+                ],
+                onChanged: (value) {
+                  if (value == null) return;
+                  rate = value;
+                  unawaited(_switchRate(value));
+                },
+              ),
+              if (result.subtitles.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                DropdownButtonFormField<int>(
+                  initialValue: subtitleIndex,
+                  decoration: const InputDecoration(
+                    labelText: '字幕',
+                    isDense: true,
+                  ),
+                  items: [
+                    const DropdownMenuItem<int>(value: -1, child: Text('关闭')),
+                    for (var i = 0; i < result.subtitles.length; i++)
+                      DropdownMenuItem<int>(
+                        value: i,
+                        child: Text(result.subtitles[i].name),
+                      ),
+                  ],
+                  onChanged: (index) {
+                    if (index == null) return;
+                    subtitleIndex = index;
+                    unawaited(_selectSubtitle(index));
+                  },
+                ),
+              ],
+              const SizedBox(height: 8),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('弹幕设置'),
+                subtitle: Text(_danmakuEnabled ? '当前：开启' : '当前：关闭'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  unawaited(_openDanmakuSettings());
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _openDanmakuSettings() async {
     var enabled = _danmakuEnabled;
     final blockWords = List<String>.from(_danmakuBlockWords);
@@ -801,20 +907,64 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
     if (result == null) return;
     if (index == _selectedSubtitle) return;
     if (index < 0) {
-      await _player.setSubtitleTrack(SubtitleTrack.no());
-    } else {
-      final subtitle = result.subtitles[index];
-      if (subtitle.url.isEmpty) return;
-      await _player.setSubtitleTrack(
-        SubtitleTrack.uri(
-          subtitle.url,
-          title: subtitle.name,
-          language: subtitle.lan,
-        ),
-      );
+      if (!mounted) return;
+      setState(() {
+        _selectedSubtitle = -1;
+        _subtitles = const [];
+      });
+      return;
     }
+    final subtitle = result.subtitles[index];
+    if (subtitle.url.isEmpty) return;
     if (!mounted) return;
-    setState(() => _selectedSubtitle = index);
+    setState(() {
+      _selectedSubtitle = index;
+      _subtitles = const [];
+    });
+    await _loadSubtitles(result);
+  }
+
+  Future<void> _loadSubtitles(BilibiliPlayResult result) async {
+    if (_selectedSubtitle < 0 || _selectedSubtitle >= result.subtitles.length) {
+      if (mounted) {
+        setState(() => _subtitles = const []);
+      }
+      return;
+    }
+    final subtitle = result.subtitles[_selectedSubtitle];
+    if (subtitle.url.isEmpty) return;
+    try {
+      final response = await http.get(Uri.parse(subtitle.url));
+      if (response.statusCode != 200) return;
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      final rawBody = decoded is Map ? decoded['body'] : null;
+      final items = <_BilibiliSubtitle>[];
+      if (rawBody is List) {
+        for (final item in rawBody) {
+          if (item is! Map) continue;
+          final from = double.tryParse((item['from'] ?? '').toString()) ?? 0;
+          final to = double.tryParse((item['to'] ?? '').toString()) ?? 0;
+          final content = (item['content'] ?? '').toString().trim();
+          if (content.isEmpty) continue;
+          items.add(_BilibiliSubtitle(from: from, to: to, content: content));
+        }
+      }
+      if (!mounted) return;
+      setState(() => _subtitles = List.unmodifiable(items));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _subtitles = const []);
+    }
+  }
+
+  _BilibiliSubtitle? _findSubtitle(int milliseconds) {
+    for (final subtitle in _subtitles) {
+      if (milliseconds >= (subtitle.from * 1000).round() &&
+          milliseconds <= (subtitle.to * 1000).round()) {
+        return subtitle;
+      }
+    }
+    return null;
   }
 
   Future<void> _handleDoubleTap() async {
@@ -855,6 +1005,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
           position: _player.stream.position,
           playing: _player.stream.playing,
           items: _danmakuItems,
+          subtitles: _subtitles,
           danmakuEnabled: _danmakuEnabled,
           loadComments: _fetchCommentPage,
           loadReplies: _fetchReplyPage,
@@ -943,46 +1094,6 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
       return actualQn;
     }
     return result.qualities.first.qn;
-  }
-
-  Widget _playerOptionDropdown<T>({
-    required String label,
-    required T value,
-    required List<DropdownMenuItem<T>> items,
-    required ValueChanged<T?>? onChanged,
-  }) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white70, fontSize: 12),
-        ),
-        const SizedBox(width: 2),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<T>(
-              value: value,
-              items: items,
-              onChanged: onChanged,
-              dropdownColor: const Color(0xFF1B1B1B),
-              borderRadius: BorderRadius.circular(10),
-              icon: const Icon(
-                Icons.arrow_drop_down_rounded,
-                color: Colors.white70,
-              ),
-              style: const TextStyle(color: Colors.white, fontSize: 12),
-              isDense: true,
-            ),
-          ),
-        ),
-      ],
-    );
   }
 
   Widget _videoInfoBlock(
@@ -1158,6 +1269,14 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
                                     const MaterialPositionIndicator(),
                                     const Spacer(),
                                     MaterialCustomButton(
+                                      icon: const Icon(
+                                        Icons.settings_outlined,
+                                        color: Colors.white,
+                                      ),
+                                      onPressed: () =>
+                                          unawaited(_openPlayerSettings()),
+                                    ),
+                                    MaterialCustomButton(
                                       icon: const Icon(Icons.fullscreen),
                                       onPressed: () =>
                                           unawaited(_enterFullscreen()),
@@ -1173,6 +1292,55 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
                         const Center(
                           child: CircularProgressIndicator(
                             color: Colors.white70,
+                          ),
+                        ),
+                      if (_selectedSubtitle >= 0 && _subtitles.isNotEmpty)
+                        Positioned(
+                          left: 12,
+                          right: 12,
+                          bottom: 12,
+                          child: IgnorePointer(
+                            child: StreamBuilder<Duration>(
+                              stream: _player.stream.position,
+                              builder: (context, snapshot) {
+                                final position = snapshot.data ?? Duration.zero;
+                                final item = _findSubtitle(
+                                  position.inMilliseconds,
+                                );
+                                if (item == null) {
+                                  return const SizedBox.shrink();
+                                }
+                                return Center(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.55,
+                                      ),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      item.content,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                        shadows: [
+                                          Shadow(
+                                            blurRadius: 4,
+                                            color: Colors.black,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
                           ),
                         ),
                       IgnorePointer(
@@ -1362,105 +1530,6 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
                                   ),
                                 ],
                                 const SizedBox(height: 8),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    if (result.qualities.isNotEmpty)
-                                      _playerOptionDropdown<int>(
-                                        label: '清晰度',
-                                        value:
-                                            _selectedQualityQn(result) ??
-                                            result.qualities.first.qn,
-                                        items: [
-                                          for (final quality
-                                              in result.qualities)
-                                            DropdownMenuItem<int>(
-                                              value: quality.qn,
-                                              child: Text(quality.label),
-                                            ),
-                                        ],
-                                        onChanged: _loading
-                                            ? null
-                                            : (qn) {
-                                                if (qn == null) return;
-                                                final quality = result.qualities
-                                                    .firstWhere(
-                                                      (item) => item.qn == qn,
-                                                    );
-                                                unawaited(
-                                                  _switchQuality(quality),
-                                                );
-                                              },
-                                      ),
-                                    _playerOptionDropdown<double>(
-                                      label: '倍速',
-                                      value: _rate,
-                                      items: [
-                                        for (final rate in const [
-                                          0.5,
-                                          1.0,
-                                          1.25,
-                                          1.5,
-                                          2.0,
-                                        ])
-                                          DropdownMenuItem<double>(
-                                            value: rate,
-                                            child: Text(
-                                              rate == 1.0 ? '1.0x' : '${rate}x',
-                                            ),
-                                          ),
-                                      ],
-                                      onChanged: _loading
-                                          ? null
-                                          : (rate) {
-                                              if (rate == null) return;
-                                              unawaited(_switchRate(rate));
-                                            },
-                                    ),
-                                    if (result.subtitles.isNotEmpty)
-                                      _playerOptionDropdown<int>(
-                                        label: '字幕',
-                                        value: _selectedSubtitle,
-                                        items: [
-                                          const DropdownMenuItem<int>(
-                                            value: -1,
-                                            child: Text('关闭'),
-                                          ),
-                                          for (
-                                            var i = 0;
-                                            i < result.subtitles.length;
-                                            i++
-                                          )
-                                            DropdownMenuItem<int>(
-                                              value: i,
-                                              child: Text(
-                                                result.subtitles[i].name,
-                                              ),
-                                            ),
-                                        ],
-                                        onChanged: _loading
-                                            ? null
-                                            : (index) {
-                                                if (index == null) return;
-                                                unawaited(
-                                                  _selectSubtitle(index),
-                                                );
-                                              },
-                                      ),
-                                    ActionChip(
-                                      label: Text(
-                                        _danmakuEnabled ? '弹幕：开' : '弹幕：关',
-                                      ),
-                                      labelStyle: const TextStyle(fontSize: 11),
-                                      visualDensity: VisualDensity.compact,
-                                      backgroundColor: _danmakuEnabled
-                                          ? Colors.white24
-                                          : null,
-                                      onPressed: _openDanmakuSettings,
-                                    ),
-                                  ],
-                                ),
                                 if (result.pages.length > 1) ...[
                                   const SizedBox(height: 10),
                                   Text('分P', style: theme.textTheme.labelLarge),
@@ -1778,6 +1847,7 @@ class _DanmakuFullscreenPage extends StatefulWidget {
     required this.position,
     required this.playing,
     required this.items,
+    required this.subtitles,
     required this.danmakuEnabled,
     required this.loadComments,
     required this.loadReplies,
@@ -1794,6 +1864,7 @@ class _DanmakuFullscreenPage extends StatefulWidget {
   final Stream<Duration> position;
   final Stream<bool>? playing;
   final List<DanmakuItem> items;
+  final List<_BilibiliSubtitle> subtitles;
   final bool danmakuEnabled;
   final _CommentPageLoader loadComments;
   final _ReplyPageLoader loadReplies;
@@ -1864,6 +1935,17 @@ class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
         subject: widget.shareUrl,
       ),
     );
+  }
+
+  _BilibiliSubtitle? _currentSubtitle(Duration position) {
+    final milliseconds = position.inMilliseconds;
+    for (final subtitle in widget.subtitles) {
+      if (milliseconds >= (subtitle.from * 1000).round() &&
+          milliseconds <= (subtitle.to * 1000).round()) {
+        return subtitle;
+      }
+    }
+    return null;
   }
 
   Future<void> _openComments() async {
@@ -1939,6 +2021,47 @@ class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
               onPressed: _openComments,
             ),
           ),
+          if (widget.subtitles.isNotEmpty)
+            Positioned(
+              left: 14,
+              right: 14,
+              bottom: 76,
+              child: IgnorePointer(
+                child: StreamBuilder<Duration>(
+                  stream: widget.position,
+                  builder: (context, snapshot) {
+                    final subtitle = _currentSubtitle(
+                      snapshot.data ?? Duration.zero,
+                    );
+                    if (subtitle == null) return const SizedBox.shrink();
+                    return Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.55),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          subtitle.content,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            shadows: [
+                              Shadow(blurRadius: 4, color: Colors.black),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
           Positioned(
             left: 0,
             right: 0,
@@ -2053,6 +2176,18 @@ class _FullscreenActionButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class _BilibiliSubtitle {
+  const _BilibiliSubtitle({
+    required this.from,
+    required this.to,
+    required this.content,
+  });
+
+  final double from;
+  final double to;
+  final String content;
 }
 
 /// One comment card: author, message, like count and a preview of the reply
