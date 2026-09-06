@@ -2038,7 +2038,9 @@ class _DanmakuFullscreenPage extends StatefulWidget {
 class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
   late bool _playing = widget.controller.player.state.playing;
   bool _showPlaybackIcon = false;
+  bool _controlsVisible = true;
   Timer? _iconTimer;
+  Timer? _controlsTimer;
 
   @override
   void initState() {
@@ -2052,11 +2054,13 @@ class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
               DeviceOrientation.landscapeRight,
             ],
     );
+    _startControlsTimer();
   }
 
   @override
   void dispose() {
     _iconTimer?.cancel();
+    _controlsTimer?.cancel();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations(const [
       DeviceOrientation.portraitUp,
@@ -2066,6 +2070,19 @@ class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
     super.dispose();
   }
 
+  void _showControls() {
+    if (!mounted) return;
+    setState(() => _controlsVisible = true);
+    _startControlsTimer();
+  }
+
+  void _startControlsTimer() {
+    _controlsTimer?.cancel();
+    _controlsTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _controlsVisible = false);
+    });
+  }
+
   Future<void> _togglePlayback() async {
     await widget.controller.player.playOrPause();
     if (!mounted) return;
@@ -2073,6 +2090,7 @@ class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
       _playing = !_playing;
       _showPlaybackIcon = true;
     });
+    _showControls();
     _iconTimer?.cancel();
     _iconTimer = Timer(const Duration(milliseconds: 600), () {
       if (mounted) setState(() => _showPlaybackIcon = false);
@@ -2155,22 +2173,36 @@ class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
           Positioned(
             top: MediaQuery.paddingOf(context).top + 8,
             left: 8,
-            child: IconButton(
-              tooltip: '退出全屏',
-              icon: const Icon(Icons.fullscreen_exit, color: Colors.white),
-              onPressed: () => Navigator.of(context).pop(),
+            child: AnimatedOpacity(
+              opacity: _controlsVisible ? 1 : 0,
+              duration: const Duration(milliseconds: 180),
+              child: IgnorePointer(
+                ignoring: !_controlsVisible,
+                child: IconButton(
+                  tooltip: '退出全屏',
+                  icon: const Icon(Icons.fullscreen_exit, color: Colors.white),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ),
             ),
           ),
           Positioned(
             top: MediaQuery.paddingOf(context).top + 8,
             right: 8,
-            child: IconButton(
-              tooltip: '查看评论',
-              icon: const Icon(
-                Icons.mode_comment_outlined,
-                color: Colors.white,
+            child: AnimatedOpacity(
+              opacity: _controlsVisible ? 1 : 0,
+              duration: const Duration(milliseconds: 180),
+              child: IgnorePointer(
+                ignoring: !_controlsVisible,
+                child: IconButton(
+                  tooltip: '查看评论',
+                  icon: const Icon(
+                    Icons.mode_comment_outlined,
+                    color: Colors.white,
+                  ),
+                  onPressed: _openComments,
+                ),
               ),
-              onPressed: _openComments,
             ),
           ),
           if (widget.subtitles.isNotEmpty)
@@ -2218,55 +2250,65 @@ class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
             left: 0,
             right: 0,
             bottom: 0,
-            child: SafeArea(
-              top: false,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [Colors.black87, Colors.transparent],
+            child: AnimatedOpacity(
+              opacity: _controlsVisible ? 1 : 0,
+              duration: const Duration(milliseconds: 180),
+              child: IgnorePointer(
+                ignoring: !_controlsVisible,
+                child: SafeArea(
+                  top: false,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
+                    ),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [Colors.black87, Colors.transparent],
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _FullscreenActionButton(
+                          icon: (widget.videoState?.like ?? false)
+                              ? Icons.thumb_up_rounded
+                              : Icons.thumb_up_outlined,
+                          label: '点赞',
+                          active: widget.videoState?.like ?? false,
+                          count: widget.videoState?.likeCount ?? 0,
+                          onTap: widget.onLike,
+                        ),
+                        _FullscreenActionButton(
+                          icon: Icons.monetization_on_outlined,
+                          label: '投币',
+                          count: widget.videoState?.coinCount ?? 0,
+                          onTap: widget.onCoin,
+                        ),
+                        _FullscreenActionButton(
+                          icon: (widget.videoState?.favorite ?? false)
+                              ? Icons.star_rounded
+                              : Icons.star_border_rounded,
+                          label: '收藏',
+                          active: widget.videoState?.favorite ?? false,
+                          count: widget.videoState?.favoriteCount ?? 0,
+                          onTap: widget.onFavorite,
+                        ),
+                        _FullscreenActionButton(
+                          icon: Icons.auto_awesome_rounded,
+                          label: '三连',
+                          onTap: widget.onTriple,
+                        ),
+                        _FullscreenActionButton(
+                          icon: Icons.share_outlined,
+                          label: '分享',
+                          onTap: _share,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _FullscreenActionButton(
-                      icon: (widget.videoState?.like ?? false)
-                          ? Icons.thumb_up_rounded
-                          : Icons.thumb_up_outlined,
-                      label: '点赞',
-                      active: widget.videoState?.like ?? false,
-                      count: widget.videoState?.likeCount ?? 0,
-                      onTap: widget.onLike,
-                    ),
-                    _FullscreenActionButton(
-                      icon: Icons.monetization_on_outlined,
-                      label: '投币',
-                      count: widget.videoState?.coinCount ?? 0,
-                      onTap: widget.onCoin,
-                    ),
-                    _FullscreenActionButton(
-                      icon: (widget.videoState?.favorite ?? false)
-                          ? Icons.star_rounded
-                          : Icons.star_border_rounded,
-                      label: '收藏',
-                      active: widget.videoState?.favorite ?? false,
-                      count: widget.videoState?.favoriteCount ?? 0,
-                      onTap: widget.onFavorite,
-                    ),
-                    _FullscreenActionButton(
-                      icon: Icons.auto_awesome_rounded,
-                      label: '三连',
-                      onTap: widget.onTriple,
-                    ),
-                    _FullscreenActionButton(
-                      icon: Icons.share_outlined,
-                      label: '分享',
-                      onTap: _share,
-                    ),
-                  ],
                 ),
               ),
             ),
