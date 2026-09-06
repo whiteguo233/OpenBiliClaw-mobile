@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show ValueNotifier, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
@@ -128,6 +128,18 @@ class CoverImage extends StatelessWidget {
   }
 }
 
+/// App-resume marker for image widgets. When the app returns from background,
+/// bumped so any image that was suspended/failed during backgrounding retries.
+class ImageLoadEpoch {
+  ImageLoadEpoch._();
+
+  static final ImageLoadEpoch instance = ImageLoadEpoch._();
+
+  final ValueNotifier<int> notifier = ValueNotifier<int>(0);
+
+  void bump() => notifier.value += 1;
+}
+
 /// Limits simultaneous cover image downloads so API/refresh requests keep
 /// enough phone network/CPU headroom. This is a client-side complement to the
 /// server-side Image Proxy split.
@@ -184,7 +196,17 @@ class _LimitedImageState extends State<_LimitedImage> {
   @override
   void initState() {
     super.initState();
+    ImageLoadEpoch.instance.notifier.addListener(_onEpochChanged);
     _acquire();
+  }
+
+  void _onEpochChanged() {
+    if (!mounted) return;
+    if (_ready) {
+      _ImageLimiter.instance.release();
+      setState(() => _ready = false);
+      _acquire();
+    }
   }
 
   Future<void> _acquire() async {
@@ -198,6 +220,7 @@ class _LimitedImageState extends State<_LimitedImage> {
 
   @override
   void dispose() {
+    ImageLoadEpoch.instance.notifier.removeListener(_onEpochChanged);
     if (_ready) {
       _ImageLimiter.instance.release();
     }
@@ -240,6 +263,26 @@ class _DirectFirstImage extends StatefulWidget {
 
 class _DirectFirstImageState extends State<_DirectFirstImage> {
   bool _useDirect = true;
+
+  @override
+  void initState() {
+    super.initState();
+    ImageLoadEpoch.instance.notifier.addListener(_onEpochChanged);
+  }
+
+  void _onEpochChanged() {
+    if (!mounted) return;
+    // Retry the direct CDN path after returning from background.
+    if (!_useDirect) {
+      setState(() => _useDirect = true);
+    }
+  }
+
+  @override
+  void dispose() {
+    ImageLoadEpoch.instance.notifier.removeListener(_onEpochChanged);
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(covariant _DirectFirstImage oldWidget) {

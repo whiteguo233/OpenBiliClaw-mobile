@@ -12,6 +12,7 @@ import '../providers/recommend_provider.dart';
 import '../providers/saved_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_chrome.dart';
+import '../widgets/cover_image.dart';
 import '../widgets/message_inbox.dart';
 import 'chat_view.dart';
 import 'profile_view.dart';
@@ -51,6 +52,8 @@ class _HomeViewState extends State<HomeView> with WidgetsBindingObserver {
     if (state != AppLifecycleState.resumed || !_providersReady) return;
     // 后台挂起可能中断 WebSocket / 定时器；回前台立即重连。
     _recommendProvider.resume();
+    // 让被后台挂起的图片请求重新走一遍直连/队列。
+    ImageLoadEpoch.instance.bump();
     unawaited(_profileProvider.loadNotifications());
     unawaited(_chatProvider.loadPendingConfirmations());
   }
