@@ -29,11 +29,24 @@ class RecommendView extends StatefulWidget {
 
 class RecommendViewState extends State<RecommendView> {
   final ScrollController _scrollController = ScrollController();
+  bool _autoLoadScheduled = false;
 
   @override
   void dispose() {
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _scheduleAutoLoad(RecommendProvider rp) {
+    if (_autoLoadScheduled) return;
+    _autoLoadScheduled = true;
+    Future<void>.delayed(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      _autoLoadScheduled = false;
+      if (rp.recommendations.isNotEmpty) {
+        unawaited(rp.append());
+      }
+    });
   }
 
   /// 点击底部「推荐」时，先回到顶部，再触发一次真实刷新。
@@ -59,9 +72,9 @@ class RecommendViewState extends State<RecommendView> {
           children: [
             NotificationListener<ScrollNotification>(
               onNotification: (notification) {
-                if (notification.metrics.extentAfter < 520 &&
+                if (notification.metrics.extentAfter < 1000 &&
                     rp.recommendations.isNotEmpty) {
-                  unawaited(rp.append());
+                  _scheduleAutoLoad(rp);
                 }
                 return false;
               },
