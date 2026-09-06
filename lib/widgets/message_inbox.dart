@@ -163,11 +163,15 @@ class _ProbeSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle(theme, title, icon, color),
+        _SectionHeader(
+          icon: icon,
+          title: title,
+          color: color,
+          count: '${probes.length}',
+        ),
         ...probes.map((probe) {
           final domain = probe['domain']?.toString() ?? '';
           return _probeCard(context, probe, domain);
@@ -280,29 +284,6 @@ class _ProbeSection extends StatelessWidget {
         );
     }
   }
-
-  Widget _sectionTitle(
-    ThemeData theme,
-    String title,
-    IconData icon,
-    Color color,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          Icon(icon, size: 17, color: color),
-          const SizedBox(width: 6),
-          Text(
-            title,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _CognitionSection extends StatelessWidget {
@@ -312,24 +293,14 @@ class _CognitionSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 6),
-          child: Row(
-            children: [
-              Icon(Icons.auto_awesome, size: 17, color: context.appPositive),
-              const SizedBox(width: 6),
-              Text(
-                '阿B刚记下（${notifications.length}）',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
+        _SectionHeader(
+          icon: Icons.auto_awesome_rounded,
+          title: '阿B刚记下',
+          color: context.appPositive,
+          count: '${notifications.length}',
         ),
         ...notifications.map(
           (notification) => _CognitionCard(
@@ -384,16 +355,29 @@ class _CognitionCard extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            context.appPositive.withValues(alpha: 0.1),
-            theme.colorScheme.secondary.withValues(alpha: 0.06),
+            context.appPositive.withValues(alpha: 0.08),
+            theme.colorScheme.secondary.withValues(alpha: 0.05),
           ],
         ),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: context.appColors.line),
+        border: Border(
+          left: BorderSide(color: context.appPositive, width: 3),
+          top: BorderSide(color: context.appColors.line),
+          right: BorderSide(color: context.appColors.line),
+          bottom: BorderSide(color: context.appColors.line),
+        ),
       ),
       child: Row(
         children: [
-          Icon(_kindIcon(kind), color: context.appPositive),
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: context.appPositive.withValues(alpha: 0.14),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(_kindIcon(kind), size: 17, color: context.appPositive),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -423,7 +407,10 @@ class _CognitionCard extends StatelessWidget {
                 ),
                 if (summary.isNotEmpty) ...[
                   const SizedBox(height: 5),
-                  Text(summary, style: theme.textTheme.bodySmall),
+                  Text(
+                    summary,
+                    style: theme.textTheme.bodySmall?.copyWith(height: 1.45),
+                  ),
                 ],
               ],
             ),
@@ -446,34 +433,29 @@ class _PendingConfirmations extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 6),
-          child: Row(
-            children: [
-              Icon(
-                Icons.pending_actions_rounded,
-                size: 17,
-                color: theme.colorScheme.secondary,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                '待聊确认',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
+        _SectionHeader(
+          icon: Icons.pending_actions_rounded,
+          title: '待聊确认',
+          color: theme.colorScheme.secondary,
+          count: '${items.length}',
         ),
-        ...items.map(
-          (item) => Container(
+        ...items.map((item) {
+          final kindColor = item.kind == 'confusion'
+              ? theme.colorScheme.error
+              : theme.colorScheme.secondary;
+          return Container(
             width: double.infinity,
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: context.appColors.surface,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: context.appColors.line),
+              border: Border(
+                left: BorderSide(color: kindColor, width: 3),
+                top: BorderSide(color: context.appColors.line),
+                right: BorderSide(color: context.appColors.line),
+                bottom: BorderSide(color: context.appColors.line),
+              ),
             ),
             child: Row(
               children: [
@@ -561,10 +543,67 @@ class _PendingConfirmations extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-        ),
+          );
+        }),
         const SizedBox(height: 12),
       ],
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.icon,
+    required this.title,
+    required this.color,
+    this.count,
+  });
+
+  final IconData icon;
+  final String title;
+  final Color color;
+  final String? count;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 17, color: color),
+          const SizedBox(width: 7),
+          Text(
+            title,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const Spacer(),
+          if (count != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                count!,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
