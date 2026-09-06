@@ -58,6 +58,10 @@ class _DelightBannerState extends State<DelightBanner> {
     final onWatchLater = widget.onWatchLater;
     final onFavorite = widget.onFavorite;
     final theme = Theme.of(context);
+    final platformLabel = sourcePlatformLabel(delight.sourcePlatform);
+    final showPlatformChip =
+        delight.sourcePlatform.trim().isNotEmpty &&
+        delight.sourcePlatform.trim().toLowerCase() != 'web';
     final accessibilityLayout = MediaQuery.textScalerOf(context).scale(1) > 1.3;
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 2, 12, 8),
@@ -96,12 +100,32 @@ class _DelightBannerState extends State<DelightBanner> {
                         ),
                       ),
                     ),
+                    const SizedBox(width: 6),
+                    if (showPlatformChip)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          platformLabel,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
                     const SizedBox(width: 7),
                     Expanded(
                       child: Text(
                         delight.hook.isNotEmpty
                             ? delight.hook
-                            : sourcePlatformLabel(delight.sourcePlatform),
+                            : (showPlatformChip ? '' : platformLabel),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.labelSmall?.copyWith(
