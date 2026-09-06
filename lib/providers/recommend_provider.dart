@@ -332,7 +332,7 @@ class RecommendProvider extends ChangeNotifier {
   }
 
   Future<void> reshuffle() async {
-    if (_reshuffling || _loading || _autoLoadExhausted) return;
+    if (_reshuffling || _loading) return;
     _reshuffling = true;
     _error = '';
     _safeNotify();
