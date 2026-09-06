@@ -42,6 +42,7 @@ class RecommendProvider extends ChangeNotifier {
   bool _reshuffling = false;
   bool _autoLoadExhausted = false;
   bool _online = false;
+  int _consecutivePollFailures = 0;
   bool _polling = false;
   String _error = '';
   String _platformFilter = '';
@@ -476,11 +477,12 @@ class RecommendProvider extends ChangeNotifier {
     if (_polling) return;
     _polling = true;
     try {
-      final recs = await _api.fetch(timeout: 8);
+      final recs = await _api.fetch(timeout: 12);
       if (_recommendations.isEmpty && recs.isNotEmpty) {
         _recommendations = recs;
       }
       _online = true;
+      _consecutivePollFailures = 0;
       _error = '';
       // 先通知主列表，再异步加载侧栏状态；侧栏慢时不要拖慢首屏/轮询。
       _safeNotify();
@@ -490,7 +492,9 @@ class RecommendProvider extends ChangeNotifier {
       unawaited(_loadPlatformAvailability());
       unawaited(_loadEnabledSources());
     } catch (_) {
-      if (_online) {
+      // 短暂超时不立刻判离线，连续 2 次失败才切离线，避免图片/请求多时误报。
+      _consecutivePollFailures += 1;
+      if (_online && _consecutivePollFailures >= 2) {
         _online = false;
         _safeNotify();
       }
