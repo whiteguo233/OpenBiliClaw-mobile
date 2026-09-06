@@ -1801,7 +1801,14 @@ class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          Video(controller: widget.controller, controls: NoVideoControls),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => widget.controller.player.playOrPause(),
+            child: Video(
+              controller: widget.controller,
+              controls: NoVideoControls,
+            ),
+          ),
           IgnorePointer(
             child: DanmakuOverlay(
               position: widget.position,
