@@ -37,6 +37,9 @@ class CoverImage extends StatelessWidget {
         ),
       );
     }
+    // 有些平台返回协议相对 URL（//cdn...），客户端直接加载会失败，
+    // 这里统一补上 https。
+    final normalizedUrl = url.startsWith('//') ? 'https:$url' : url;
     final client = context.read<ApiClient>();
     final token = client.sessionToken;
     // 根据来源平台决定是否直连原图 CDN。小红书/网页等无法保证直连的
@@ -45,8 +48,8 @@ class CoverImage extends StatelessWidget {
     final canDirect =
         !kIsWeb && !client.usesTailscale && _canUseDirect(normalizedPlatform);
     final proxyUrl = kIsWeb
-        ? proxyImageUrl(url, client.baseUrl, token: token)
-        : proxyImageUrl(url, client.baseUrl);
+        ? proxyImageUrl(normalizedUrl, client.baseUrl, token: token)
+        : proxyImageUrl(normalizedUrl, client.baseUrl);
     final headers = token.isEmpty ? null : {'Cookie': 'obc_session=$token'};
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
@@ -61,7 +64,7 @@ class CoverImage extends StatelessWidget {
             )
           : canDirect
           ? _DirectFirstImage(
-              directUrl: url,
+              directUrl: normalizedUrl,
               proxyUrl: proxyUrl,
               headers: headers,
               width: width,
