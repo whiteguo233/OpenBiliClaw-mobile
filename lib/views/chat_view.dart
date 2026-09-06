@@ -485,7 +485,10 @@ class _ChatViewState extends State<ChatView> {
                 ).copyWith(bottomLeft: const Radius.circular(4)),
                 border: Border.all(color: context.appColors.line),
               ),
-              child: _markdown(theme, turn.reply),
+              child: _StreamingMarkdown(
+                text: turn.reply,
+                builder: (partial) => _markdown(theme, partial),
+              ),
             ),
           )
         else if (turn.isPending)
@@ -910,5 +913,63 @@ class _ChatViewState extends State<ChatView> {
     try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (_) {}
+  }
+}
+
+/// Typewriter-style markdown renderer for chat replies. This gives the mobile
+/// chat a streamed-content feel while the backend still returns final replies.
+class _StreamingMarkdown extends StatefulWidget {
+  const _StreamingMarkdown({required this.text, required this.builder});
+
+  final String text;
+  final Widget Function(String partial) builder;
+
+  @override
+  State<_StreamingMarkdown> createState() => _StreamingMarkdownState();
+}
+
+class _StreamingMarkdownState extends State<_StreamingMarkdown> {
+  String _shown = '';
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _start();
+  }
+
+  @override
+  void didUpdateWidget(covariant _StreamingMarkdown oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text) _start();
+  }
+
+  void _start() {
+    _timer?.cancel();
+    _shown = '';
+    _timer = Timer.periodic(const Duration(milliseconds: 20), (_) {
+      if (!mounted) return;
+      if (_shown.length >= widget.text.length) {
+        _timer?.cancel();
+        return;
+      }
+      setState(() {
+        _shown = widget.text.substring(
+          0,
+          (_shown.length + 3).clamp(0, widget.text.length),
+        );
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.builder(_shown);
   }
 }
