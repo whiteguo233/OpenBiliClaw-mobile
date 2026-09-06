@@ -1084,7 +1084,9 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
         final playerHeight = useCompact ? compactHeight : expandedHeight;
         return Column(
           children: [
-            SizedBox(
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
               width: constraints.maxWidth,
               height: playerHeight,
               child: Center(
