@@ -359,7 +359,13 @@ class RecommendProvider extends ChangeNotifier {
   }
 
   Future<void> append() async {
-    if (_loadingMore || _loading || _reshuffling) return;
+    if (_loadingMore || _loading || _reshuffling || _autoLoadExhausted) return;
+    // 空库存时不要再发起后端 append，避免慢重建导致转菊花。
+    if (_platformAvailability.totalAvailable <= 0) {
+      _autoLoadExhausted = true;
+      _safeNotify();
+      return;
+    }
     _loadingMore = true;
     _error = '';
     _safeNotify();
