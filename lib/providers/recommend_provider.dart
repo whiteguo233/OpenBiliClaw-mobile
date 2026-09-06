@@ -336,10 +336,9 @@ class RecommendProvider extends ChangeNotifier {
     _safeNotify();
     try {
       final excluded = _recommendations.map((item) => item.bvid).toList();
-      final newItems = await _api.append(
-        excluded,
-        sourcePlatform: _platformFilter,
-      );
+      final newItems = await _api
+          .append(excluded, sourcePlatform: _platformFilter)
+          .timeout(const Duration(seconds: 12));
       final identities = _recommendations
           .map((item) => item.savedIdentity)
           .toSet();
