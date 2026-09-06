@@ -429,6 +429,13 @@ class RecommendProvider extends ChangeNotifier {
     unawaited(_connectStream());
   }
 
+  /// 从后台回到前台时调用：重新建立轮询和 WebSocket，并立刻触发一次拉取，
+  /// 避免 iOS/Android 挂起后恢复却仍显示“离线”。
+  void resume() {
+    if (!_running) return;
+    startPolling();
+  }
+
   void stopPolling() {
     _running = false;
     _pollGeneration += 1;

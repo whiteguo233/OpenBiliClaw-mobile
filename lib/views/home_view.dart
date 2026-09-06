@@ -26,7 +26,7 @@ class HomeView extends StatefulWidget {
   State<HomeView> createState() => _HomeViewState();
 }
 
-class _HomeViewState extends State<HomeView> {
+class _HomeViewState extends State<HomeView> with WidgetsBindingObserver {
   int _currentIndex = 0;
   final Set<int> _loadedTabs = {};
   bool _providersReady = false;
@@ -42,7 +42,17 @@ class _HomeViewState extends State<HomeView> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadTab(0));
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !_providersReady) return;
+    // 后台挂起可能中断 WebSocket / 定时器；回前台立即重连。
+    _recommendProvider.resume();
+    unawaited(_profileProvider.loadNotifications());
+    unawaited(_chatProvider.loadPendingConfirmations());
   }
 
   @override
@@ -59,6 +69,7 @@ class _HomeViewState extends State<HomeView> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _disposed = true;
     if (_providersReady) {
       _recommendProvider.stopPolling();
