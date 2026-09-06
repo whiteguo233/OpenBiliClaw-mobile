@@ -198,7 +198,7 @@ class RecommendProvider extends ChangeNotifier {
       } else {
         final next = await _api
             .reshuffle(excluded, sourcePlatform: _platformFilter)
-            .timeout(const Duration(seconds: 10));
+            .timeout(const Duration(seconds: 15));
         debugPrint(
           '[RecommendProvider] refresh: reshuffle done, items=${next.length}',
         );
@@ -234,11 +234,13 @@ class RecommendProvider extends ChangeNotifier {
   /// 可选来源：优先按后端“是否启用该来源”展示；启用过的来源即使当前
   /// 候选池为 0 也保留 tab。旧后端/接口异常时回退为当前列表已出现的来源。
   List<String> get availablePlatforms {
+    final availabilitySet = _platformAvailability.byPlatform.keys.toSet();
     if (_enabledSources.isNotEmpty) {
       final known = _platformLabels.map((entry) => entry.$1);
+      final union = {..._enabledSources, ...availabilitySet};
       final ordered = <String>[
-        ...known.where(_enabledSources.contains),
-        ..._enabledSources.difference(known.toSet()).toList()..sort(),
+        ...known.where(union.contains),
+        ...union.difference(known.toSet()).toList()..sort(),
       ];
       return ordered;
     }
@@ -247,10 +249,11 @@ class RecommendProvider extends ChangeNotifier {
       final slug = item.sourcePlatform.trim().toLowerCase();
       if (slug.isNotEmpty) seen.add(slug);
     }
+    final union = {...seen, ...availabilitySet};
     final known = _platformLabels.map((entry) => entry.$1);
     return <String>[
-      ...known.where(seen.contains),
-      ...seen.difference(known.toSet()).toList()..sort(),
+      ...known.where(union.contains),
+      ...union.difference(known.toSet()).toList()..sort(),
     ];
   }
 
@@ -341,7 +344,7 @@ class RecommendProvider extends ChangeNotifier {
       final excluded = _recommendations.map((item) => item.bvid).toList();
       final next = await _api
           .reshuffle(excluded, sourcePlatform: _platformFilter)
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 15));
       debugPrint('[RecommendProvider] reshuffle done items=${next.length}');
       if (next.isNotEmpty) _recommendations = next;
       _online = true;
@@ -374,7 +377,7 @@ class RecommendProvider extends ChangeNotifier {
       final excluded = _recommendations.map((item) => item.bvid).toList();
       final result = await _api
           .append(excluded, sourcePlatform: _platformFilter)
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 15));
       final newItems = result.items;
       final identities = _recommendations
           .map((item) => item.savedIdentity)
