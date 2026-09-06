@@ -163,7 +163,7 @@ class RecommendProvider extends ChangeNotifier {
   }
 
   /// 下拉刷新 / 点击推荐 Tab 回顶刷新：先让后端真正刷新一次推荐池，
-  /// 再拉取最新列表。避免只重新 GET 当前列表导致内容看起来“没变化”。
+  /// 再换一批新内容，避免只重新 GET 当前列表导致内容看起来“没变化”。
   Future<void> refresh() async {
     if (_loading) return;
     _loading = true;
@@ -171,8 +171,12 @@ class RecommendProvider extends ChangeNotifier {
     _safeNotify();
     try {
       await _api.refresh();
-      final recs = await _api.fetch();
-      _recommendations = recs;
+      final excluded = _recommendations.map((item) => item.bvid).toList();
+      final next = await _api.reshuffle(
+        excluded,
+        sourcePlatform: _platformFilter,
+      );
+      if (next.isNotEmpty) _recommendations = next;
       _online = true;
       _prunePlatformFilter();
     } catch (error) {
