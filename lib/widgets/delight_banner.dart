@@ -137,6 +137,7 @@ class _DelightBannerState extends State<DelightBanner> {
                   aspectRatio: 16 / 9,
                   child: CoverImage(
                     url: delight.coverUrl,
+                    sourcePlatform: delight.sourcePlatform,
                     width: double.infinity,
                     height: double.infinity,
                     borderRadius: 12,
@@ -157,6 +158,7 @@ class _DelightBannerState extends State<DelightBanner> {
                       height: 72,
                       child: CoverImage(
                         url: delight.coverUrl,
+                        sourcePlatform: delight.sourcePlatform,
                         width: 96,
                         height: 72,
                         borderRadius: 12,

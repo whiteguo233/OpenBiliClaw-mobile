@@ -63,6 +63,7 @@ class RecommendationCard extends StatelessWidget {
               aspectRatio: 16 / 9,
               child: CoverImage(
                 url: rec.coverUrl,
+                sourcePlatform: rec.sourcePlatform,
                 height: double.infinity,
                 borderRadius: 0,
               ),

@@ -248,6 +248,7 @@ class _SavedList extends StatelessWidget {
                   height: 78,
                   child: CoverImage(
                     url: item.coverUrl,
+                    sourcePlatform: item.sourcePlatform,
                     width: 104,
                     height: 78,
                     borderRadius: 12,
@@ -968,6 +969,7 @@ class _HistoryCard extends StatelessWidget {
                       height: 72,
                       child: CoverImage(
                         url: item.coverUrl,
+                        sourcePlatform: item.sourcePlatform,
                         width: 96,
                         height: 72,
                         borderRadius: 12,

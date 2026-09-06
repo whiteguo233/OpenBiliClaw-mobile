@@ -1468,6 +1468,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
                                             height: 56,
                                             child: CoverImage(
                                               url: item.coverUrl,
+                                              sourcePlatform: 'bilibili',
                                               width: 90,
                                               height: 56,
                                               borderRadius: 8,
@@ -2174,6 +2175,7 @@ class _CommentAvatar extends StatelessWidget {
         height: size,
         child: CoverImage(
           url: normalized,
+          sourcePlatform: 'bilibili',
           width: size,
           height: size,
           borderRadius: size / 2,

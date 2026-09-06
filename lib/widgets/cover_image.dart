@@ -6,10 +6,12 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import '../api/client.dart';
 import '../api/utils.dart';
+import '../models/recommendation.dart';
 import '../theme/app_theme.dart';
 
 class CoverImage extends StatelessWidget {
   final String url;
+  final String sourcePlatform;
   final double width;
   final double height;
   final double borderRadius;
@@ -17,6 +19,7 @@ class CoverImage extends StatelessWidget {
   const CoverImage({
     super.key,
     required this.url,
+    this.sourcePlatform = '',
     this.width = double.infinity,
     this.height = 140,
     this.borderRadius = 12,
@@ -36,10 +39,11 @@ class CoverImage extends StatelessWidget {
     }
     final client = context.read<ApiClient>();
     final token = client.sessionToken;
-    // Native first tries the original CDN URL directly — this avoids the
-    // backend round-trip when the image is not cached there. If the direct
-    // request fails (hotlink/TLS/network policy), it falls back to the
-    // backend image proxy automatically.
+    // 根据来源平台决定是否直连原图 CDN。小红书/网页等无法保证直连的
+    // 图片仍走后端代理；其余平台先直连，失败再自动回退到后端。
+    final normalizedPlatform = normalizeSourcePlatform(sourcePlatform);
+    final canDirect =
+        !kIsWeb && !client.usesTailscale && _canUseDirect(normalizedPlatform);
     final proxyUrl = kIsWeb
         ? proxyImageUrl(url, client.baseUrl, token: token)
         : proxyImageUrl(url, client.baseUrl);
@@ -55,15 +59,49 @@ class CoverImage extends StatelessWidget {
               height: height,
               placeholder: _placeholder,
             )
-          : _DirectFirstImage(
-              directUrl: kIsWeb ? proxyUrl : url,
+          : canDirect
+          ? _DirectFirstImage(
+              directUrl: url,
               proxyUrl: proxyUrl,
               headers: headers,
               width: width,
               height: height,
               placeholder: _placeholder,
+            )
+          : CachedNetworkImage(
+              imageUrl: proxyUrl,
+              httpHeaders: headers,
+              width: width,
+              height: height,
+              fit: BoxFit.cover,
+              memCacheWidth: 640,
+              filterQuality: FilterQuality.medium,
+              fadeInDuration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 220),
+              placeholder: (_, _) =>
+                  _placeholder(context, Icons.image_outlined),
+              errorWidget: (_, _, _) =>
+                  _placeholder(context, Icons.broken_image_outlined),
             ),
     );
+  }
+
+  static bool _canUseDirect(String platform) {
+    // 这些平台的原图 CDN 一般可直接访问；小红书/网页等未知来源走后端。
+    return switch (platform) {
+      'bilibili' ||
+      'douyin' ||
+      'weibo' ||
+      'youtube' ||
+      'twitter' ||
+      'zhihu' ||
+      'reddit' ||
+      'bangumi' ||
+      'linuxdo' ||
+      'v2ex' => true,
+      _ => false,
+    };
   }
 
   Widget _placeholder(BuildContext context, IconData icon) {
