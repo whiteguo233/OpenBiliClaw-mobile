@@ -8,9 +8,11 @@ import 'package:http/http.dart' as http;
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:provider/provider.dart';
+import 'package:screen_brightness/screen_brightness.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:volume_controller/volume_controller.dart';
 
 import '../api/bilibili_api.dart';
 import '../api/bilibili_comment_api.dart';
@@ -2041,6 +2043,13 @@ class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
   bool _controlsVisible = true;
   Timer? _iconTimer;
   Timer? _controlsTimer;
+  double _brightness = 1.0;
+  double _volume = 0.5;
+  bool _adjustActive = false;
+  bool _adjustIsVolume = false;
+  double _adjustStartValue = 0.0;
+  double _adjustStartDy = 0.0;
+  String? _adjustHint;
 
   @override
   void initState() {
@@ -2055,6 +2064,22 @@ class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
             ],
     );
     _startControlsTimer();
+    unawaited(_loadSystemValues());
+  }
+
+  Future<void> _loadSystemValues() async {
+    try {
+      final brightness = await ScreenBrightness().application;
+      if (mounted) {
+        setState(() => _brightness = brightness);
+      }
+    } catch (_) {}
+    try {
+      final volume = await VolumeController.instance.getVolume();
+      if (mounted) {
+        setState(() => _volume = volume.clamp(0.0, 1.0));
+      }
+    } catch (_) {}
   }
 
   @override
@@ -2081,6 +2106,40 @@ class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
     _controlsTimer = Timer(const Duration(seconds: 3), () {
       if (mounted) setState(() => _controlsVisible = false);
     });
+  }
+
+  void _startAdjust(DragStartDetails details) {
+    final size = MediaQuery.sizeOf(context);
+    final isLeft = details.globalPosition.dx < size.width / 2;
+    _adjustActive = true;
+    _adjustIsVolume = !isLeft;
+    _adjustStartValue = isLeft ? _brightness : _volume;
+    _adjustStartDy = details.globalPosition.dy;
+    _adjustHint = isLeft ? '亮度' : '音量';
+    _showControls();
+    if (mounted) setState(() {});
+  }
+
+  void _updateAdjust(DragUpdateDetails details) {
+    if (!_adjustActive) return;
+    final size = MediaQuery.sizeOf(context);
+    final dyDelta = details.globalPosition.dy - _adjustStartDy;
+    final delta = -dyDelta / size.height * 1.5;
+    final value = (_adjustStartValue + delta).clamp(0.0, 1.0);
+    if (_adjustIsVolume) {
+      _volume = value;
+      VolumeController.instance.setVolume(value);
+    } else {
+      _brightness = value;
+      ScreenBrightness().setApplicationScreenBrightness(value);
+    }
+    if (mounted) setState(() {});
+  }
+
+  void _endAdjust(DragEndDetails details) {
+    _adjustActive = false;
+    _adjustHint = null;
+    if (mounted) setState(() {});
   }
 
   String _formatFullscreenDuration(Duration duration) {
@@ -2167,6 +2226,9 @@ class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: _togglePlayback,
+            onVerticalDragStart: _startAdjust,
+            onVerticalDragUpdate: _updateAdjust,
+            onVerticalDragEnd: _endAdjust,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -2177,6 +2239,39 @@ class _DanmakuFullscreenPageState extends State<_DanmakuFullscreenPage> {
                       _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
                       size: 72,
                       color: Colors.white.withValues(alpha: 0.85),
+                    ),
+                  ),
+                if (_adjustActive && _adjustHint != null)
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.65),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _adjustIsVolume
+                                ? Icons.volume_up_rounded
+                                : Icons.brightness_6_rounded,
+                            color: Colors.white,
+                            size: 22,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '$_adjustHint ${((_adjustIsVolume ? _volume : _brightness) * 100).round()}%',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
               ],
