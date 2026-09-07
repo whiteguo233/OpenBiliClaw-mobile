@@ -107,6 +107,9 @@ class RecommendApi {
       '/recommendations/platform-availability',
       timeout: 8,
     );
+    if (data['total_available'] is! num || data['by_platform'] is! Map) {
+      throw const FormatException('候选库存响应缺少数量字段');
+    }
     return PlatformAvailability.fromJson(data);
   }
 

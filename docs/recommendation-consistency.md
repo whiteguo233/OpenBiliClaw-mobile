@@ -1,6 +1,6 @@
 # 推荐换批、库存与续页一致性
 
-本客户端需配合 OpenBiliClaw 后端 `fix/recommendation-consistency` 分支使用完整能力。
+完整库存能力需要 OpenBiliClaw 后端 main `ac942817` 或后续版本（换批响应包含 `pool_status`）。
 
 ## 数据流
 
@@ -9,7 +9,8 @@
          ← items + pool_status（总量、来源数量、读取版本）
          → RecommendProvider 一次应用卡片和库存
 后台补货 → 主 API runtime-stream → 同一库存合并入口
-旧后端   → 有界 platform-availability 补读；失败保留最后成功值
+旧后端   → 立即有界补读 platform-availability，再一并发布卡片与库存
+补读失败 → 卡片保持可用，所有库存徽标标为「待同步」，后续有效快照恢复
 ```
 
 `RecommendApi.reshuffle()` / `append()` 返回 `RecommendAppendResult`，新增可空
@@ -59,3 +60,15 @@ flutter drive --driver=test_driver/recommendation_live.dart \
 `docs/verification/2026-09-07-recommendation-live.md`。
 
 现场收尾：实体 iPhone 已成功安装以 `lib/main.dart` 为入口的正常 Release 包，替换临时测试入口并保留应用数据。安装成功仍不代表实体 UI 自动化通过。
+
+## 2026-09-08：首帧库存一致性
+
+换批、追加和下拉刷新均先准备同批库存，再同步修改卡片与库存，最后一次通知页面。顶部「当前可换」、Tab「全部」与各平台数字共用 `PlatformAvailability`；后台 runtime-status 不能覆盖这组数字。请求开始时更新读请求代次，屏蔽开始于该操作之前的库存查询。
+
+新后端响应直接携带库存，客户端不会为了更新徽标额外 GET，也不等待轮询或 WebSocket。旧响应缺少库存时，立即发起独立补读，绕过正在等待的旧库存查询，最多等待既有 8 秒读取截止时间；卡片与数字随后一起发布。这是兼容路径，不能承诺旧后端与新后端有相同延迟。补读失败时展示新卡片，但将所有旧库存数字标为「待同步」，直到有效快照到达；缺字段的响应不会被解释成库存为零。
+
+页面测试在 runtime-status 一直未返回的条件下，实际点击「换一批」，验证响应完成后的第一帧同时显示新卡片、顶部数量和三个来源选择徽标，并验证没有额外库存 GET。状态测试另覆盖三种批次操作的通知一致性、旧库存查询滞后与兼容补读失败。
+
+本机 main 后端的真实请求实测：库存 3 → 换批返回 3 条与库存 0 同时出现在响应中，约 593ms；未观察到该实例在响应后才更新库存。这次客户端修复补齐可复现的通知与兼容路径缺口，手机实际连接地址和用户所述延迟的发生阶段尚未确认，不能把它们视为已定位的线上根因。
+
+本轮验证：定向测试 11 项通过，完整 `flutter test` 88 项通过，`flutter analyze` 无问题，`git diff --check` 通过。正常入口 `flutter build ios --release --target lib/main.dart --no-pub` 编译成功，已通过 devicectl 安装到配对 iPhone；尚未完成用户实际连接实例上的手机页面复测。

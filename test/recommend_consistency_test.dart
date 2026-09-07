@@ -140,6 +140,143 @@ void main() {
     },
   );
 
+  for (final action in ['reshuffle', 'append', 'refresh']) {
+    test(
+      '$action notifies cards and all inventory counts atomically',
+      () async {
+        final p = provider((r) async {
+          if (r.url.path.endsWith('/recommendations')) {
+            return response({
+              'items': [item('old')],
+            });
+          }
+          if (r.url.path.endsWith('/reshuffle') ||
+              r.url.path.endsWith('/append')) {
+            return response({
+              'items': [item('fresh')],
+              'pool_status': inventory(7, 20),
+            });
+          }
+          if (r.url.path.endsWith('/platform-availability')) {
+            return response({
+              'total_available': 9,
+              'by_platform': {'bilibili': 9},
+              'pool_status_version': 10,
+            });
+          }
+          return response({'items': []});
+        });
+        await p.load();
+        await Future<void>.delayed(Duration.zero);
+        final inconsistent = <String>[];
+        p.addListener(() {
+          final fresh = p.recommendations.any((r) => r.bvid == 'fresh');
+          if ((p.poolAvailableCount == 7) != fresh) {
+            inconsistent.add('cards=$fresh count=${p.poolAvailableCount}');
+          }
+        });
+        if (action == 'reshuffle') await p.reshuffle();
+        if (action == 'append') await p.append();
+        if (action == 'refresh') await p.refresh();
+        expect(inconsistent, isEmpty);
+        expect(p.poolAvailableCount, 7);
+        expect(p.inventoryStale, isFalse);
+        p.dispose();
+      },
+    );
+  }
+
+  test(
+    'legacy response reads fresh inventory before publishing new cards',
+    () async {
+      final oldRead = Completer<http.Response>();
+      final freshRead = Completer<http.Response>();
+      final readStarted = Completer<void>();
+      var reads = 0;
+      final p = provider((r) async {
+        if (r.url.path.endsWith('/recommendations')) {
+          return response({
+            'items': [item('old')],
+          });
+        }
+        if (r.url.path.endsWith('/reshuffle')) {
+          return response({
+            'items': [item('fresh')],
+          });
+        }
+        if (r.url.path.endsWith('/platform-availability')) {
+          if (++reads == 1) return oldRead.future;
+          readStarted.complete();
+          return freshRead.future;
+        }
+        return response({'items': []});
+      });
+      await p.load();
+      final operation = p.reshuffle();
+      await readStarted.future;
+      expect(p.reshuffling, isTrue);
+      expect(p.recommendations.single.bvid, 'old');
+      freshRead.complete(
+        response({
+          'total_available': 4,
+          'by_platform': {'bilibili': 1, 'twitter': 3},
+          'pool_status_version': 20,
+        }),
+      );
+      await operation;
+      expect(p.recommendations.single.bvid, 'fresh');
+      expect(p.runtimeStatus.poolAvailableCount, 4);
+      expect(p.platformAvailabilityBySource, {'bilibili': 1, 'twitter': 3});
+      oldRead.complete(
+        response({
+          'total_available': 99,
+          'by_platform': {'bilibili': 99},
+          'pool_status_version': 10,
+        }),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(p.poolAvailableCount, 4);
+      p.dispose();
+    },
+  );
+
+  test(
+    'failed legacy inventory read never labels stale counts as current',
+    () async {
+      var failRead = false;
+      final p = provider((r) async {
+        if (r.url.path.endsWith('/recommendations')) {
+          return response({
+            'items': [item('old')],
+          });
+        }
+        if (r.url.path.endsWith('/reshuffle')) {
+          return response({
+            'items': [item('fresh')],
+          });
+        }
+        if (r.url.path.endsWith('/platform-availability')) {
+          if (failRead) throw TimeoutException('inventory stalled');
+          return response({
+            'total_available': 9,
+            'by_platform': {'bilibili': 9},
+            'pool_status_version': 10,
+          });
+        }
+        return response({'items': []});
+      });
+      await p.load();
+      await Future<void>.delayed(Duration.zero);
+      expect(p.poolAvailableCount, 9);
+      failRead = true;
+      await p.reshuffle();
+      expect(p.recommendations.single.bvid, 'fresh');
+      expect(p.reshuffling, isFalse);
+      expect(p.inventoryStale, isTrue);
+      p.dispose();
+    },
+  );
+
   testWidgets('scroll during cooldown is rechecked without a new gesture', (
     tester,
   ) async {

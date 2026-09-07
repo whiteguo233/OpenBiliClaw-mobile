@@ -58,6 +58,7 @@ class RecommendProvider extends ChangeNotifier {
   int _pollGeneration = 0;
   bool _disposed = false;
   bool _hasPlatformAvailability = false;
+  bool _inventoryStale = false;
   int _inventoryGeneration = 0;
   bool _inventoryLoading = false;
   bool _inventoryReloadPending = false;
@@ -88,6 +89,10 @@ class RecommendProvider extends ChangeNotifier {
   String get error => _error;
   RuntimeStatus get runtimeStatus => _runtimeStatus;
   PlatformAvailability get platformAvailability => _platformAvailability;
+  bool get inventoryStale => _inventoryStale;
+  int get poolAvailableCount => _hasPlatformAvailability
+      ? _platformAvailability.totalAvailable
+      : _runtimeStatus.poolAvailableCount;
   Map<String, int> get platformAvailabilityBySource =>
       _platformAvailability.byPlatform;
   Set<String> get enabledSources => Set.unmodifiable(_enabledSources);
@@ -181,6 +186,7 @@ class RecommendProvider extends ChangeNotifier {
     _error = '';
     _safeNotify();
     debugPrint('[RecommendProvider] refresh start');
+    _inventoryGeneration += 1;
     try {
       // POST /refresh is only a background pool-replenishment trigger. It must
       // not gate the user-visible refresh: if the response is lost on the
@@ -198,7 +204,8 @@ class RecommendProvider extends ChangeNotifier {
         excluded,
         sourcePlatform: requestPlatform,
       );
-      _applyPoolStatus(result.poolStatus);
+      final poolStatus = await _resolveBatchPoolStatus(result.poolStatus);
+      _applyBatchPoolStatus(poolStatus);
       _replaceBatch(result.items, requestPlatform);
       _online = true;
       if (_platformFilter == requestPlatform) {
@@ -296,11 +303,12 @@ class RecommendProvider extends ChangeNotifier {
       ? status.totalAvailable
       : (status.byPlatform[_platformFilter] ?? 0);
 
-  bool _applyPoolStatus(PlatformAvailability? status) {
+  bool _applyPoolStatus(PlatformAvailability? status, {bool notify = true}) {
     if (status == null || _disposed) return false;
     if (status.version < _platformAvailability.version) return true;
     final previous = _availableForScope(_platformAvailability);
     _hasPlatformAvailability = true;
+    _inventoryStale = false;
     _platformAvailability = status;
     _inventoryGeneration += 1;
     _runtimeStatus = _runtimeStatus.withPoolAvailableCount(
@@ -310,8 +318,33 @@ class RecommendProvider extends ChangeNotifier {
     if (_autoLoadExhausted && _availableForScope(status) > previous) {
       _autoLoadExhausted = false;
     }
-    _safeNotify();
+    if (notify) _safeNotify();
     return true;
+  }
+
+  /// Publish card and inventory changes together in the operation's final
+  /// notification. Legacy responses require a fresh post-response read,
+  /// never a queued read that started before the mutation.
+  Future<PlatformAvailability?> _resolveBatchPoolStatus(
+    PlatformAvailability? status,
+  ) async {
+    if (status != null) return status;
+    try {
+      return await _api.fetchPlatformAvailability();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _applyBatchPoolStatus(PlatformAvailability? status) {
+    if (status == null) {
+      // A successful batch must not display old counts as current. Keep
+      // the cards usable and let polling/stream updates restore badges.
+      _inventoryStale = true;
+      _inventoryGeneration += 1;
+      return;
+    }
+    _applyPoolStatus(status, notify: false);
   }
 
   void _replaceBatch(List<Recommendation> items, String scope) {
@@ -387,6 +420,7 @@ class RecommendProvider extends ChangeNotifier {
     _error = '';
     _safeNotify();
     debugPrint('[RecommendProvider] reshuffle start');
+    _inventoryGeneration += 1;
     try {
       final excluded = _recommendations.map((item) => item.bvid).toList();
       final requestPlatform = _platformFilter;
@@ -394,13 +428,13 @@ class RecommendProvider extends ChangeNotifier {
         excluded,
         sourcePlatform: requestPlatform,
       );
-      final inventoryApplied = _applyPoolStatus(result.poolStatus);
+      final poolStatus = await _resolveBatchPoolStatus(result.poolStatus);
+      _applyBatchPoolStatus(poolStatus);
       _replaceBatch(result.items, requestPlatform);
       _online = true;
       if (_platformFilter == requestPlatform) {
         _autoLoadExhausted = result.items.isEmpty;
       }
-      if (!inventoryApplied) unawaited(_loadPlatformAvailability());
       unawaited(_loadRuntimeStatus());
     } catch (error) {
       debugPrint('[RecommendProvider] reshuffle error: $error');
@@ -417,6 +451,7 @@ class RecommendProvider extends ChangeNotifier {
     // Manual retries must reach the server even if the last inventory read
     // was zero or failed. Only the view's automatic loading uses exhaustion.
     _loadingMore = true;
+    _inventoryGeneration += 1;
     _error = '';
     _safeNotify();
     try {
@@ -426,7 +461,8 @@ class RecommendProvider extends ChangeNotifier {
         excluded,
         sourcePlatform: requestPlatform,
       );
-      final inventoryApplied = _applyPoolStatus(result.poolStatus);
+      final poolStatus = await _resolveBatchPoolStatus(result.poolStatus);
+      _applyBatchPoolStatus(poolStatus);
       final newItems = result.items;
       final identities = _recommendations
           .map((item) => item.savedIdentity)
@@ -442,7 +478,6 @@ class RecommendProvider extends ChangeNotifier {
       if (_platformFilter == requestPlatform) {
         _autoLoadExhausted = addedCount == 0 || !result.hasMore;
       }
-      if (!inventoryApplied) unawaited(_loadPlatformAvailability());
     } catch (error) {
       _error = _message(error, '加载更多失败');
     } finally {

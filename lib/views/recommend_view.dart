@@ -259,10 +259,12 @@ class RecommendViewState extends State<RecommendView> {
   Widget _buildHeader(BuildContext context, RecommendProvider rp) {
     final status = rp.runtimeStatus;
     final liveSummary = rp.activityFeed.liveSummary.trim();
-    final summary = liveSummary.isNotEmpty
+    final summary = rp.inventoryStale
+        ? '候选数量待同步，内容可以正常浏览。'
+        : liveSummary.isNotEmpty
         ? liveSummary
-        : status.poolAvailableCount > 0
-        ? '阿B 已经备好 ${status.poolAvailableCount} 条内容，慢慢挑。'
+        : rp.poolAvailableCount > 0
+        ? '阿B 已经备好 ${rp.poolAvailableCount} 条内容，慢慢挑。'
         : '阿B 这会儿先替你盯着。';
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 8),
@@ -342,7 +344,9 @@ class RecommendViewState extends State<RecommendView> {
                 child: _poolChip(
                   context,
                   label: '当前可换',
-                  value: '${status.poolAvailableCount} 条',
+                  value: rp.inventoryStale
+                      ? '待同步'
+                      : '${rp.poolAvailableCount} 条',
                 ),
               ),
               const SizedBox(width: 6),
@@ -568,9 +572,11 @@ class RecommendViewState extends State<RecommendView> {
           final selected =
               (isAll && rp.platformFilter.isEmpty) ||
               (!isAll && rp.platformFilter == slug);
-          final label = isAll
-              ? '全部 ${rp.platformAvailability.totalAvailable}'
-              : '${RecommendProvider.platformLabel(slug)} ${rp.platformAvailabilityBySource[slug] ?? 0}';
+          final count = rp.inventoryStale
+              ? '待同步'
+              : '${isAll ? rp.poolAvailableCount : rp.platformAvailabilityBySource[slug] ?? 0}';
+          final label =
+              '${isAll ? '全部' : RecommendProvider.platformLabel(slug)} $count';
           return ChoiceChip(
             label: Text(label),
             selected: selected,
