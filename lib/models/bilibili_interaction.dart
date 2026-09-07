@@ -87,6 +87,7 @@ class BilibiliComment {
   final String message;
   final int likeCount;
   final int replyCount;
+  final int ctime;
   final List<BilibiliComment> replies;
 
   const BilibiliComment({
@@ -97,6 +98,7 @@ class BilibiliComment {
     this.message = '',
     this.likeCount = 0,
     this.replyCount = 0,
+    this.ctime = 0,
     this.replies = const [],
   });
 
@@ -110,6 +112,7 @@ class BilibiliComment {
       message: decodeHtml(_text(json['message'])),
       likeCount: _int(json['like_count']),
       replyCount: _int(json['reply_count']),
+      ctime: _int(json['ctime']),
       replies: rawReplies is List
           ? rawReplies
                 .whereType<Map>()
@@ -136,6 +139,7 @@ class BilibiliComment {
       message: decodeHtml(content is Map ? _text(content['message']) : ''),
       likeCount: _int(json['like']),
       replyCount: _int(json['rcount']),
+      ctime: _int(json['ctime']),
       replies: rawReplies is List
           ? rawReplies
                 .whereType<Map>()

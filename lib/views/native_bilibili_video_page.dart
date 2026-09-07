@@ -2587,6 +2587,19 @@ class _BilibiliSubtitle {
 /// One comment card: author, message, like count and a preview of the reply
 /// thread. Shared by the player page's comment section and the fullscreen
 /// comments sheet.
+String _commentTimeText(int ctime) {
+  if (ctime <= 0) return '';
+  final time = DateTime.fromMillisecondsSinceEpoch(ctime * 1000);
+  final diff = DateTime.now().difference(time);
+  if (diff.inMinutes < 1) return '刚刚';
+  if (diff.inHours < 1) return '${diff.inMinutes}分钟前';
+  if (diff.inDays < 1) return '${diff.inHours}小时前';
+  if (diff.inDays < 7) return '${diff.inDays}天前';
+  final mm = time.month.toString().padLeft(2, '0');
+  final dd = time.day.toString().padLeft(2, '0');
+  return '${time.year}-$mm-$dd';
+}
+
 class _CommentTile extends StatelessWidget {
   const _CommentTile({required this.comment, required this.onOpenReplies});
 
@@ -2625,6 +2638,8 @@ class _CommentTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
+                  '$_commentTimeText(comment.ctime)'
+                  '${comment.ctime > 0 ? ' · ' : ''}'
                   '👍 ${comment.likeCount}',
                   style: const TextStyle(color: Colors.white54, fontSize: 11),
                 ),
@@ -2653,29 +2668,44 @@ class _CommentTile extends StatelessWidget {
                                 ),
                                 const SizedBox(width: 6),
                                 Expanded(
-                                  child: Text.rich(
-                                    TextSpan(
-                                      children: [
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text.rich(
                                         TextSpan(
-                                          text: '${reply.uname}: ',
-                                          style: const TextStyle(
-                                            color: Color(0xFFFB7299),
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                          ),
+                                          children: [
+                                            TextSpan(
+                                              text: '${reply.uname}: ',
+                                              style: const TextStyle(
+                                                color: Color(0xFFFB7299),
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            TextSpan(
+                                              text: reply.message,
+                                              style: const TextStyle(
+                                                color: Colors.white70,
+                                                fontSize: 12,
+                                                height: 1.4,
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                        TextSpan(
-                                          text: reply.message,
-                                          style: const TextStyle(
-                                            color: Colors.white70,
-                                            fontSize: 12,
-                                            height: 1.4,
-                                          ),
+                                        maxLines: 3,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      Text(
+                                        '${_commentTimeText(reply.ctime)}'
+                                        '${reply.ctime > 0 ? ' · ' : ''}'
+                                        '👍 ${reply.likeCount}',
+                                        style: const TextStyle(
+                                          color: Colors.white54,
+                                          fontSize: 10,
                                         ),
-                                      ],
-                                    ),
-                                    maxLines: 3,
-                                    overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
