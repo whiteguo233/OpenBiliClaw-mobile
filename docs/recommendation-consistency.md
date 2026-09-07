@@ -32,3 +32,30 @@
 - `flutter analyze`：无问题。
 - 本轮未安装到实体 Android/iOS 手机；网络和设备后台恢复时延不能由单元测试代替。
 - 后端的真实 SQLite 原子提交 / 独立进程库存事件桥接在后端仓库验证；没有新增第三方依赖或用户配置。
+
+## 真实请求验收（2026-09-07）
+
+新增 `integration_test/recommendation_consistency_live_test.dart`：挂载生产
+RecommendView、真实 providers 和 ApiClient，使用真实 HTTP/WebSocket，验证两次点击换批、
+实际 fling 触发追加、真实 ID、无重复及总量/来源图一致。不改已保存的连接设置，不发反馈或聊天。
+
+iOS 26.5 的 iPhone 17 Pro 模拟器两轮通过；最终后端版本下 UI 换批完成约 5.67 / 2.64 秒，
+fling 至卡片 10→20 约 8.45 秒（含滚动及 debug 渲染，不等于接口延迟）。
+第二轮 Flutter 提示预期输出路径不存在，但同版本模拟器 App 实际启动并完成全部断言；
+本轮没有更改已提交的原生业务代码。实体 iOS 18.5 设备已完成签名编译，但无线 Dart VM
+服务未连接，不能记为通过；需要解锁、允许本地网络或 USB 连接后补验。
+
+```bash
+flutter test integration_test/recommendation_consistency_live_test.dart \
+  -d <模拟器ID> --no-uninstall
+flutter drive --driver=test_driver/recommendation_live.dart \
+  --target=integration_test/recommendation_consistency_live_test.dart \
+  -d <实体设备ID> --publish-port \
+  --dart-define=LIVE_BACKEND_HOST=<电脑局域网地址>
+```
+
+以上会真实消耗推荐库存。结束后应安装正常 `lib/main.dart` 入口的 App，避免保留测试入口。
+完整后端计时、真实环境发现的活动动态主线程阻塞与事务重复计算补修，记录在后端仓库
+`docs/verification/2026-09-07-recommendation-live.md`。
+
+现场收尾：实体 iPhone 已成功安装以 `lib/main.dart` 为入口的正常 Release 包，替换临时测试入口并保留应用数据。安装成功仍不代表实体 UI 自动化通过。

@@ -125,3 +125,5 @@ output_dimensionality = 768          # 需匹配 embedding 模型实际维度
 换批和加载更多现在同步应用后端返回的总库存及各平台余量，拒绝迟到的旧状态覆盖；
 底部续页在冷却结束或补货后恢复，零库存仍可手动重试。
 配套后端和验证范围见 [推荐一致性说明](docs/recommendation-consistency.md)。
+
+推荐真实环境回归入口和设备限制见 [推荐一致性验收](docs/recommendation-consistency.md#真实请求验收2026-09-07)。测试会消费真实推荐池。
