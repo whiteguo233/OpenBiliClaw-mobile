@@ -2641,7 +2641,7 @@ class _CommentTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '$_commentTimeText(comment.ctime)'
+                  '${_commentTimeText(comment.ctime)}'
                   '${comment.ctime > 0 ? ' · ' : ''}'
                   '👍 ${comment.likeCount}',
                   style: const TextStyle(color: Colors.white54, fontSize: 11),

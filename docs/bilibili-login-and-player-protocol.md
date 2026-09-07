@@ -418,7 +418,10 @@ POST /api/bilibili/player/play-url
 ```
 
 - `replies` 内嵌该评论的前几条回复；当 `reply_count > replies.length` 时，客户端按页拉取完整回复楼。
+- 原生评论卡将 `ctime`（Unix 秒）格式化为相对时间或本地日期，再与点赞数组合显示；缺少时间时只显示点赞数。主评论、完整回复楼和内嵌回复均调用时间格式化函数，避免将 Dart 函数对象插值为 `Closure` 文本。
 - `has_more = page * pageSize < total`，为 `true` 时客户端展示“加载更多评论”。
 - 直连路径由 B 站原生响应解析（`member.uname` / `member.avatar` / `content.message` / `like` / `rcount` / `page.count`）；后端兜底路径按上表字段解析，头像字段兼容 `avatar` 或 `avatar_url`，旧版后端缺少的分页/回复/头像字段按缺省值兼容。
 
 除评论外，其余互动接口都复用同一个后端 B 站 Cookie；移动端不持久化任何 B 站凭据，播放会话结束即丢弃。
+
+2026-09-07 评论时间显示修复验证：`flutter analyze` 无问题，`flutter test` 82 项通过；直接执行页面中的格式化表达式，确认零时间、刚刚及跨年日期分别输出 `👍 14`、`刚刚 · 👍 14`、`2020-06-13 · 👍 14`。`flutter build ios --release --target lib/main.dart --no-pub` 成功，正常入口安装包已通过 `devicectl` 安装到配对 iPhone。尚未完成该评论页面的实体机截图复核；此修改仅涉及 Flutter 字符串插值，不改后端协议或推荐流程。
