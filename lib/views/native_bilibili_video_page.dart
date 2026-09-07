@@ -2594,9 +2594,12 @@ String _commentTimeText(int ctime) {
   if (diff.inMinutes < 1) return '刚刚';
   if (diff.inHours < 1) return '${diff.inMinutes}分钟前';
   if (diff.inDays < 1) return '${diff.inHours}小时前';
+  if (diff.inDays == 1) return '昨天';
   if (diff.inDays < 7) return '${diff.inDays}天前';
+  final now = DateTime.now();
   final mm = time.month.toString().padLeft(2, '0');
   final dd = time.day.toString().padLeft(2, '0');
+  if (time.year == now.year) return '$mm-$dd';
   return '${time.year}-$mm-$dd';
 }
 
