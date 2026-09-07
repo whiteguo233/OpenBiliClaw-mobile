@@ -288,12 +288,15 @@ class ApiClient {
     Map<String, dynamic>? body,
   }) async* {
     final uri = apiUri(path);
-    final lease = _openClient();
+    // Use a plain http.Client (not CupertinoClient) for SSE: CupertinoClient
+    // can buffer streaming responses until the connection closes, which makes
+    // chat look like "后台处理中 → 整段出现".
+    final client = http.Client();
     try {
       final request = http.Request('POST', uri)
         ..headers.addAll(_headers())
         ..body = jsonEncode(body ?? {});
-      final response = await lease.client.send(request);
+      final response = await client.send(request);
       _captureSession(response);
       if (response.statusCode == 401) clearSession();
       if (response.statusCode >= 400) {
@@ -307,7 +310,7 @@ class ApiClient {
         yield line;
       }
     } finally {
-      lease.close();
+      client.close();
     }
   }
 
