@@ -8,10 +8,15 @@ String _newRequestId(String prefix) =>
     '$prefix-${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 32)}';
 
 class RecommendAppendResult {
-  const RecommendAppendResult({required this.items, required this.hasMore});
+  const RecommendAppendResult({
+    required this.items,
+    required this.hasMore,
+    this.poolStatus,
+  });
 
   final List<Recommendation> items;
   final bool hasMore;
+  final PlatformAvailability? poolStatus;
 }
 
 class RecommendApi {
@@ -23,7 +28,7 @@ class RecommendApi {
     return _recommendations(data['items']);
   }
 
-  Future<List<Recommendation>> reshuffle(
+  Future<RecommendAppendResult> reshuffle(
     List<String> excludedBvids, {
     String sourcePlatform = '',
   }) async {
@@ -33,9 +38,13 @@ class RecommendApi {
         'excluded_bvids': excludedBvids,
         if (sourcePlatform.isNotEmpty) 'source_platform': sourcePlatform,
       },
-      timeout: 30,
+      timeout: 12,
     );
-    return _recommendations(data['items']);
+    return RecommendAppendResult(
+      items: _recommendations(data['items']),
+      hasMore: true,
+      poolStatus: _poolStatus(data['pool_status']),
+    );
   }
 
   Future<RecommendAppendResult> append(
@@ -48,11 +57,12 @@ class RecommendApi {
         'excluded_bvids': excludedBvids,
         if (sourcePlatform.isNotEmpty) 'source_platform': sourcePlatform,
       },
-      timeout: 30,
+      timeout: 12,
     );
     return RecommendAppendResult(
       items: _recommendations(data['items']),
       hasMore: data['has_more'] != false,
+      poolStatus: _poolStatus(data['pool_status']),
     );
   }
 
@@ -157,6 +167,19 @@ class RecommendApi {
 
   Future<void> markDelightSent(String bvid) =>
       _client.post('/delight/sent', body: {'bvid': bvid});
+
+  PlatformAvailability? _poolStatus(dynamic raw) {
+    if (raw is! Map ||
+        raw['pool_available_count'] is! num ||
+        raw['platform_available_counts'] is! Map) {
+      return null;
+    }
+    return PlatformAvailability.fromJson({
+      'total_available': raw['pool_available_count'],
+      'by_platform': raw['platform_available_counts'],
+      'pool_status_version': raw['pool_status_version'],
+    });
+  }
 
   List<Recommendation> _recommendations(dynamic rawItems) {
     if (rawItems is! List) return const [];

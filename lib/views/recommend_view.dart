@@ -16,6 +16,7 @@ import '../theme/app_theme.dart';
 import '../widgets/back_to_top_fab.dart';
 import '../widgets/delight_banner.dart';
 import '../widgets/recommendation_card.dart';
+import '../widgets/recommend_auto_load.dart';
 
 class RecommendView extends StatefulWidget {
   const RecommendView({super.key, this.onStartChat});
@@ -29,32 +30,30 @@ class RecommendView extends StatefulWidget {
 
 class RecommendViewState extends State<RecommendView> {
   final ScrollController _scrollController = ScrollController();
-  bool _autoLoadScheduled = false;
-  DateTime? _lastAutoLoadAt;
+  RecommendAutoLoad? _autoLoad;
+  bool _userScrollActive = false;
 
   @override
   void dispose() {
+    _autoLoad?.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  void _scheduleAutoLoad(RecommendProvider rp) {
-    if (_autoLoadScheduled) return;
-    final now = DateTime.now();
-    if (_lastAutoLoadAt != null &&
-        now.difference(_lastAutoLoadAt!) < const Duration(seconds: 5)) {
-      return;
-    }
-    _autoLoadScheduled = true;
-    _lastAutoLoadAt = now;
-    Future<void>.delayed(const Duration(milliseconds: 350), () {
-      if (!mounted) return;
-      _autoLoadScheduled = false;
-      if (rp.recommendations.isNotEmpty) {
-        unawaited(rp.append());
-      }
-    });
-  }
+  RecommendAutoLoad _autoLoader(RecommendProvider rp) =>
+      _autoLoad ??= RecommendAutoLoad(
+        canLoad: () =>
+            mounted &&
+            _scrollController.hasClients &&
+            _scrollController.position.extentAfter < 1000 &&
+            rp.recommendations.isNotEmpty &&
+            !rp.loading &&
+            !rp.loadingMore &&
+            !rp.reshuffling &&
+            !rp.autoLoadExhausted,
+        load: rp.append,
+        waitingForRefill: () => rp.autoLoadExhausted,
+      );
 
   /// 点击底部「推荐」时，先回到顶部，再触发一次真实刷新。
   Future<void> scrollToTopAndRefresh() async {
@@ -91,14 +90,26 @@ class RecommendViewState extends State<RecommendView> {
     return Consumer2<RecommendProvider, SavedProvider>(
       builder: (context, rp, sp, _) {
         final delightsCount = rp.delights.length;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _autoLoader(rp).recheck();
+        });
         return Stack(
           children: [
             NotificationListener<ScrollNotification>(
               onNotification: (notification) {
-                if (notification.metrics.extentAfter < 1000 &&
-                    rp.recommendations.isNotEmpty &&
-                    !rp.autoLoadExhausted) {
-                  _scheduleAutoLoad(rp);
+                if (notification is ScrollStartNotification &&
+                    notification.dragDetails != null) {
+                  _userScrollActive = true;
+                }
+                // A finger fling can enter the bottom zone after dragDetails
+                // becomes null. Keep its user intent until scrolling stops.
+                if (notification is ScrollUpdateNotification &&
+                    _userScrollActive &&
+                    notification.metrics.extentAfter < 1000) {
+                  _autoLoader(rp).request();
+                }
+                if (notification is ScrollEndNotification) {
+                  _userScrollActive = false;
                 }
                 return false;
               },
@@ -216,18 +227,16 @@ class RecommendViewState extends State<RecommendView> {
                                       strokeWidth: 2,
                                     ),
                                   )
-                                : rp.autoLoadExhausted
-                                ? const Text(
-                                    '已经到底啦',
-                                    style: TextStyle(
-                                      color: Colors.white38,
-                                      fontSize: 13,
-                                    ),
-                                  )
                                 : TextButton.icon(
-                                    onPressed: rp.append,
+                                    onPressed: rp.loading || rp.reshuffling
+                                        ? null
+                                        : rp.append,
                                     icon: const Icon(Icons.expand_more),
-                                    label: const Text('加载更多推荐'),
+                                    label: Text(
+                                      rp.autoLoadExhausted
+                                          ? '暂时没有新内容，点此重试'
+                                          : '加载更多推荐',
+                                    ),
                                   ),
                           ),
                         ),

@@ -119,3 +119,9 @@ output_dimensionality = 768          # 需匹配 embedding 模型实际维度
 ## License
 
 [MIT](LICENSE)
+
+## 推荐刷新一致性
+
+换批和加载更多现在同步应用后端返回的总库存及各平台余量，拒绝迟到的旧状态覆盖；
+底部续页在冷却结束或补货后恢复，零库存仍可手动重试。
+配套后端和验证范围见 [推荐一致性说明](docs/recommendation-consistency.md)。

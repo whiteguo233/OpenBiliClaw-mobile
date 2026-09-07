@@ -57,6 +57,10 @@ class RecommendProvider extends ChangeNotifier {
   bool _running = false;
   int _pollGeneration = 0;
   bool _disposed = false;
+  bool _hasPlatformAvailability = false;
+  int _inventoryGeneration = 0;
+  bool _inventoryLoading = false;
+  bool _inventoryReloadPending = false;
 
   RecommendProvider(ApiClient client)
     : _client = client,
@@ -146,7 +150,7 @@ class RecommendProvider extends ChangeNotifier {
   }
 
   Future<void> load() async {
-    if (_loading) return;
+    if (_loading || _reshuffling || _loadingMore) return;
     _loading = true;
     _error = '';
     _safeNotify();
@@ -169,7 +173,7 @@ class RecommendProvider extends ChangeNotifier {
   /// 下拉刷新 / 点击推荐 Tab 回顶刷新：先让后端真正刷新一次推荐池，
   /// 再换一批新内容，避免只重新 GET 当前列表导致内容看起来“没变化”。
   Future<void> refresh() async {
-    if (_loading) {
+    if (_loading || _reshuffling || _loadingMore) {
       debugPrint('[RecommendProvider] refresh skipped: already loading');
       return;
     }
@@ -189,22 +193,16 @@ class RecommendProvider extends ChangeNotifier {
       );
       debugPrint('[RecommendProvider] refresh: POST /refresh fired');
       final excluded = _recommendations.map((item) => item.bvid).toList();
-      if (_autoLoadExhausted) {
-        // 已经到底了：只触发后台补池，不阻塞用户刷新。
-        debugPrint(
-          '[RecommendProvider] refresh: already exhausted, skip reshuffle',
-        );
-        _online = true;
-      } else {
-        final next = await _api
-            .reshuffle(excluded, sourcePlatform: _platformFilter)
-            .timeout(const Duration(seconds: 15));
-        debugPrint(
-          '[RecommendProvider] refresh: reshuffle done, items=${next.length}',
-        );
-        if (next.isNotEmpty) _recommendations = next;
-        _online = true;
-        _autoLoadExhausted = next.isEmpty;
+      final requestPlatform = _platformFilter;
+      final result = await _api.reshuffle(
+        excluded,
+        sourcePlatform: requestPlatform,
+      );
+      _applyPoolStatus(result.poolStatus);
+      _replaceBatch(result.items, requestPlatform);
+      _online = true;
+      if (_platformFilter == requestPlatform) {
+        _autoLoadExhausted = result.items.isEmpty;
       }
       _prunePlatformFilter();
     } catch (error) {
@@ -294,21 +292,67 @@ class RecommendProvider extends ChangeNotifier {
     ]);
   }
 
+  int _availableForScope(PlatformAvailability status) => _platformFilter.isEmpty
+      ? status.totalAvailable
+      : (status.byPlatform[_platformFilter] ?? 0);
+
+  bool _applyPoolStatus(PlatformAvailability? status) {
+    if (status == null || _disposed) return false;
+    if (status.version < _platformAvailability.version) return true;
+    final previous = _availableForScope(_platformAvailability);
+    _hasPlatformAvailability = true;
+    _platformAvailability = status;
+    _inventoryGeneration += 1;
+    _runtimeStatus = _runtimeStatus.withPoolAvailableCount(
+      status.totalAvailable,
+    );
+    // Other platforms having stock cannot revive an exhausted scoped feed.
+    if (_autoLoadExhausted && _availableForScope(status) > previous) {
+      _autoLoadExhausted = false;
+    }
+    _safeNotify();
+    return true;
+  }
+
+  void _replaceBatch(List<Recommendation> items, String scope) {
+    if (items.isEmpty) return;
+    _recommendations = scope.isEmpty
+        ? items
+        : [
+            ..._recommendations.where((item) => item.sourcePlatform != scope),
+            ...items,
+          ];
+  }
+
   Future<void> _loadRuntimeStatus() async {
     try {
-      _runtimeStatus = await _api.fetchRuntimeStatus();
+      final status = await _api.fetchRuntimeStatus();
+      _runtimeStatus = _hasPlatformAvailability
+          ? status.withPoolAvailableCount(_platformAvailability.totalAvailable)
+          : status;
       _safeNotify();
     } catch (_) {}
   }
 
   Future<void> _loadPlatformAvailability() async {
+    if (_inventoryLoading) {
+      _inventoryReloadPending = true;
+      return;
+    }
+    _inventoryLoading = true;
+    final generation = _inventoryGeneration;
     try {
-      _platformAvailability = await _api.fetchPlatformAvailability();
-      if (_platformAvailability.totalAvailable > 0) {
-        _autoLoadExhausted = false;
+      final status = await _api.fetchPlatformAvailability();
+      if (generation == _inventoryGeneration) _applyPoolStatus(status);
+    } catch (_) {
+      // Keep last successful counts. Failed reads are not empty inventory.
+    } finally {
+      _inventoryLoading = false;
+      if (_inventoryReloadPending && !_disposed) {
+        _inventoryReloadPending = false;
+        unawaited(_loadPlatformAvailability());
       }
-      _safeNotify();
-    } catch (_) {}
+    }
   }
 
   Future<void> _loadEnabledSources() async {
@@ -338,26 +382,29 @@ class RecommendProvider extends ChangeNotifier {
   }
 
   Future<void> reshuffle() async {
-    if (_reshuffling || _loading) return;
+    if (_reshuffling || _loading || _loadingMore) return;
     _reshuffling = true;
     _error = '';
     _safeNotify();
     debugPrint('[RecommendProvider] reshuffle start');
     try {
       final excluded = _recommendations.map((item) => item.bvid).toList();
-      final next = await _api
-          .reshuffle(excluded, sourcePlatform: _platformFilter)
-          .timeout(const Duration(seconds: 15));
-      debugPrint('[RecommendProvider] reshuffle done items=${next.length}');
-      if (next.isNotEmpty) _recommendations = next;
+      final requestPlatform = _platformFilter;
+      final result = await _api.reshuffle(
+        excluded,
+        sourcePlatform: requestPlatform,
+      );
+      final inventoryApplied = _applyPoolStatus(result.poolStatus);
+      _replaceBatch(result.items, requestPlatform);
       _online = true;
-      _autoLoadExhausted = next.isEmpty;
+      if (_platformFilter == requestPlatform) {
+        _autoLoadExhausted = result.items.isEmpty;
+      }
+      if (!inventoryApplied) unawaited(_loadPlatformAvailability());
       unawaited(_loadRuntimeStatus());
-      unawaited(_loadPlatformAvailability());
     } catch (error) {
       debugPrint('[RecommendProvider] reshuffle error: $error');
       _error = _message(error, '换一批失败');
-      _autoLoadExhausted = true;
     } finally {
       _reshuffling = false;
       _safeNotify();
@@ -367,24 +414,19 @@ class RecommendProvider extends ChangeNotifier {
 
   Future<void> append() async {
     if (_loadingMore || _loading || _reshuffling) return;
-    // 已到底但库存恢复了，允许重新加载更多。
-    if (_autoLoadExhausted && _platformAvailability.totalAvailable <= 0) {
-      return;
-    }
-    // 空库存时不要再发起后端 append，避免慢重建导致转菊花。
-    if (_platformAvailability.totalAvailable <= 0) {
-      _autoLoadExhausted = true;
-      _safeNotify();
-      return;
-    }
+    // Manual retries must reach the server even if the last inventory read
+    // was zero or failed. Only the view's automatic loading uses exhaustion.
     _loadingMore = true;
     _error = '';
     _safeNotify();
     try {
       final excluded = _recommendations.map((item) => item.bvid).toList();
-      final result = await _api
-          .append(excluded, sourcePlatform: _platformFilter)
-          .timeout(const Duration(seconds: 15));
+      final requestPlatform = _platformFilter;
+      final result = await _api.append(
+        excluded,
+        sourcePlatform: requestPlatform,
+      );
+      final inventoryApplied = _applyPoolStatus(result.poolStatus);
       final newItems = result.items;
       final identities = _recommendations
           .map((item) => item.savedIdentity)
@@ -397,8 +439,10 @@ class RecommendProvider extends ChangeNotifier {
         }
       }
       _online = true;
-      _autoLoadExhausted = addedCount == 0 || !result.hasMore;
-      unawaited(_loadPlatformAvailability());
+      if (_platformFilter == requestPlatform) {
+        _autoLoadExhausted = addedCount == 0 || !result.hasMore;
+      }
+      if (!inventoryApplied) unawaited(_loadPlatformAvailability());
     } catch (error) {
       _error = _message(error, '加载更多失败');
     } finally {
@@ -586,6 +630,18 @@ class RecommendProvider extends ChangeNotifier {
             if (type == 'runtime.heartbeat') return;
             if (type == 'delight.candidate' || type == 'delight.liked') {
               unawaited(_loadDelights());
+            }
+            if (type == 'refresh.pool_updated' &&
+                event['pool_available_count'] is num &&
+                event['platform_available_counts'] is Map) {
+              _applyPoolStatus(
+                PlatformAvailability.fromJson({
+                  'total_available': event['pool_available_count'],
+                  'by_platform': event['platform_available_counts'],
+                  'pool_status_version': event['pool_status_version'],
+                }),
+              );
+              return;
             }
             if (type == 'refresh.pool_updated' || type.isNotEmpty) {
               // 实时事件先直接刷新顶部状态；_poll() 可能因为正在轮询而早退，

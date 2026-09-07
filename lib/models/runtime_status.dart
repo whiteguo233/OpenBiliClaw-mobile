@@ -42,15 +42,26 @@ class RuntimeStatus {
     );
   }
 
+  RuntimeStatus withPoolAvailableCount(int count) => RuntimeStatus(
+    poolAvailableCount: count,
+    lastReplenishedCount: lastReplenishedCount,
+    poolPendingCount: poolPendingCount,
+    recentPoolTopics: recentPoolTopics,
+    activity: activity,
+    busy: busy,
+  );
+
   String get topicSummary => recentPoolTopics.join(' / ');
 }
 
 class PlatformAvailability {
   final int totalAvailable;
+  final int version;
   final Map<String, int> byPlatform;
 
   const PlatformAvailability({
     this.totalAvailable = 0,
+    this.version = 0,
     this.byPlatform = const {},
   });
 
@@ -68,6 +79,7 @@ class PlatformAvailability {
         : const <String, int>{};
     return PlatformAvailability(
       totalAvailable: _integer(json['total_available']),
+      version: _integer(json['pool_status_version']),
       byPlatform: Map<String, int>.unmodifiable(map),
     );
   }
