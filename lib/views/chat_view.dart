@@ -429,7 +429,7 @@ class _ChatViewState extends State<ChatView> {
     ChatTurn turn,
     ThemeData theme,
   ) {
-    final hasResponse = turn.reply.isNotEmpty && turn.isDone;
+    final hasResponse = turn.reply.isNotEmpty && !turn.hasError;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
