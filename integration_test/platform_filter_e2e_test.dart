@@ -36,8 +36,10 @@ void main() {
     expect(rp.recommendations, isNotEmpty, reason: '真实推荐池应有内容');
 
     final platforms = rp.availablePlatforms;
-    debugPrint('E2E: real pool sources = $platforms '
-        '(count=${rp.recommendations.length})');
+    debugPrint(
+      'E2E: real pool sources = $platforms '
+      '(count=${rp.recommendations.length})',
+    );
 
     if (platforms.length <= 1) {
       // 单一来源：完全不出过滤条。

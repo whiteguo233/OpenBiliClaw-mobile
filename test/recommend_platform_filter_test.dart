@@ -37,26 +37,29 @@ RecommendProvider _providerWith(List<Map<String, dynamic>> items) {
 }
 
 void main() {
-  test('platform filter lists sources in fixed order and filters items', () async {
-    final provider = _providerWith([
-      _item('douyin', 'a'),
-      _item('bilibili', 'b'),
-      _item('douyin', 'c'),
-    ]);
-    await provider.load();
+  test(
+    'platform filter lists sources in fixed order and filters items',
+    () async {
+      final provider = _providerWith([
+        _item('douyin', 'a'),
+        _item('bilibili', 'b'),
+        _item('douyin', 'c'),
+      ]);
+      await provider.load();
 
-    expect(provider.availablePlatforms, ['bilibili', 'douyin']);
-    expect(provider.showPlatformChoice, isTrue);
-    expect(provider.visibleRecommendations.length, 3);
+      expect(provider.availablePlatforms, ['bilibili', 'douyin']);
+      expect(provider.showPlatformChoice, isTrue);
+      expect(provider.visibleRecommendations.length, 3);
 
-    provider.setPlatformFilter('douyin');
-    expect(provider.platformFilter, 'douyin');
-    expect(
-      provider.visibleRecommendations.map((r) => r.sourcePlatform).toSet(),
-      {'douyin'},
-    );
-    expect(provider.visibleRecommendations.length, 2);
-  });
+      provider.setPlatformFilter('douyin');
+      expect(provider.platformFilter, 'douyin');
+      expect(
+        provider.visibleRecommendations.map((r) => r.sourcePlatform).toSet(),
+        {'douyin'},
+      );
+      expect(provider.visibleRecommendations.length, 2);
+    },
+  );
 
   test('single source hides the platform choice entirely', () async {
     final provider = _providerWith([

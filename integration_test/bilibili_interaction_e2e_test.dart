@@ -36,10 +36,7 @@ void main() {
       Provider<ApiClient>.value(
         value: client,
         child: const MaterialApp(
-          home: NativeBilibiliVideoPage(
-            bvid: bvid,
-            title: '互动端到端测试视频',
-          ),
+          home: NativeBilibiliVideoPage(bvid: bvid, title: '互动端到端测试视频'),
         ),
       ),
     );
@@ -51,7 +48,9 @@ void main() {
     }, timeout: const Duration(seconds: 30));
 
     Future<Map<String, dynamic>> relation() async {
-      final res = await http.get(Uri.parse('$base/bilibili/video/relation?bvid=$bvid'));
+      final res = await http.get(
+        Uri.parse('$base/bilibili/video/relation?bvid=$bvid'),
+      );
       expect(res.statusCode, 200, reason: 'relation 接口应可用');
       return jsonDecode(res.body) as Map<String, dynamic>;
     }
@@ -66,19 +65,27 @@ void main() {
     final visibleTexts = tester
         .widgetList<Text>(find.byType(Text))
         .map((t) => t.data ?? '')
-        .where((t) =>
-            t.contains('点赞') ||
-            t.contains('互动') ||
-            t.contains('失败') ||
-            t.contains('已'))
+        .where(
+          (t) =>
+              t.contains('点赞') ||
+              t.contains('互动') ||
+              t.contains('失败') ||
+              t.contains('已'),
+        )
         .toList();
     debugPrint('E2E: texts after like tap: $visibleTexts');
-    await _pumpUntil(tester, () async => (await relation())['like'] == !wasLiked,
-        timeout: const Duration(seconds: 10));
+    await _pumpUntil(
+      tester,
+      () async => (await relation())['like'] == !wasLiked,
+      timeout: const Duration(seconds: 10),
+    );
     debugPrint('E2E: like toggled on -> ${(await relation())['like']}');
     await tester.tap(find.text('点赞'));
-    await _pumpUntil(tester, () async => (await relation())['like'] == wasLiked,
-        timeout: const Duration(seconds: 10));
+    await _pumpUntil(
+      tester,
+      () async => (await relation())['like'] == wasLiked,
+      timeout: const Duration(seconds: 10),
+    );
     debugPrint('E2E: like restored -> ${(await relation())['like']}');
 
     // ── 评论发布 + 自动删除 ──
@@ -99,11 +106,13 @@ void main() {
     final afterSend = tester
         .widgetList<Text>(find.byType(Text))
         .map((t) => t.data ?? '')
-        .where((t) =>
-            t.contains('失败') ||
-            t.contains('登录') ||
-            t.contains('发布') ||
-            t.contains(unique))
+        .where(
+          (t) =>
+              t.contains('失败') ||
+              t.contains('登录') ||
+              t.contains('发布') ||
+              t.contains(unique),
+        )
         .toList();
     debugPrint('E2E: texts after send: $afterSend');
     // 断言发布成功的确定信号：SnackBar「评论已发布」（列表排序可能延迟，

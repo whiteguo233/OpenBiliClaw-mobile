@@ -8,9 +8,7 @@ import 'package:openbiliclaw_app/widgets/danmaku_overlay.dart';
 
 Widget _wrap(Widget child) {
   return MaterialApp(
-    home: Scaffold(
-      body: SizedBox(width: 400, height: 300, child: child),
-    ),
+    home: Scaffold(body: SizedBox(width: 400, height: 300, child: child)),
   );
 }
 
@@ -24,8 +22,9 @@ Iterable<String> _visibleTexts(DanmakuController<Object?> controller) sync* {
 
 void main() {
   group('DanmakuOverlay (canvas_danmaku engine)', () {
-    testWidgets('adds a danmaku when playback crosses its timestamp',
-        (tester) async {
+    testWidgets('adds a danmaku when playback crosses its timestamp', (
+      tester,
+    ) async {
       final position = StreamController<Duration>();
       addTearDown(() => unawaited(position.close()));
       DanmakuController<Object?>? engine;
@@ -66,8 +65,9 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     });
 
-    testWidgets('removes a danmaku only after it has scrolled out',
-        (tester) async {
+    testWidgets('removes a danmaku only after it has scrolled out', (
+      tester,
+    ) async {
       final position = StreamController<Duration>();
       addTearDown(() => unawaited(position.close()));
       DanmakuController<Object?>? engine;
@@ -99,8 +99,9 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     });
 
-    testWidgets('never back-fills comments whose timestamp already passed',
-        (tester) async {
+    testWidgets('never back-fills comments whose timestamp already passed', (
+      tester,
+    ) async {
       final position = StreamController<Duration>();
       addTearDown(() => unawaited(position.close()));
       DanmakuController<Object?>? engine;
@@ -174,8 +175,9 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     });
 
-    testWidgets('does not spawn danmaku while playback is paused',
-        (tester) async {
+    testWidgets('does not spawn danmaku while playback is paused', (
+      tester,
+    ) async {
       final position = StreamController<Duration>();
       final playing = StreamController<bool>();
       addTearDown(() => unawaited(position.close()));

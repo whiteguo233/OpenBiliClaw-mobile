@@ -76,8 +76,10 @@ Future<void> _runDanmakuScrollTest(
   }, timeout: const Duration(seconds: 90));
 
   final videoWidth = tester.getRect(find.byType(Video)).width;
-  debugPrint('E2E danmaku [$bvid]: first real danmaku spawned, '
-      'videoWidth=$videoWidth, sampling scroll...');
+  debugPrint(
+    'E2E danmaku [$bvid]: first real danmaku spawned, '
+    'videoWidth=$videoWidth, sampling scroll...',
+  );
 
   // Sample the engine every 500 ms for 30 s of real playback.
   final seen = <String, double>{}; // text -> last observed x
@@ -118,8 +120,7 @@ Future<void> _runDanmakuScrollTest(
   );
 
   // Real data really flowed: several distinct comments crossed the screen.
-  expect(seen.length, greaterThanOrEqualTo(3),
-      reason: '真实弹幕数量不足，可能没有取到真实弹幕数据');
+  expect(seen.length, greaterThanOrEqualTo(3), reason: '真实弹幕数量不足，可能没有取到真实弹幕数据');
   // And at least one comment completed its journey during the window.
   expect(exitXs, isNotEmpty, reason: '采样窗口内没有观察到弹幕退出');
 
@@ -127,8 +128,7 @@ Future<void> _runDanmakuScrollTest(
   // passed the left edge. The old implementation removed items while still
   // on screen (lastX around the middle of the player width, e.g. +100..+250).
   for (final x in exitXs) {
-    expect(x, lessThanOrEqualTo(0),
-        reason: '弹幕在 x=$x（仍处于屏幕内）就被移除 —— 中间消失问题复现');
+    expect(x, lessThanOrEqualTo(0), reason: '弹幕在 x=$x（仍处于屏幕内）就被移除 —— 中间消失问题复现');
   }
 
   debugPrint('E2E danmaku [$bvid]: PASS — 所有弹幕都完整飘出左边缘后才被移除');

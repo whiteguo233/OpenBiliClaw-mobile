@@ -207,8 +207,7 @@ class _DanmakuEngineState extends State<_DanmakuEngine> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final size = constraints.hasBoundedWidth &&
-                constraints.hasBoundedHeight
+        final size = constraints.hasBoundedWidth && constraints.hasBoundedHeight
             ? constraints.biggest
             : Size.zero;
         return DanmakuScreen<Object?>(
