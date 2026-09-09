@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.154+2004 (2026-09-09)
+
+- 修复 Android versionCode 单调性问题：发版 build number 回退会导致已安装更高 versionCode 的设备无法覆盖安装（`INSTALL_FAILED_VERSION_DOWNGRADE`）。本次将版本提升到 `0.3.154+2004`，后续 CI 也会校验 build number 必须大于上一个已发布版本。
+
 ## v0.3.153+1 (2026-09-09)
 
 - 换批、追加、下拉刷新的卡片与库存同次通知页面，顶部总数和来源 Tab 共用库存；缺库存字段时立即补读，失败明确显示「待同步」，避免旧数字滞留。新增首帧 UI 与乱序回归验证。
