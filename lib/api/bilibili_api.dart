@@ -98,7 +98,7 @@ class BilibiliApi {
     final data = await _client.get(
       '/bilibili/video/info?bvid=${Uri.encodeQueryComponent(bvid)}',
     );
-    return data is Map<String, dynamic> ? data : const {};
+    return data;
   }
 
   /// `GET /api/bilibili/video/relation?bvid=...`
