@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.155+2005 (2026-09-10)
+
+- 原生 B 站播放页的简介、点赞/投币/收藏/评论数改为优先通过后端 `/api/bilibili/video/info` 获取；后端使用 WBI 签名 `/x/web-interface/wbi/view` 回退，解决普通 `/view` 接口 412 导致播放页互动数据缺失的问题。
+
 ## v0.3.154+2004 (2026-09-09)
 
 - 修复 Android versionCode 单调性问题：发版 build number 回退会导致已安装更高 versionCode 的设备无法覆盖安装（`INSTALL_FAILED_VERSION_DOWNGRADE`）。本次将版本提升到 `0.3.154+2004`，后续 CI 也会校验 build number 必须大于上一个已发布版本。
