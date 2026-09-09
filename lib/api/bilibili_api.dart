@@ -93,6 +93,14 @@ class BilibiliApi {
     return BilibiliPlayResult.fromJson(data);
   }
 
+  /// `GET /api/bilibili/video/info?bvid=...`
+  Future<Map<String, dynamic>> videoInfo({required String bvid}) async {
+    final data = await _client.get(
+      '/bilibili/video/info?bvid=${Uri.encodeQueryComponent(bvid)}',
+    );
+    return data is Map<String, dynamic> ? data : const {};
+  }
+
   /// `GET /api/bilibili/video/relation?bvid=...`
   Future<BilibiliVideoState> videoRelation({required String bvid}) async {
     final data = await _client.get(

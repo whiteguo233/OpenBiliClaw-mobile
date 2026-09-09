@@ -280,9 +280,18 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
       if (mounted) setState(() => _related = related);
     } catch (_) {}
     try {
-      final direct = _commentDirect;
-      if (direct != null) {
-        final info = await direct.videoInfo(widget.bvid);
+      Map<String, dynamic>? info;
+      try {
+        info = await api.videoInfo(bvid: widget.bvid);
+      } catch (_) {
+        final direct = _commentDirect;
+        if (direct != null) {
+          try {
+            info = await direct.videoInfo(widget.bvid);
+          } catch (_) {}
+        }
+      }
+      if (info != null) {
         final desc = info['desc']?.toString().trim() ?? '';
         final stat = info['stat'];
         final replyTotal = stat is Map
