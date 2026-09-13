@@ -242,7 +242,7 @@ class _HomeViewState extends State<HomeView> with WidgetsBindingObserver {
             maxScaleFactor: 1.2,
             child: _HomeBottomNavigation(
               currentIndex: _currentIndex,
-              pendingCount: chat.pendingCount,
+              pendingCount: chat.pendingBadgeCount,
               onSelected: (index) {
                 HapticFeedback.selectionClick();
                 _selectTab(index);

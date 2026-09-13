@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:provider/provider.dart';
+
 import 'api/client.dart';
 import 'providers/auth_provider.dart';
 import 'providers/recommend_provider.dart';
@@ -106,7 +107,9 @@ class _AppEntryState extends State<AppEntry> {
   Future<void> _init() async {
     final client = context.read<ApiClient>();
     final auth = context.read<AuthProvider>();
+    final chat = context.read<ChatProvider>();
     await client.loadSettings();
+    await chat.loadShowPendingBadge();
     if (!mounted) return;
     setState(() => _ready = true);
     // 本地设置就绪后立即进入 App，认证状态在后台校验；如果后端要求登录，

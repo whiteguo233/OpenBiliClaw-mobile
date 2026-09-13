@@ -10,6 +10,16 @@ class ChatStreamEvent {
   final Map<String, dynamic> data;
 }
 
+/// A bounded page of pending confirmations plus the full deduped backlog
+/// count. `items` is capped by the backend; `total` is what the 对话 tab badge
+/// should display, matching the desktop Web / extension clients.
+class PendingConfirmationsPage {
+  const PendingConfirmationsPage({required this.items, required this.total});
+
+  final List<PendingConfirmation> items;
+  final int total;
+}
+
 class ChatApi {
   final ApiClient _client;
   ChatApi(this._client);
@@ -107,20 +117,26 @@ class ChatApi {
         .toList();
   }
 
-  Future<List<PendingConfirmation>> fetchPendingConfirmations() async {
+  Future<PendingConfirmationsPage> fetchPendingConfirmations() async {
     final data = await _client.get(
       '/chat/pending-confirmations?session=popup',
       timeout: 10,
     );
     final rawItems = data['items'];
-    if (rawItems is! List) return const [];
-    return rawItems
-        .whereType<Map>()
-        .map(
-          (item) =>
-              PendingConfirmation.fromJson(Map<String, dynamic>.from(item)),
-        )
-        .toList();
+    final items = rawItems is List
+        ? rawItems
+              .whereType<Map>()
+              .map(
+                (item) => PendingConfirmation.fromJson(
+                  Map<String, dynamic>.from(item),
+                ),
+              )
+              .toList()
+        : <PendingConfirmation>[];
+    // Older backends may omit `total`; fall back to the page count.
+    final rawTotal = data['total'] ?? data['count'];
+    final total = rawTotal is num ? rawTotal.toInt() : items.length;
+    return PendingConfirmationsPage(items: items, total: total < 0 ? 0 : total);
   }
 
   Future<ChatTurn> openPendingConfirmation(String ref) async {

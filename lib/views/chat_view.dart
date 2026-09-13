@@ -51,6 +51,7 @@ class _ChatViewState extends State<ChatView> {
                 constraints.maxHeight < 560;
             return Column(
               children: [
+                if (!compactViewport) _badgePreferenceRow(context, provider),
                 if (!compactViewport && accessibilityChrome)
                   _compactHeader(context, provider, turns.length),
                 if (provider.pendingCount > 0 && !compactViewport)
@@ -110,6 +111,49 @@ class _ChatViewState extends State<ChatView> {
               tooltip: '刷新共享历史',
               onPressed: provider.loading ? null : provider.loadTurns,
               icon: const Icon(Icons.refresh_rounded),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 「对话」Tab 顶部的快捷开关：控制底部导航是否显示待聊数量红点。
+  /// 默认关闭，偏好由 ChatProvider 持久化到 SharedPreferences。
+  Widget _badgePreferenceRow(BuildContext context, ChatProvider provider) {
+    final colors = context.appColors;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+      padding: const EdgeInsets.fromLTRB(12, 0, 4, 0),
+      decoration: BoxDecoration(
+        color: colors.surface.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(AppRadius.medium),
+        border: Border.all(color: colors.line),
+      ),
+      child: MediaQuery.withClampedTextScaling(
+        maxScaleFactor: 1.4,
+        child: Row(
+          children: [
+            Icon(Icons.circle, size: 8, color: AppColors.brandStrong),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '对话标签红点',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+            Tooltip(
+              message: provider.showPendingBadge
+                  ? '关闭后「对话」标签不再显示待聊数量'
+                  : '开启后在「对话」标签显示待聊数量',
+              child: Switch.adaptive(
+                key: const Key('chatPendingBadgeToggle'),
+                value: provider.showPendingBadge,
+                onChanged: (value) =>
+                    unawaited(provider.setShowPendingBadge(value)),
+              ),
             ),
           ],
         ),

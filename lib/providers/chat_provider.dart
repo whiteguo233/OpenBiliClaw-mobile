@@ -2,17 +2,23 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api/chat_api.dart';
 import '../api/client.dart';
 import '../models/chat.dart';
 
 class ChatProvider extends ChangeNotifier {
+  static const String showPendingBadgePreferenceKey =
+      'obc.showChatPendingBadge';
+
   final ChatApi _api;
   final Random _random = Random();
 
   List<ChatTurn> _turns = [];
   List<PendingConfirmation> _pendingConfirmations = [];
+  int _pendingTotal = 0;
+  bool _showPendingBadge = false;
   final Set<String> _busyCardIds = {};
   final Set<String> _busyConfirmationRefs = {};
   bool _loading = false;
@@ -63,7 +69,43 @@ class ChatProvider extends ChangeNotifier {
 
   List<PendingConfirmation> get pendingConfirmations =>
       List.unmodifiable(_pendingConfirmations);
+
+  /// 当前页待聊条目数（后端对列表有上限，用于渲染列表）。
   int get pendingCount => _pendingConfirmations.length;
+
+  /// 完整去重后的待聊积压总数，红点展示用；旧后端缺 `total` 时回落为列表长度。
+  int get pendingTotal => _pendingTotal;
+
+  /// 是否在底部「对话」Tab 上显示待聊数量红点。默认关闭。
+  bool get showPendingBadge => _showPendingBadge;
+
+  /// 底部「对话」Tab 实际渲染的红点数量：开关关闭时恒为 0。
+  int get pendingBadgeCount => _showPendingBadge ? pendingTotal : 0;
+
+  Future<void> loadShowPendingBadge() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final next = prefs.getBool(showPendingBadgePreferenceKey) ?? false;
+      if (next == _showPendingBadge) return;
+      _showPendingBadge = next;
+      _safeNotify();
+    } catch (_) {
+      // 偏好读取失败时保持默认关闭，不影响待聊数据加载。
+    }
+  }
+
+  Future<void> setShowPendingBadge(bool value) async {
+    if (_showPendingBadge == value) return;
+    _showPendingBadge = value;
+    _safeNotify();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(showPendingBadgePreferenceKey, value);
+    } catch (_) {
+      // 写入失败只影响下次启动的默认值，本次会话内仍然生效。
+    }
+  }
+
   bool get loading => _loading;
   bool get loadingOlder => _loadingOlder;
   bool get hasMoreHistory => _hasMoreHistory;
@@ -137,12 +179,15 @@ class ChatProvider extends ChangeNotifier {
 
   Future<bool> _loadPendingConfirmations() async {
     try {
-      final items = await _api.fetchPendingConfirmations();
-      final signature = items
+      final page = await _api.fetchPendingConfirmations();
+      final signature = page.items
           .map((item) => '${item.kind}|${item.ref}|${item.title}')
           .join('\n');
-      if (signature == _pendingSignature) return false;
-      _pendingConfirmations = items;
+      if (signature == _pendingSignature && page.total == _pendingTotal) {
+        return false;
+      }
+      _pendingConfirmations = page.items;
+      _pendingTotal = page.total;
       _pendingSignature = signature;
       return true;
     } catch (_) {
