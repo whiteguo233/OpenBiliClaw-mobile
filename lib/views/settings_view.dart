@@ -6,6 +6,7 @@ import '../api/config_api.dart';
 import '../providers/recommend_provider.dart';
 import '../services/tailnet_service.dart';
 import '../theme/app_theme.dart';
+import 'app_information_view.dart';
 
 class SettingsView extends StatefulWidget {
   const SettingsView({super.key});
@@ -620,6 +621,8 @@ class _SettingsViewState extends State<SettingsView> {
                   ],
                 ),
               ),
+              const SizedBox(height: 16),
+              const AppInformationLinks(),
             ],
           ),
         ),

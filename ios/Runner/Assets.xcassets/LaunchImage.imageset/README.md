@@ -1,5 +1,6 @@
 # Launch Screen Assets
 
-You can customize the launch screen with your own desired assets by replacing the image files in this directory.
-
-You can also do it by opening your Flutter project's Xcode project with `open ios/Runner.xcworkspace`, selecting `Runner/Assets.xcassets` in the Project Navigator and dropping in the desired images.
+The launch screen reuses the existing 1024px OpenBiliClaw app icon without
+modifying the artwork. `LaunchScreen.storyboard` constrains it to 96pt and
+preserves its aspect ratio. The asset has one universal resolution; UIKit
+scales the source for the device. Keep it in sync when updating the app icon.

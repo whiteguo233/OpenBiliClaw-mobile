@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_chrome.dart';
+import 'app_information_view.dart';
 
 class LoginView extends StatefulWidget {
   const LoginView({super.key});
@@ -95,6 +96,8 @@ class _LoginViewState extends State<LoginView> {
                               : const Text('登录'),
                         ),
                       ),
+                      const SizedBox(height: 16),
+                      const AppInformationLinks(),
                     ],
                   ),
                 ),
