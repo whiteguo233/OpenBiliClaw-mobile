@@ -59,11 +59,14 @@ class BilibiliApi {
   /// 请求后端把已保存的 B 站 Cookie 导出给移动端。移动端仅在当前会话内
   /// 使用这份 Cookie 直连 B 站，不落盘；后端未实现此接口时保持原有的
   /// `play-url` 下发 Cookie 路径。
-  Future<BilibiliCookieSession> exportSession() async {
+  ///
+  /// [timeoutSeconds] 供打开内置 WebView 时使用更短的等待，避免后端不可达
+  /// 时首屏长时间空白。
+  Future<BilibiliCookieSession> exportSession({int timeoutSeconds = 5}) async {
     final data = await _client.post(
       '/bilibili/auth/export',
       body: const {},
-      timeout: 5,
+      timeout: timeoutSeconds,
     );
     return BilibiliCookieSession.fromJson(data);
   }

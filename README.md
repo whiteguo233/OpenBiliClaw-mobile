@@ -35,6 +35,7 @@ App 采用「客户端 + 后端」架构，使用流程：
 - 推荐页、画像页、历史记录支持「回到顶部」悬浮按钮
 - Android 使用 Material 3 导航，iOS 使用 Cupertino Tab Bar；支持跟随系统的浅色/深色主题、Dynamic Type/大字体、横屏与安全区
 - Bilibili 卡片点击后默认进入 App 内原生播放器（基于 media_kit 移植自 PiliPlus 的思路）；登录态/取流走后端 `/api/bilibili/player/play-url` 协议，后端未就绪时可一键回退内置 WebView
+- 内置 WebView 播放页会自动带上后端已有的 B 站登录态（优先复用 `play-url` 的 Cookie，否则调一次 `auth/export`），网页版播放/评论无需重新登录；Android 侧为避免 Cookie 值被二次 URL 编码，走同源引导页 + `document.cookie` 写入原始值
 - 原生播放器支持弹幕、字幕、倍速、画质/分 P 切换、记忆播放、双击快进/快退、滑动调音量；WebView 登录后可一键同步 Cookie 到后端
 - 原生播放页支持点赞、投币、收藏、稍后再看、三连、原生评论列表和相关视频推荐
 - B 站登录态与原生播放器取流协议见 [docs/bilibili-login-and-player-protocol.md](docs/bilibili-login-and-player-protocol.md)
@@ -67,6 +68,7 @@ flutter test integration_test/app_e2e_test.dart -d <device-id>   # 真实 App �
 - `test_e2e/e2e_backend_test.dart`：真实请求后端验证内容历史、保存反馈事件、收藏交叉切换、自动同步配置、健康与 embedding 就绪。
 - `test_e2e/e2e_llm_test.dart`：验证 LLM 驱动的画像素描、惊喜推荐理由、AI 对话回复、待聊确认、活动流汇总。
 - `integration_test/app_e2e_test.dart`：在 Android/iOS 设备或模拟器上真实启动 App，断言四个 tab 加载真实数据、画像页展示 LLM 人格素描、对话发送后收到商汤真实回复。
+- `integration_test/bilibili_webview_login_e2e_test.dart`：验证内置 WebView 首屏带上后端已有的 B 站登录态，并确认同源引导页写入的 Cookie 值不会被二次 URL 编码。
 
 ## 验证状态
 

@@ -659,6 +659,8 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
   }
 
   Future<void> _openWebViewFallback() async {
+    final result = _result;
+    final cookie = result == null ? '' : _headerValue(result.headers, 'cookie');
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => BilibiliVideoPage(
@@ -666,6 +668,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
           title: widget.title,
           contentUrl: widget.contentUrl,
           coverUrl: widget.coverUrl,
+          sessionCookie: cookie,
         ),
       ),
     );
@@ -911,7 +914,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
     if (!mounted) return;
     if (!ok) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('未能拉起 B 站 App，可试试右上角“评论/完整页”')),
+        const SnackBar(content: Text('未能拉起 B 站 App，可试试右上角“网页版播放”')),
       );
     }
   }
@@ -1170,7 +1173,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
         ),
         actions: [
           IconButton(
-            tooltip: '评论/完整页',
+            tooltip: '评论/网页版（带登录态）',
             onPressed: _openWebViewFallback,
             icon: const Icon(Icons.forum_outlined),
           ),
@@ -1224,7 +1227,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
                 ),
                 FilledButton(
                   onPressed: _openWebViewFallback,
-                  child: const Text('使用内置网页播放'),
+                  child: const Text('使用内置网页播放（带登录态）'),
                 ),
               ],
             ),

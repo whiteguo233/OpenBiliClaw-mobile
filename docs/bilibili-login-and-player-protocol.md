@@ -371,6 +371,21 @@ POST /api/bilibili/player/play-url
 6. 播放器自定义 UI 上提供画质切换、倍数、全屏、记忆播放等。
 7. 退出页面或切换视频时，不持久化 Cookie，只保留后端会话。
 
+### 4.1 内置 WebView 回退页的登录态
+
+原生播放器不可用或用户点右上角“网页版播放”时，客户端打开内置 WebView
+`BilibiliVideoPage`。该页面在首个请求前会注入后端已有的 B 站登录态：
+
+- 优先复用调用方从 `play-url` 拿到的 `headers.cookie`，省掉一次请求；
+- 没有时调用 `POST /api/bilibili/auth/export` 取一次后端 Cookie；
+- 取不到（未登录 / 后端未实现 export）时安静回退匿名网页，不阻塞打开；
+- iOS/macOS 通过 `WKHTTPCookieStore` 写 `.bilibili.com` 域名 Cookie；
+- Android 的 `webview_flutter` 会对 `WebViewCookieManager.setCookie` 的值再做
+  一次 `Uri.encodeComponent`，导致 SESSDATA 里的 `%2A` / `%2C` 被二次编码而
+  登录失效；因此 Android 先加载一个 B 站同源引导页（`/robots.txt`），再用
+  `document.cookie` 写入原始值。Cookie 只落在 App 自身的 WebView Cookie
+  存储里，不写入 SharedPreferences，也不进入后端协议。
+
 ---
 
 ## 5. 互动 / 评论 / 相关视频接口
