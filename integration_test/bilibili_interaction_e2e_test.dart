@@ -41,10 +41,10 @@ void main() {
       ),
     );
 
-    // 页面加载：互动按钮出现。
+    // 页面加载：互动按钮出现（计数异步到达后文案会带数字）。
     await _pumpUntil(tester, () async {
-      return find.text('点赞').evaluate().isNotEmpty &&
-          find.text('收藏').evaluate().isNotEmpty;
+      return find.textContaining('点赞').evaluate().isNotEmpty &&
+          find.textContaining('收藏').evaluate().isNotEmpty;
     }, timeout: const Duration(seconds: 30));
 
     Future<Map<String, dynamic>> relation() async {
@@ -59,7 +59,7 @@ void main() {
     var state = await relation();
     final wasLiked = state['like'] == true;
     debugPrint('E2E: like before=$wasLiked');
-    await tester.tap(find.text('点赞'));
+    await tester.tap(find.textContaining('点赞'));
     await tester.pump(const Duration(milliseconds: 800));
     // 诊断：打印当前可见的 SnackBar/错误文案（如有）。
     final visibleTexts = tester
@@ -80,7 +80,7 @@ void main() {
       timeout: const Duration(seconds: 10),
     );
     debugPrint('E2E: like toggled on -> ${(await relation())['like']}');
-    await tester.tap(find.text('点赞'));
+    await tester.tap(find.textContaining('点赞'));
     await _pumpUntil(
       tester,
       () async => (await relation())['like'] == wasLiked,
@@ -92,7 +92,12 @@ void main() {
     // 「收藏」与「稍后」不做自动翻转断言：收藏是多夹语义（全局 favorite
     // 无法用 relation 精确断言，移除单个夹后仍为 true）；稍后再看的
     // 状态接口不可靠（添加/移除本身已通过后端调用验证，B 站 code 0）。
-    await tester.tap(find.text('评论'));
+    await tester.tap(
+      find.descendant(
+        of: find.byType(TabBar),
+        matching: find.textContaining('评论'),
+      ),
+    );
     await tester.pump(const Duration(milliseconds: 400));
     await _pumpUntil(tester, () async {
       return find.byType(TextField).evaluate().isNotEmpty;

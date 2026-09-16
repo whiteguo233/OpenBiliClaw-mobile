@@ -63,7 +63,7 @@ Future<void> _runDanmakuScrollTest(
 
   // Player UI ready + danmaku overlay mounted.
   await _pumpUntil(tester, () async {
-    return find.text('点赞').evaluate().isNotEmpty &&
+    return find.textContaining('点赞').evaluate().isNotEmpty &&
         DanmakuOverlay.debugLastController != null;
   }, timeout: const Duration(seconds: 60));
 

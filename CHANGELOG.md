@@ -1,5 +1,10 @@
 # Changelog
 
+## 未发布
+
+- 原生 B 站播放页新增 UP 主信息条：展示头像、名称与粉丝数，点击头像/名称先尝试唤起 B 站原生 App 的 `bilibili://space/<mid>`，失败回退网页版 `https://space.bilibili.com/<mid>`；右侧可直接关注/取消关注，取消关注前二次确认。
+- 关注能力依赖后端新增 `GET /api/bilibili/user/card`（粉丝数与 `following` 状态）与 `POST /api/bilibili/user/follow`（后端持有 CSRF 调用 B 站关系接口）；旧版后端返回 404 时自动隐藏关注按钮，UP 主信息展示不受影响。
+
 ## v0.3.158+2008 (2026-09-14)
 
 - 内置 WebView 播放页自动带上后端已有的 B 站登录态：优先复用 `play-url` 返回的 Cookie，否则调用一次 `auth/export`，网页版播放、弹幕与评论无需重新登录。Android 通过同源引导页写入原始 Cookie，避免 Cookie 值被二次 URL 编码；iOS/macOS 使用 `WKHTTPCookieStore` 直接写入，并规避 macOS 未实现背景色设置导致的异常。

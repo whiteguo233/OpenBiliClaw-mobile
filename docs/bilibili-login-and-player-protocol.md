@@ -357,7 +357,8 @@ POST /api/bilibili/player/play-url
 4. 可选：`POST /api/bilibili/auth/export`
 5. `DELETE /api/bilibili/auth/session`
 6. `POST /api/bilibili/player/play-url`
-7. 可选：`POST /api/bilibili/player/danmaku` 或直接返回弹幕 URL
+7. `GET /api/bilibili/video/info` + `GET /api/bilibili/user/card` + `POST /api/bilibili/user/follow`（UP 主展示与关注）
+8. 可选：`POST /api/bilibili/player/danmaku` 或直接返回弹幕 URL
 
 ---
 
@@ -399,8 +400,36 @@ POST /api/bilibili/player/play-url
 | `POST /api/bilibili/video/favorite` | 收藏/取消收藏 |
 | `POST /api/bilibili/video/watch-later` | 加入/移出稍后再看 |
 | `GET /api/bilibili/video/related?bvid=...` | 相关视频 |
+| `GET /api/bilibili/user/card?mid=...` | UP 主公开展示信息 + 当前用户是否已关注 |
+| `POST /api/bilibili/user/follow` | 关注/取消关注 UP 主 |
 | `GET /api/bilibili/video/comments?bvid=...&pn=1&limit=20` | 视频评论（分页，兜底路径，见下） |
 | `GET /api/bilibili/video/comment-replies?bvid=...&root=<rpid>&pn=1&limit=10` | 某条评论的完整回复楼（兜底路径，见下） |
+
+### UP 主信息与关注
+
+原生播放页在播放器互动按钮下方展示 UP 主头像、名称和粉丝数，点击头像/名称打开 UP 主空间，右侧提供“关注 / 已关注”按钮（与官方 App 的信息层级对齐）。
+
+- UP 主的 `mid` / `name` / `face` 直接取自 `GET /api/bilibili/video/info` 的 `owner` 对象；该接口已有 WBI 回退，见 2.1 同级的视频信息协议。
+- 页面展示 owner 后立即调用 `GET /api/bilibili/user/card?mid=<mid>` 补充 `fans`（粉丝数）与 `following`（当前登录用户是否已关注）：
+
+```json
+{
+  "ok": true,
+  "mid": 42,
+  "name": "某 UP 主",
+  "face": "https://i0.hdslb.com/bfs/face/xxx.jpg",
+  "sign": "个人签名",
+  "fans": 123456,
+  "following": false
+}
+```
+
+- 后端内部走 B 站 `/x/web-interface/card?mid=<mid>&photo=false`；`face` 的协议相对地址（`//i0.hdslb.com/...`）在服务端归一化为 `https:`。
+- 关注按钮调用 `POST /api/bilibili/user/follow`，请求体 `{"mid": 42, "follow": true}`，响应与 `user/card` 相同的扁平字段（返回刷新后的 `following` 与 `fans`）。取消关注传 `{"follow": false}`。
+- 写操作由后端携带 `bili_jct` 调 B 站 `/x/relation/modify`（`act=1` 关注、`act=2` 取消关注），移动端不直接接触 CSRF 写接口。
+- B 站对“已经关注却重复关注”返回 `22014`，后端将其视为成功并重新拉取 card，避免客户端因本地状态过期而看到失败提示；取消关注一个未关注用户时上游返回 `code 0`，同样无需额外处理。
+- 取消关注前客户端会二次确认，避免单次误触；后端返回 401 时提示重新登录 B 站。`GET user/card` 返回 404（旧版后端未实现该接口）时隐藏关注按钮；其它卡片失败时保留按钮但按“关注状态未确认”处理，首次点击由后端的 22014 幂等处理兜底。UP 主展示本身不受影响。
+- 点击 UP 主信息时先尝试原生 App 深链 `bilibili://space/<mid>`，失败再打开网页版 `https://space.bilibili.com/<mid>`。
 
 ### 评论区：端上直连优先，后端兜底
 

@@ -193,4 +193,80 @@ void main() {
       expect(page.hasMore, isFalse);
     });
   });
+
+  group('Bilibili UP card protocol', () {
+    test('parses video owner into displayable UP info', () {
+      final up = BilibiliUpInfo.fromVideoOwner({
+        'mid': 42,
+        'name': '测试UP &amp; 朋友',
+        'face': '//i0.hdslb.com/bfs/face/up.jpg',
+      });
+
+      expect(up.mid, 42);
+      expect(up.name, '测试UP & 朋友');
+      expect(up.avatarUrl, 'https://i0.hdslb.com/bfs/face/up.jpg');
+      expect(up.hasIdentity, isTrue);
+    });
+
+    test('parses backend user card with fans and follow state', () {
+      final up = BilibiliUpInfo.fromJson({
+        'ok': true,
+        'mid': 42,
+        'name': '测试UP',
+        'face': 'https://i0.hdslb.com/bfs/face/up.jpg',
+        'sign': '签名',
+        'fans': 12345,
+        'following': true,
+      });
+
+      expect(up.mid, 42);
+      expect(up.fans, 12345);
+      expect(up.following, isTrue);
+      expect(up.sign, '签名');
+    });
+
+    test('merges card state over owner identity without dropping fields', () {
+      final owner = BilibiliUpInfo.fromVideoOwner({
+        'mid': 42,
+        'name': '测试UP',
+        'face': '//i0.hdslb.com/bfs/face/up.jpg',
+      });
+      final card = BilibiliUpInfo.fromJson({
+        'mid': 42,
+        'name': '测试UP',
+        'fans': 999,
+        'following': true,
+      });
+
+      final merged = owner.merge(card);
+
+      expect(merged.avatarUrl, owner.avatarUrl);
+      expect(merged.fans, 999);
+      expect(merged.following, isTrue);
+    });
+
+    test('tolerates an anonymous owner payload', () {
+      final up = BilibiliUpInfo.fromVideoOwner({});
+
+      expect(up.hasIdentity, isFalse);
+      expect(up.avatarUrl, isEmpty);
+    });
+
+    test('accepts the raw upstream card shape as a fallback', () {
+      final up = BilibiliUpInfo.fromJson({
+        'card': {
+          'mid': '42',
+          'name': '测试UP',
+          'face': '//i0.hdslb.com/bfs/face/up.jpg',
+          'fans': 7,
+        },
+        'following': false,
+      });
+
+      expect(up.mid, 42);
+      expect(up.fans, 7);
+      expect(up.avatarUrl, 'https://i0.hdslb.com/bfs/face/up.jpg');
+      expect(up.following, isFalse);
+    });
+  });
 }

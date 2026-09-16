@@ -38,6 +38,7 @@ App 采用「客户端 + 后端」架构，使用流程：
 - 内置 WebView 播放页会自动带上后端已有的 B 站登录态（优先复用 `play-url` 的 Cookie，否则调一次 `auth/export`），网页版播放/评论无需重新登录；Android 侧为避免 Cookie 值被二次 URL 编码，走同源引导页 + `document.cookie` 写入原始值
 - 原生播放器支持弹幕、字幕、倍速、画质/分 P 切换、记忆播放、双击快进/快退、滑动调音量；WebView 登录后可一键同步 Cookie 到后端
 - 原生播放页支持点赞、投币、收藏、稍后再看、三连、原生评论列表和相关视频推荐
+- 原生播放页展示 UP 主头像、名称与粉丝数，点击可跳转 B 站原生 App / 网页版空间，并可直接关注 / 取消关注（依赖后端 `GET /api/bilibili/user/card` 与 `POST /api/bilibili/user/follow`；旧版后端会自动隐藏关注按钮）
 - B 站登录态与原生播放器取流协议见 [docs/bilibili-login-and-player-protocol.md](docs/bilibili-login-and-player-protocol.md)
 - 支持 Bilibili、抖音、小红书、YouTube、X、知乎、Reddit、微博、Linux.do、V2EX 等来源识别；非 Bilibili 内容优先唤起已安装的原生 App，失败时回落到规范化网页地址
 - 支持 Android / iOS / Web / Linux / macOS / Windows

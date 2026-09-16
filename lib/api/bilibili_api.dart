@@ -112,6 +112,31 @@ class BilibiliApi {
     return BilibiliVideoState.fromJson(data);
   }
 
+  /// `GET /api/bilibili/user/card?mid=...`
+  ///
+  /// Enriches the UP 主 shown on the native player page with the account's
+  /// follow state and fan count. Requires a working backend cookie; an older
+  /// backend without this route returns 404 and callers hide the follow UI.
+  Future<BilibiliUpInfo> userCard({required int mid}) async {
+    final data = await _client.get('/bilibili/user/card?mid=$mid');
+    return BilibiliUpInfo.fromJson(data);
+  }
+
+  /// `POST /api/bilibili/user/follow`
+  ///
+  /// Follows or unfollows an UP through the backend, which owns the Bilibili
+  /// CSRF token; the response carries the refreshed follow state.
+  Future<BilibiliUpInfo> followUser({
+    required int mid,
+    required bool follow,
+  }) async {
+    final data = await _client.post(
+      '/bilibili/user/follow',
+      body: {'mid': mid, 'follow': follow},
+    );
+    return BilibiliUpInfo.fromJson(data);
+  }
+
   /// `POST /api/bilibili/video/like`
   Future<BilibiliVideoState> likeVideo(
     String bvid, {

@@ -19,6 +19,7 @@ import '../api/bilibili_comment_api.dart';
 import '../api/client.dart';
 import '../models/bilibili_interaction.dart';
 import '../models/bilibili_play.dart';
+import '../services/bilibili_space_launcher.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/danmaku_overlay.dart';
 import 'bilibili_login_view.dart';
@@ -82,6 +83,11 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
   List<BilibiliRelatedVideo> _related = const [];
   String _videoDescription = '';
   bool _playerCompact = false;
+  BilibiliUpInfo? _up;
+  bool _upCardLoaded = false;
+  bool _upCardUnsupported = false;
+  bool _followStateUnconfirmed = false;
+  bool _followBusy = false;
 
   late final TabController _tabController = TabController(
     length: 2,
@@ -157,6 +163,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
       });
       unawaited(_loadDanmaku(result));
       unawaited(_loadSubtitles(result));
+      unawaited(_loadVideoInfo());
       unawaited(_loadInteractions());
       await _openPlayer(result);
     } catch (error) {
@@ -256,6 +263,102 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
     return Color(0xFF000000 | (value & 0xFFFFFF));
   }
 
+  /// Loads the video metadata that powers the intro tab, and kicks off the UP
+  /// card enrichment as soon as the owner is known. Runs independently from
+  /// the interaction channels so a slow comment list cannot delay the creator
+  /// row / description.
+  Future<void> _loadVideoInfo() async {
+    final api = _api;
+    if (api == null) return;
+    Map<String, dynamic>? info;
+    try {
+      info = await api.videoInfo(bvid: widget.bvid);
+    } catch (_) {
+      final direct = _commentDirect;
+      if (direct != null) {
+        try {
+          info = await direct.videoInfo(widget.bvid);
+        } catch (_) {
+          // Fall through: the page still plays without intro metadata.
+        }
+      }
+    }
+    if (info == null || !mounted) return;
+    final desc = info['desc']?.toString().trim() ?? '';
+    final rawOwner = info['owner'];
+    final owner = rawOwner is Map
+        ? BilibiliUpInfo.fromVideoOwner(Map<String, dynamic>.from(rawOwner))
+        : null;
+    final stat = info['stat'];
+    final replyTotal = stat is Map
+        ? int.tryParse((stat['reply'] ?? '').toString()) ?? 0
+        : 0;
+    final likeTotal = stat is Map
+        ? int.tryParse((stat['like'] ?? '').toString()) ?? 0
+        : 0;
+    final coinTotal = stat is Map
+        ? int.tryParse((stat['coin'] ?? '').toString()) ?? 0
+        : 0;
+    final favoriteTotal = stat is Map
+        ? int.tryParse((stat['favorite'] ?? '').toString()) ?? 0
+        : 0;
+    setState(() {
+      if (owner != null && owner.hasIdentity) _up = owner;
+      if (replyTotal > 0 && _commentTotal <= 0) {
+        _commentTotal = replyTotal;
+      }
+      final current = _videoState ?? const BilibiliVideoState();
+      _videoState = current.copyWith(
+        likeCount: likeTotal,
+        coinCount: coinTotal,
+        favoriteCount: favoriteTotal,
+      );
+      if (desc.isNotEmpty) _videoDescription = desc;
+    });
+    if (owner != null && owner.mid > 0) {
+      unawaited(_loadUpCard(owner.mid));
+    }
+  }
+
+  /// Enriches the video owner with the follow state and fan count. While the
+  /// card request is in flight the button shows a spinner. A 404 means the
+  /// backend predates the follow protocol, so the button is hidden; other
+  /// failures keep it visible in the unknown "follow" state because Bilibili's
+  /// duplicate-follow response (22014) is treated as success by the backend,
+  /// making a first tap safe even when the local snapshot is stale.
+  Future<void> _loadUpCard(int mid) async {
+    final api = _api;
+    if (api == null || mid <= 0) return;
+    try {
+      final card = await api.userCard(mid: mid);
+      if (!mounted) return;
+      setState(() {
+        final current = _up;
+        _up = current == null ? card : current.merge(card);
+        _upCardLoaded = true;
+        _upCardUnsupported = false;
+        _followStateUnconfirmed = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _upCardLoaded = false;
+        if (error.statusCode == 404) {
+          _upCardUnsupported = true;
+          _followStateUnconfirmed = false;
+        } else {
+          _followStateUnconfirmed = true;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _upCardLoaded = false;
+        _followStateUnconfirmed = true;
+      });
+    }
+  }
+
   Future<void> _loadInteractions() async {
     final api = _api;
     if (api == null) return;
@@ -263,7 +366,17 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
     // prevent the like/favorite state from rendering.
     try {
       final state = await api.videoRelation(bvid: widget.bvid);
-      if (mounted) setState(() => _videoState = state);
+      if (mounted) {
+        setState(() {
+          final current = _videoState ?? const BilibiliVideoState();
+          _videoState = current.copyWith(
+            like: state.like,
+            coin: state.coin,
+            favorite: state.favorite,
+            watchLater: state.watchLater,
+          );
+        });
+      }
     } catch (_) {}
     try {
       final commentPage = await _fetchCommentPage(1);
@@ -278,49 +391,6 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
     try {
       final related = await api.relatedVideos(bvid: widget.bvid);
       if (mounted) setState(() => _related = related);
-    } catch (_) {}
-    try {
-      Map<String, dynamic>? info;
-      try {
-        info = await api.videoInfo(bvid: widget.bvid);
-      } catch (_) {
-        final direct = _commentDirect;
-        if (direct != null) {
-          try {
-            info = await direct.videoInfo(widget.bvid);
-          } catch (_) {}
-        }
-      }
-      if (info != null) {
-        final desc = info['desc']?.toString().trim() ?? '';
-        final stat = info['stat'];
-        final replyTotal = stat is Map
-            ? int.tryParse((stat['reply'] ?? '').toString()) ?? 0
-            : 0;
-        final likeTotal = stat is Map
-            ? int.tryParse((stat['like'] ?? '').toString()) ?? 0
-            : 0;
-        final coinTotal = stat is Map
-            ? int.tryParse((stat['coin'] ?? '').toString()) ?? 0
-            : 0;
-        final favoriteTotal = stat is Map
-            ? int.tryParse((stat['favorite'] ?? '').toString()) ?? 0
-            : 0;
-        if (mounted) {
-          setState(() {
-            if (replyTotal > 0 && _commentTotal <= 0) {
-              _commentTotal = replyTotal;
-            }
-            final current = _videoState ?? const BilibiliVideoState();
-            _videoState = current.copyWith(
-              likeCount: likeTotal,
-              coinCount: coinTotal,
-              favoriteCount: favoriteTotal,
-            );
-            if (desc.isNotEmpty) _videoDescription = desc;
-          });
-        }
-      }
     } catch (_) {}
   }
 
@@ -638,6 +708,119 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
     return '$value';
   }
 
+  /// Creator row between the player actions and the tabs, mirroring the
+  /// official app's UP 主 strip. Tapping the identity opens the space; the
+  /// follow button appears once the backend card confirms the actual state.
+  Widget _upBar(BilibiliUpInfo up) {
+    final fansLabel = up.fans > 0 ? '${_shortCount(up.fans)}粉丝' : 'UP主';
+    return Container(
+      color: Colors.black,
+      padding: const EdgeInsets.fromLTRB(12, 0, 8, 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              onTap: () => unawaited(_openUpSpace(up)),
+              borderRadius: BorderRadius.circular(10),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    _CommentAvatar(url: up.avatarUrl, name: up.name, size: 36),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            up.name.isNotEmpty ? up.name : '这位 UP 还没认出来',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            fansLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      size: 18,
+                      color: Colors.white38,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (!_upCardUnsupported) ...[
+            const SizedBox(width: 8),
+            _followButton(up),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _followButton(BilibiliUpInfo up) {
+    final loading = !_upCardLoaded && !_followStateUnconfirmed;
+    final busy = _followBusy || loading;
+    final showSpinner = loading || _followBusy;
+    final child = showSpinner
+        ? const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Colors.white38,
+            ),
+          )
+        : Text(
+            up.following ? '已关注' : '关注',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          );
+    if (up.following) {
+      return OutlinedButton(
+        onPressed: busy ? null : () => unawaited(_toggleFollow()),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Colors.white70,
+          disabledForegroundColor: Colors.white38,
+          side: const BorderSide(color: Colors.white24),
+          minimumSize: const Size(72, 32),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        child: child,
+      );
+    }
+    return FilledButton(
+      onPressed: busy ? null : () => unawaited(_toggleFollow()),
+      style: FilledButton.styleFrom(
+        backgroundColor: const Color(0xFFFB7299),
+        foregroundColor: Colors.white,
+        disabledBackgroundColor: const Color(0x66FB7299),
+        minimumSize: const Size(72, 32),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: child,
+    );
+  }
+
   static String _formatPPageDuration(int seconds) {
     final hours = seconds ~/ 3600;
     final minutes = (seconds % 3600) ~/ 60;
@@ -656,6 +839,98 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
         '%${videoUrl.length}%$videoUrl;'
         '!new_stream;!no_chapters;'
         '%${audioUrl.length}%$audioUrl';
+  }
+
+  /// Opens the UP 主 space through the native Bilibili app when possible,
+  /// otherwise through the canonical web space page.
+  Future<void> _openUpSpace(BilibiliUpInfo up) async {
+    if (up.mid <= 0) return;
+    final opened = await BilibiliSpaceLauncher.open(mid: '${up.mid}');
+    if (!opened && mounted) _showSnack('无法打开 UP 主空间，请稍后重试');
+  }
+
+  Future<bool> _confirmUnfollow(String name) async {
+    final label = name.trim().isEmpty ? '这位 UP 主' : name.trim();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('取消关注'),
+        content: Text('确定不再关注 $label 吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('取消关注'),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
+  /// Follows or unfollows the video owner through the backend. Unfollowing
+  /// asks for confirmation first so a single tap cannot silently drop an UP
+  /// the user has followed for a long time.
+  Future<void> _toggleFollow() async {
+    final api = _api;
+    final up = _up;
+    if (api == null || up == null || up.mid <= 0 || _followBusy) return;
+    if (_upCardUnsupported) {
+      _showSnack('当前后端版本暂不支持关注，请先升级后端');
+      return;
+    }
+    if (!_upCardLoaded && !_followStateUnconfirmed) return;
+    if (up.following && !await _confirmUnfollow(up.name)) return;
+    if (!mounted) return;
+    final nextFollowing = !up.following;
+    setState(() => _followBusy = true);
+    try {
+      final updated = await api.followUser(mid: up.mid, follow: nextFollowing);
+      if (!mounted) return;
+      setState(() {
+        final current = _up ?? up;
+        _up = current.merge(updated);
+        _followBusy = false;
+        _upCardLoaded = true;
+        _upCardUnsupported = false;
+        _followStateUnconfirmed = false;
+      });
+      _showSnack(nextFollowing ? '已关注' : '已取消关注');
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _followBusy = false);
+      if (error.statusCode == 401) {
+        _showFollowLoginPrompt();
+      } else if (error.statusCode == 404) {
+        setState(() {
+          _upCardLoaded = false;
+          _upCardUnsupported = true;
+          _followStateUnconfirmed = false;
+        });
+        _showSnack('当前后端版本暂不支持关注，请先升级后端');
+      } else {
+        _showSnack('关注失败（HTTP ${error.statusCode}）');
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _followBusy = false);
+      _showSnack('关注失败：$error');
+    }
+  }
+
+  void _showFollowLoginPrompt() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('B 站登录态已失效，请先重新登录'),
+        action: SnackBarAction(
+          label: '去登录',
+          onPressed: () => unawaited(_openLogin()),
+        ),
+      ),
+    );
   }
 
   Future<void> _openWebViewFallback() async {
@@ -683,6 +958,12 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
       _commentDirect = null;
       _commentAid = null;
       _directSessionTried = false;
+      setState(() {
+        _upCardLoaded = false;
+        _upCardUnsupported = false;
+        _followStateUnconfirmed = false;
+        _followBusy = false;
+      });
       await _load();
     }
   }
@@ -1161,6 +1442,10 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
   Widget build(BuildContext context) {
     final result = _result;
     final theme = Theme.of(context);
+    // 键盘 inset 必须在上层 context 读取：Scaffold 开启
+    // resizeToAvoidBottomInset 后会把 body 的 viewInsets 扣掉，在 body 内
+    // 读不到真实键盘高度。
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -1188,7 +1473,12 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
           ? const Center(child: CircularProgressIndicator(color: Colors.white))
           : _error != null
           ? _errorPanel(context)
-          : _playerBody(context, result!, theme),
+          : _playerBody(
+              context,
+              result!,
+              theme,
+              keyboardVisible: keyboardVisible,
+            ),
     );
   }
 
@@ -1240,16 +1530,25 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
   Widget _playerBody(
     BuildContext context,
     BilibiliPlayResult result,
-    ThemeData theme,
-  ) {
+    ThemeData theme, {
+    required bool keyboardVisible,
+  }) {
     final video = result.video;
     return LayoutBuilder(
       builder: (context, constraints) {
         final isPortrait =
             video != null && video.width > 0 && video.height > video.width;
         final useCompact = _playerCompact && isPortrait;
-        // 展开态：竖屏视频仍要控制高度，避免一开始就把评论区挤出屏幕。
-        final maxPlayerHeight = constraints.maxHeight * 0.6;
+        // 评论区键盘弹出时 Scaffold body 会被压缩，播放器需要主动让出
+        // 互动栏 / UP 主信息条 / Tab 区所需的空间；无键盘时保持原有
+        // 60% 上限，避免影响常规播放与点击布局。键盘收起后会弹回。
+        final standardMaxPlayerHeight = constraints.maxHeight * 0.6;
+        final maxPlayerHeight = keyboardVisible
+            ? (constraints.maxHeight -
+                      (64.0 + (_up != null ? 52.0 : 0.0) + 156.0))
+                  .clamp(0.0, standardMaxPlayerHeight)
+                  .toDouble()
+            : standardMaxPlayerHeight;
         final naturalHeight = constraints.maxWidth / _aspectRatio(video);
         final expandedHeight = naturalHeight > maxPlayerHeight
             ? maxPlayerHeight
@@ -1257,11 +1556,20 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
         // 紧凑态：切换到 16:9 的迷你播放器高度，把更多空间留给下方内容。
         final compactHeight = constraints.maxWidth * 9 / 16;
         final aspectRatio = useCompact ? 16 / 9 : _aspectRatio(video);
-        final playerHeight = useCompact ? compactHeight : expandedHeight;
+        final playerHeight = useCompact
+            ? (keyboardVisible && maxPlayerHeight < compactHeight
+                  ? maxPlayerHeight
+                  : compactHeight)
+            : expandedHeight;
         return Column(
           children: [
             AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
+              // 键盘弹出/收起时 Scaffold body 会在同一帧改变高度；若播放器
+              // 高度继续做 220ms 补间，过渡帧会用旧的大高度挤压下方
+              // Column。键盘可见时直接跳到目标高度，避免瞬时溢出。
+              duration: keyboardVisible
+                  ? Duration.zero
+                  : const Duration(milliseconds: 220),
               curve: Curves.easeOutCubic,
               width: constraints.maxWidth,
               height: playerHeight,
@@ -1426,6 +1734,7 @@ class _NativeBilibiliVideoPageState extends State<NativeBilibiliVideoPage>
                 ],
               ),
             ),
+            if (_up != null) _upBar(_up!),
             Expanded(
               child: Column(
                 children: [

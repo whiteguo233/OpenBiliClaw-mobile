@@ -49,6 +49,86 @@ class BilibiliVideoState {
   );
 }
 
+/// The UP 主 behind a Bilibili video.
+///
+/// The native player first learns [mid] / [name] / [avatarUrl] from the video
+/// `owner` object, then enriches them with [fans] and [following] from the
+/// backend user-card endpoint so the creator row can render a follow button.
+class BilibiliUpInfo {
+  final int mid;
+  final String name;
+  final String avatarUrl;
+  final String sign;
+  final int fans;
+  final bool following;
+
+  const BilibiliUpInfo({
+    this.mid = 0,
+    this.name = '',
+    this.avatarUrl = '',
+    this.sign = '',
+    this.fans = 0,
+    this.following = false,
+  });
+
+  bool get hasIdentity => mid > 0 && (name.isNotEmpty || avatarUrl.isNotEmpty);
+
+  /// Parses the `owner` object of Bilibili's `/x/web-interface/view` payload
+  /// (also returned by the backend `/api/bilibili/video/info`).
+  factory BilibiliUpInfo.fromVideoOwner(Map<String, dynamic> json) =>
+      BilibiliUpInfo(
+        mid: _int(json['mid']),
+        name: decodeHtml(_text(json['name'])),
+        avatarUrl: _absoluteUrl(_text(json['face'])),
+      );
+
+  /// Parses the backend `/api/bilibili/user/card` payload. The raw Bilibili
+  /// card shape is accepted too, because the endpoint returns the card fields
+  /// at the top level while upstream nests them under `card`.
+  factory BilibiliUpInfo.fromJson(Map<String, dynamic> json) {
+    final card = json['card'];
+    final source = card is Map ? Map<String, dynamic>.from(card) : json;
+    return BilibiliUpInfo(
+      mid: _int(source['mid']),
+      name: decodeHtml(_text(source['name'] ?? source['uname'])),
+      avatarUrl: _absoluteUrl(
+        _text(source['face'] ?? source['avatar'] ?? source['avatar_url']),
+      ),
+      sign: _text(source['sign'] ?? source['signature']),
+      fans: _int(source['fans'] ?? source['follower']),
+      following: json['following'] == true || source['following'] == true,
+    );
+  }
+
+  BilibiliUpInfo copyWith({
+    int? mid,
+    String? name,
+    String? avatarUrl,
+    String? sign,
+    int? fans,
+    bool? following,
+  }) => BilibiliUpInfo(
+    mid: mid ?? this.mid,
+    name: name ?? this.name,
+    avatarUrl: avatarUrl ?? this.avatarUrl,
+    sign: sign ?? this.sign,
+    fans: fans ?? this.fans,
+    following: following ?? this.following,
+  );
+
+  /// Fills missing profile fields from [other] while taking [other]'s follow
+  /// flag as authoritative. Used to layer the user-card payload over the
+  /// owner data that came with the video view payload.
+  BilibiliUpInfo merge(BilibiliUpInfo other) => BilibiliUpInfo(
+    mid: other.mid > 0 ? other.mid : mid,
+    name: other.name.isNotEmpty ? other.name : name,
+    avatarUrl: other.avatarUrl.isNotEmpty ? other.avatarUrl : avatarUrl,
+    sign: other.sign.isNotEmpty ? other.sign : sign,
+    fans: other.fans > 0 ? other.fans : fans,
+    following: other.following,
+  );
+}
+
 class BilibiliRelatedVideo {
   final String bvid;
   final String title;
@@ -218,6 +298,11 @@ class BilibiliCommentPage {
 }
 
 String _text(dynamic value) => value?.toString().trim() ?? '';
+
+String _absoluteUrl(String value) {
+  final trimmed = value.trim();
+  return trimmed.startsWith('//') ? 'https:$trimmed' : trimmed;
+}
 
 int _int(dynamic value) {
   if (value is num) return value.toInt();
