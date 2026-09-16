@@ -182,6 +182,12 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        with:
+          # The obsolete "tools" package was removed from the SDK repository;
+          # keeping it in the default package list makes sdkmanager exit 1.
+          # platform-tools is enough here, and Gradle/AGP installs any
+          # missing platform/build-tools after the licenses were accepted.
+          packages: 'platform-tools'
 
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
