@@ -135,6 +135,8 @@ class BilibiliRelatedVideo {
   final String coverUrl;
   final String upName;
   final int view;
+  final int duration;
+  final int danmaku;
 
   const BilibiliRelatedVideo({
     this.bvid = '',
@@ -142,6 +144,8 @@ class BilibiliRelatedVideo {
     this.coverUrl = '',
     this.upName = '',
     this.view = 0,
+    this.duration = 0,
+    this.danmaku = 0,
   });
 
   factory BilibiliRelatedVideo.fromJson(Map<String, dynamic> json) {
@@ -155,6 +159,8 @@ class BilibiliRelatedVideo {
       coverUrl: _text(json['pic'] ?? json['cover']),
       upName: decodeHtml(_text(ownerMap['name'] ?? '')),
       view: _int(statMap['view']),
+      duration: _int(json['duration']),
+      danmaku: _int(statMap['danmaku']),
     );
   }
 }

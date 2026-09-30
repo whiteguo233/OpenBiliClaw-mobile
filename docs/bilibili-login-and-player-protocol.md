@@ -407,7 +407,7 @@ POST /api/bilibili/player/play-url
 
 ### UP 主信息与关注
 
-原生播放页在播放器互动按钮下方展示 UP 主头像、名称和粉丝数，点击头像/名称打开 UP 主空间，右侧提供“关注 / 已关注”按钮（与官方 App 的信息层级对齐）。
+原生播放页将“简介 / 评论”标签固定在播放器下方；UP 主头像、名称、粉丝数和“关注 / 已关注”按钮位于简介内容顶部，随后展示视频标题、播放数据、互动按钮与相关推荐。点击头像/名称打开 UP 主空间。内容区支持浅色和深色模式，页面结构与验证方式见 [播放页 UI](bilibili-player-ui.md)。
 
 - UP 主的 `mid` / `name` / `face` 直接取自 `GET /api/bilibili/video/info` 的 `owner` 对象；该接口已有 WBI 回退，见 2.1 同级的视频信息协议。
 - 页面展示 owner 后立即调用 `GET /api/bilibili/user/card?mid=<mid>` 补充 `fans`（粉丝数）与 `following`（当前登录用户是否已关注）：

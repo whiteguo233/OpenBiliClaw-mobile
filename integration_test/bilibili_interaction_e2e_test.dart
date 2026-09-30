@@ -43,8 +43,11 @@ void main() {
 
     // 页面加载：互动按钮出现（计数异步到达后文案会带数字）。
     await _pumpUntil(tester, () async {
-      return find.textContaining('点赞').evaluate().isNotEmpty &&
-          find.textContaining('收藏').evaluate().isNotEmpty;
+      return find
+              .byKey(const ValueKey('bilibili-like'))
+              .evaluate()
+              .isNotEmpty &&
+          find.byKey(const ValueKey('bilibili-favorite')).evaluate().isNotEmpty;
     }, timeout: const Duration(seconds: 30));
 
     Future<Map<String, dynamic>> relation() async {
@@ -59,7 +62,7 @@ void main() {
     var state = await relation();
     final wasLiked = state['like'] == true;
     debugPrint('E2E: like before=$wasLiked');
-    await tester.tap(find.textContaining('点赞'));
+    await tester.tap(find.byKey(const ValueKey('bilibili-like')));
     await tester.pump(const Duration(milliseconds: 800));
     // 诊断：打印当前可见的 SnackBar/错误文案（如有）。
     final visibleTexts = tester
@@ -80,7 +83,7 @@ void main() {
       timeout: const Duration(seconds: 10),
     );
     debugPrint('E2E: like toggled on -> ${(await relation())['like']}');
-    await tester.tap(find.textContaining('点赞'));
+    await tester.tap(find.byKey(const ValueKey('bilibili-like')));
     await _pumpUntil(
       tester,
       () async => (await relation())['like'] == wasLiked,

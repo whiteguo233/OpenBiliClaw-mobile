@@ -34,17 +34,27 @@ void main() {
     // 播放器应加载成功并显示互动按钮。互动计数异步到达后标签会变成
     // 「12.3万 点赞」这类文案，因此统一用 textContaining 匹配。
     await _pumpUntil(tester, () async {
-      return find.textContaining('点赞').evaluate().isNotEmpty &&
-          find.textContaining('投币').evaluate().isNotEmpty &&
-          find.textContaining('收藏').evaluate().isNotEmpty &&
-          find.textContaining('稍后').evaluate().isNotEmpty &&
-          find.textContaining('三连').evaluate().isNotEmpty;
+      return find
+              .byKey(const ValueKey('bilibili-like'))
+              .evaluate()
+              .isNotEmpty &&
+          find.byKey(const ValueKey('bilibili-coin')).evaluate().isNotEmpty &&
+          find
+              .byKey(const ValueKey('bilibili-favorite'))
+              .evaluate()
+              .isNotEmpty &&
+          find.text('分享').evaluate().isNotEmpty;
     }, timeout: const Duration(seconds: 30));
-    expect(find.textContaining('点赞'), findsOneWidget);
-    expect(find.textContaining('投币'), findsOneWidget);
-    expect(find.textContaining('收藏'), findsOneWidget);
-    expect(find.textContaining('稍后'), findsOneWidget);
-    expect(find.textContaining('三连'), findsOneWidget);
+    expect(find.byKey(const ValueKey('bilibili-like')), findsOneWidget);
+    expect(find.byKey(const ValueKey('bilibili-coin')), findsOneWidget);
+    expect(find.byKey(const ValueKey('bilibili-favorite')), findsOneWidget);
+    expect(find.text('分享'), findsOneWidget);
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('稍后再看'), findsOneWidget);
+    expect(find.text('一键三连'), findsOneWidget);
+    Navigator.of(tester.element(find.text('一键三连'))).pop();
+    await tester.pump(const Duration(milliseconds: 400));
 
     // UP 主信息条来自真实 video/info 的 owner 与 user/card 的粉丝数。
     await _pumpUntil(tester, () async {
@@ -77,7 +87,7 @@ void main() {
     );
 
     await _pumpUntil(tester, () async {
-      return find.textContaining('点赞').evaluate().isNotEmpty;
+      return find.byKey(const ValueKey('bilibili-like')).evaluate().isNotEmpty;
     }, timeout: const Duration(seconds: 30));
     await _pumpUntil(tester, () async {
       return find.byType(Video).evaluate().isNotEmpty;
@@ -96,7 +106,9 @@ void main() {
     );
 
     // 互动操作栏应在屏幕内。
-    final likeRect = tester.getRect(find.textContaining('点赞'));
+    final likeRect = tester.getRect(
+      find.byKey(const ValueKey('bilibili-like')),
+    );
     expect(likeRect.bottom, lessThanOrEqualTo(screen.height + 1));
 
     // 正文标题应无需滚动即在可视区域内（AppBar 标题在最上方，正文标题在

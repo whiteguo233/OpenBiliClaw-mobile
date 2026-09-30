@@ -52,7 +52,10 @@ void main() {
     // Interaction row proves the page loaded; the owner row follows the
     // asynchronous video/info request.
     await _pumpUntil(tester, () async {
-      return find.textContaining('点赞').evaluate().isNotEmpty &&
+      return find
+              .byKey(const ValueKey('bilibili-like'))
+              .evaluate()
+              .isNotEmpty &&
           find.text(ownerName).evaluate().isNotEmpty;
     }, timeout: const Duration(seconds: 45));
     expect(find.text(ownerName), findsOneWidget);
