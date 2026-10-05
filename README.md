@@ -73,6 +73,8 @@ flutter test integration_test/app_e2e_test.dart -d <device-id>   # 真实 App �
 
 ## 验证状态
 
+Instagram（后端实验性来源）的推荐展示、封面解码、本地收藏/稍后看和外链打开已在 iOS 模拟器通过真实 API 验证；不等于 Android / 手机真机、完整启动流程或 Instagram App 唤起已通过。范围与显式启用的集成测试见 [Instagram 消费验收](docs/instagram-consumption-live-20261005.md)。
+
 当前版本已通过真实本地后端、商汤日日新真实回复、Android 15 模拟器和 iOS 26.5
 模拟器的四主流程端到端验收，并通过 Android APK/AAB 与 unsigned iOS release 构建。
 长期运行、弱网、防盗链和各内容平台原生 App 唤起仍建议在对应真机上持续观察。
