@@ -36,7 +36,7 @@ dependencies:
   flutter_secure_storage: ^11.0.0
   share_plus: ^13.3.0
   screen_brightness: ^2.1.5
-  volume_controller: ^3.6.1
+  volume_controller: ^3.7.1
 
 dev_dependencies:
   flutter_test:
