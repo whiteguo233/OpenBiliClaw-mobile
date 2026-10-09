@@ -21,10 +21,10 @@ void main() {
       HttpOverrides.global = null;
       addTearDown(() => HttpOverrides.global = oldOverrides);
       // test_e2e is an opt-in test directory outside the analyzer's test/ root.
-    // ignore: invalid_use_of_visible_for_testing_member
-    SharedPreferences.setMockInitialValues({});
       // ignore: invalid_use_of_visible_for_testing_member
-    FlutterSecureStorage.setMockInitialValues({});
+      SharedPreferences.setMockInitialValues({});
+      // ignore: invalid_use_of_visible_for_testing_member
+      FlutterSecureStorage.setMockInitialValues({});
       ApiClient makeClient() => ApiClient(
         directClientFactory: () =>
             IOClient(HttpClient()..findProxy = (_) => 'DIRECT'),
