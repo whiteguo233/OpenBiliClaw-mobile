@@ -367,13 +367,14 @@ class ApiClient {
   }
 
   Future<bool> checkHealth({
+    String? overrideScheme,
     String? overrideHost,
     int? overridePort,
     String? overrideBasePath,
     ConnectionMode? overrideConnectionMode,
   }) async {
     try {
-      var nextScheme = _scheme;
+      var nextScheme = _normalizeScheme(overrideScheme ?? _scheme);
       var nextHost = overrideHost ?? _host;
       var nextBasePath = _normalizeBasePath(overrideBasePath ?? _basePath);
       final parsed = Uri.tryParse(nextHost);
