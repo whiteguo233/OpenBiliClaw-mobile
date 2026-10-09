@@ -160,6 +160,7 @@ class _SettingsViewState extends State<SettingsView> {
       }
     }
     final ok = await client.checkHealth(
+      overrideScheme: parsed.scheme,
       overrideHost: parsed.host,
       overridePort: parsed.port,
       overrideBasePath: parsed.basePath,
@@ -175,11 +176,12 @@ class _SettingsViewState extends State<SettingsView> {
   }
 
   String _formatBackendUrl(ApiClient client) {
-    final defaultPath = client.basePath;
-    if (defaultPath.isEmpty) {
-      return '${client.scheme}://${client.host}:${client.port}';
-    }
-    return '${client.scheme}://${client.host}:${client.port}/$defaultPath';
+    return Uri(
+      scheme: client.scheme,
+      host: client.host,
+      port: client.port,
+      path: client.basePath.isEmpty ? '' : '/${client.basePath}',
+    ).toString();
   }
 
   ({String scheme, String host, int port, String basePath}) _parseBackendUrl(
@@ -209,7 +211,9 @@ class _SettingsViewState extends State<SettingsView> {
     return (
       scheme: uri.scheme,
       host: uri.host,
-      port: uri.hasPort ? uri.port : 8420,
+      // Uri.port preserves custom ports and resolves HTTP/HTTPS defaults,
+      // including explicitly supplied :80/:443 normalized away by Uri.
+      port: uri.port,
       basePath: basePath,
     );
   }
