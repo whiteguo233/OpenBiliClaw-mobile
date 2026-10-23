@@ -134,3 +134,5 @@ output_dimensionality = 768          # 需匹配 embedding 模型实际维度
 配套后端和验证范围见 [推荐一致性说明](docs/recommendation-consistency.md)。
 
 推荐真实环境回归入口和设备限制见 [推荐一致性验收](docs/recommendation-consistency.md#真实请求验收2026-09-07)。测试会消费真实推荐池。
+
+原生聊天、假设确认与真实请求验收见 [聊天与假设确认](docs/native-chat-hypotheses.md)。

@@ -171,13 +171,60 @@ class ChatApi {
     return PendingConfirmationsPage(items: items, total: total < 0 ? 0 : total);
   }
 
-  Future<ChatTurn> openPendingConfirmation(String ref) async {
-    final data = await _client.post(
-      '/chat/pending-confirmations/${Uri.encodeComponent(ref)}/open',
-      body: const {'session': 'popup'},
-      timeout: 60,
-    );
-    return ChatTurn.fromJson(data);
+  Future<ChatTurn> openPendingConfirmation(
+    String ref, {
+    void Function()? onWaiting,
+    bool Function()? isCancelled,
+    Duration busyRetryWindow = const Duration(minutes: 2),
+  }) async {
+    final elapsed = Stopwatch()..start();
+    const delays = [1, 2, 3, 5];
+    var attempt = 0;
+    while (true) {
+      if (isCancelled?.call() ?? false) {
+        throw StateError('已取消打开待聊内容');
+      }
+      try {
+        final data = await _client.post(
+          '/chat/pending-confirmations/${Uri.encodeComponent(ref)}/open',
+          body: const {'session': 'popup'},
+          timeout: 60,
+        );
+        return ChatTurn.fromJson(data);
+      } on ApiException catch (error) {
+        // This explicit admission failure guarantees the open was not applied.
+        // Never replay a request after an ambiguous transport or server failure.
+        if (!_isDialogueBusy(error)) rethrow;
+        if (elapsed.elapsed >= busyRetryWindow) {
+          throw ApiException(
+            503,
+            jsonEncode({
+              'detail': {
+                'code': 'dialogue_busy_timeout',
+                'message': '后台整理仍未完成，请稍后再点击打开。',
+              },
+            }),
+          );
+        }
+        onWaiting?.call();
+        await Future<void>.delayed(
+          Duration(seconds: delays[attempt.clamp(0, delays.length - 1)]),
+        );
+        attempt++;
+      }
+    }
+  }
+
+  bool _isDialogueBusy(ApiException error) {
+    if (error.statusCode != 503) return false;
+    try {
+      final body = jsonDecode(error.body);
+      return body is Map &&
+          body['detail'] is Map &&
+          body['detail']['code'] == 'dialogue_busy';
+    } on FormatException {
+      return false;
+    }
   }
 
   Future<Map<String, dynamic>> actOnCard(String turnId, String action) {

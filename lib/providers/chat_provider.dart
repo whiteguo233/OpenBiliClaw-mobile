@@ -75,6 +75,7 @@ class ChatProvider extends ChangeNotifier {
   bool _showPendingBadge = false;
   final Set<String> _busyCardIds = {};
   final Set<String> _busyConfirmationRefs = {};
+  final Set<String> _waitingConfirmationRefs = {};
   bool _loading = false;
   bool _responding = false;
   bool _syncingHistory = false;
@@ -169,6 +170,8 @@ class ChatProvider extends ChangeNotifier {
   ChatComposeContext get composeContext => _composeContext;
   bool cardBusy(String turnId) => _busyCardIds.contains(turnId);
   bool confirmationBusy(String ref) => _busyConfirmationRefs.contains(ref);
+  bool confirmationWaiting(String ref) =>
+      _waitingConfirmationRefs.contains(ref);
 
   void clearError() {
     if (_error.isEmpty) return;
@@ -470,9 +473,20 @@ class ChatProvider extends ChangeNotifier {
     _error = '';
     _safeNotify();
     try {
-      final turn = await _api.openPendingConfirmation(item.ref);
+      final turn = await _api.openPendingConfirmation(
+        item.ref,
+        isCancelled: () => _disposed,
+        onWaiting: () {
+          _waitingConfirmationRefs.add(item.ref);
+          _safeNotify();
+        },
+      );
+      if (_disposed) return false;
       _upsertTurn(turn);
-      await selectDialogueContext(turn.turnId);
+      // A pending hypothesis has no active reply target until Discuss is chosen.
+      if (turn.isQuestion || (turn.isCard && turn.cardState == 'discussing')) {
+        await selectDialogueContext(turn.turnId);
+      }
       await loadPendingConfirmations(notify: false);
       return true;
     } catch (error) {
@@ -480,6 +494,7 @@ class ChatProvider extends ChangeNotifier {
       return false;
     } finally {
       _busyConfirmationRefs.remove(item.ref);
+      _waitingConfirmationRefs.remove(item.ref);
       _safeNotify();
     }
   }

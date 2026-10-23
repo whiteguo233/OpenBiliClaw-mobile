@@ -59,9 +59,16 @@ class _ChatViewState extends State<ChatView> {
                 if (!compactViewport && accessibilityChrome)
                   _compactHeader(context, provider, turns.length),
                 if (provider.pendingCount > 0 && !compactViewport)
-                  accessibilityChrome
+                  accessibilityChrome || constraints.maxWidth < 600
                       ? _compactPendingButton(context, provider)
-                      : _pendingPanel(context, provider),
+                      : ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight: constraints.maxHeight * 0.35,
+                          ),
+                          child: SingleChildScrollView(
+                            child: _pendingPanel(context, provider),
+                          ),
+                        ),
                 const ChatApprovalsButton(),
                 if (provider.error.isNotEmpty) _errorBanner(context, provider),
                 if (provider.dialogueContext != null)
@@ -188,14 +195,20 @@ class _ChatViewState extends State<ChatView> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (sheetContext) => SingleChildScrollView(
-        padding: const EdgeInsets.only(top: 12, bottom: 20),
-        child: _pendingPanel(sheetContext, provider),
+      builder: (sheetContext) => Consumer<ChatProvider>(
+        builder: (context, current, _) => SingleChildScrollView(
+          padding: const EdgeInsets.only(top: 12, bottom: 20),
+          child: _pendingPanel(sheetContext, current, dismissOnOpen: true),
+        ),
       ),
     );
   }
 
-  Widget _pendingPanel(BuildContext context, ChatProvider provider) {
+  Widget _pendingPanel(
+    BuildContext context,
+    ChatProvider provider, {
+    bool dismissOnOpen = false,
+  }) {
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 6),
       decoration: BoxDecoration(
@@ -226,9 +239,24 @@ class _ChatViewState extends State<ChatView> {
         ),
         title: Text('待聊确认（${provider.pendingCount}）'),
         subtitle: const Text('来自插件、桌面端和后台认知的共享工作列表'),
-        children: provider.pendingConfirmations
-            .map((item) => _pendingItem(context, provider, item))
-            .toList(),
+        children: [
+          if (provider.error.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                provider.error,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+          ...provider.pendingConfirmations.map(
+            (item) => _pendingItem(
+              context,
+              provider,
+              item,
+              dismissOnOpen: dismissOnOpen,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -236,8 +264,9 @@ class _ChatViewState extends State<ChatView> {
   Widget _pendingItem(
     BuildContext context,
     ChatProvider provider,
-    PendingConfirmation item,
-  ) {
+    PendingConfirmation item, {
+    bool dismissOnOpen = false,
+  }) {
     final busy = provider.confirmationBusy(item.ref);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
@@ -280,7 +309,12 @@ class _ChatViewState extends State<ChatView> {
               child: FilledButton.tonalIcon(
                 onPressed: busy
                     ? null
-                    : () => _openConfirmation(context, provider, item),
+                    : () => _openConfirmation(
+                        context,
+                        provider,
+                        item,
+                        dismissOnOpen: dismissOnOpen,
+                      ),
                 icon: busy
                     ? const SizedBox(
                         width: 14,
@@ -288,7 +322,13 @@ class _ChatViewState extends State<ChatView> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.forum_outlined, size: 16),
-                label: const Text('放进对话'),
+                label: Text(
+                  provider.confirmationWaiting(item.ref)
+                      ? '等待后台整理…'
+                      : busy
+                      ? '正在打开…'
+                      : '放进对话',
+                ),
               ),
             ),
           ],
@@ -891,10 +931,12 @@ class _ChatViewState extends State<ChatView> {
   Future<void> _openConfirmation(
     BuildContext context,
     ChatProvider provider,
-    PendingConfirmation item,
-  ) async {
+    PendingConfirmation item, {
+    bool dismissOnOpen = false,
+  }) async {
     final ok = await provider.openPendingConfirmation(item);
     if (!context.mounted || !ok) return;
+    if (dismissOnOpen) Navigator.pop(context);
     _scrollToBottom();
   }
 

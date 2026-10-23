@@ -38,6 +38,8 @@ void main() {
       final name = 'NGA 原生验收 ${DateTime.now().millisecondsSinceEpoch}';
       final prompt =
           '新增独立 Discovery 网页来源，名称“$name”，网址 https://bbs.nga.cn/thread.php?fid=-447601 。使用 Ego Lite。二次元国家地理板块第一页，允许置顶、公告、高亮和专楼，只收 read.php?tid= 帖子详情，不收导航和子版块。每轮最多3条、1页，不翻页，提取标题链接和作者，摘要没有留空。不需要登录。每5分钟采集，份额1。请现在真实试跑并提交激活审批。';
+      await tester.tap(find.byKey(const Key('chatMessageInput')));
+      await tester.pump(const Duration(milliseconds: 300));
       await tester.enterText(find.byKey(const Key('chatMessageInput')), prompt);
       await tester.tap(find.byKey(const Key('chatSend')));
       FocusManager.instance.primaryFocus?.unfocus();
@@ -231,6 +233,8 @@ Future<void> addFeed(
     'chat ready for feed',
     seconds: 90,
   );
+  await tester.tap(find.byKey(const Key('chatMessageInput')));
+  await tester.pump(const Duration(milliseconds: 300));
   await tester.enterText(find.byKey(const Key('chatMessageInput')), prompt);
   await tester.tap(find.byKey(const Key('chatSend')));
   FocusManager.instance.primaryFocus?.unfocus();
