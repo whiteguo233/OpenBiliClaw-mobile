@@ -306,6 +306,7 @@ class RecommendationCard extends StatelessWidget {
         : palette.surfaceMuted;
     final foreground = dark ? Colors.white : palette.inkMuted;
     return Container(
+      constraints: const BoxConstraints(maxWidth: 160),
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
         color: background,
@@ -313,7 +314,9 @@ class RecommendationCard extends StatelessWidget {
         border: dark ? null : Border.all(color: palette.line),
       ),
       child: Text(
-        sourcePlatformLabel(rec.sourcePlatform),
+        rec.sourceLabel,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: foreground,
           fontSize: 10,

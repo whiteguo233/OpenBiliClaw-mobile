@@ -62,6 +62,10 @@ class ContentHistoryContext {
 class ContentHistoryItem {
   final String itemKey;
   final String sourcePlatform;
+  final String sourceId;
+  final String sourceName;
+  String get sourceLabel =>
+      sourceName.isNotEmpty ? sourceName : sourcePlatformLabel(sourcePlatform);
   final String contentId;
   final String contentUrl;
   final String contentType;
@@ -78,6 +82,8 @@ class ContentHistoryItem {
   const ContentHistoryItem({
     required this.itemKey,
     required this.sourcePlatform,
+    this.sourceId = '',
+    this.sourceName = '',
     this.contentId = '',
     this.contentUrl = '',
     this.contentType = 'video',
@@ -114,6 +120,8 @@ class ContentHistoryItem {
     return ContentHistoryItem(
       itemKey: itemKey,
       sourcePlatform: source,
+      sourceId: (json['source_id']?.toString() ?? '').trim(),
+      sourceName: decodeHtml((json['source_name']?.toString() ?? '').trim()),
       contentId: _text(json['content_id']),
       contentUrl: contentUrl,
       contentType: _text(json['content_type']).isNotEmpty

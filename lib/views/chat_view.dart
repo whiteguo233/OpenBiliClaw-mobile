@@ -6,6 +6,10 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/chat.dart';
+import '../api/client.dart';
+import '../api/custom_sources_api.dart';
+import '../widgets/chat_approvals.dart';
+import 'source_login_view.dart';
 import '../providers/chat_provider.dart';
 import '../theme/app_theme.dart';
 
@@ -58,6 +62,7 @@ class _ChatViewState extends State<ChatView> {
                   accessibilityChrome
                       ? _compactPendingButton(context, provider)
                       : _pendingPanel(context, provider),
+                const ChatApprovalsButton(),
                 if (provider.error.isNotEmpty) _errorBanner(context, provider),
                 if (provider.dialogueContext != null)
                   _dialogueContextBar(context, provider)
@@ -556,6 +561,15 @@ class _ChatViewState extends State<ChatView> {
               ),
             ),
           ),
+        for (final href in turn.sourceLoginLinks)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: () => _openLink(href),
+              icon: const Icon(Icons.login),
+              label: const Text('在 APP 中登录来源'),
+            ),
+          ),
         if (turn.hasError)
           Align(
             alignment: Alignment.centerLeft,
@@ -767,6 +781,7 @@ class _ChatViewState extends State<ChatView> {
           children: [
             Expanded(
               child: TextField(
+                key: const Key('chatMessageInput'),
                 controller: _controller,
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => _send(provider),
@@ -790,6 +805,7 @@ class _ChatViewState extends State<ChatView> {
                 disabledBackgroundColor: context.appColors.brandSoft,
               ),
               icon: const Icon(Icons.arrow_upward_rounded, size: 22),
+              key: const Key('chatSend'),
               onPressed: provider.responding ? null : () => _send(provider),
             ),
           ],
@@ -949,8 +965,20 @@ class _ChatViewState extends State<ChatView> {
 
   Future<void> _openLink(String? href) async {
     if (href == null || href.isEmpty) return;
+    final api = CustomSourcesApi(context.read<ApiClient>());
+    final draftId = api.loginDraftId(href);
+    if (draftId != null) {
+      await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => SourceLoginView(api: api, draftId: draftId),
+        ),
+      );
+      if (mounted) await context.read<ChatProvider>().loadTurns();
+      return;
+    }
     final uri = Uri.tryParse(href);
-    if (uri == null) return;
+    if (uri == null || !['https', 'http'].contains(uri.scheme)) return;
     try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (_) {}

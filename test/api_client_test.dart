@@ -92,6 +92,26 @@ void main() {
     expect(transport.lastRequest?.url.host, 'openbiliclaw-server');
   });
 
+  test(
+    'source PATCH and Agent SSE reuse the shared Tailnet transport',
+    () async {
+      final transport = _TrackingClient();
+      final client = ApiClient(
+        host: 'openbiliclaw-server',
+        connectionMode: ConnectionMode.tailscale,
+        tailnetService: _FakeTailnetService(transport),
+      );
+      await client.patch('/custom-sources/custom_a', body: {'target_share': 2});
+      expect(transport.lastRequest?.method, 'PATCH');
+      expect(transport.closed, isFalse);
+      await client
+          .streamPostLines('/chat/agent/stream', body: {'turn_id': 'test'})
+          .toList();
+      expect(transport.lastRequest?.url.path, '/api/chat/agent/stream');
+      expect(transport.closed, isFalse);
+    },
+  );
+
   test('retries a transient EOF for an idempotent tailnet GET', () async {
     final transport = _TransientEofClient();
     final tailnet = _FakeTailnetService(transport);

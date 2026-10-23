@@ -12,6 +12,10 @@ class Recommendation {
   final String topicLabel;
   final String contentUrl;
   final String sourcePlatform;
+  final String sourceId;
+  final String sourceName;
+  String get sourceLabel =>
+      sourceName.isNotEmpty ? sourceName : sourcePlatformLabel(sourcePlatform);
   final String contentType;
   final String bodyText;
   final String publishedAt;
@@ -38,6 +42,8 @@ class Recommendation {
     this.topicLabel = '',
     this.contentUrl = '',
     this.sourcePlatform = 'bilibili',
+    this.sourceId = '',
+    this.sourceName = '',
     this.contentType = 'video',
     this.bodyText = '',
     this.publishedAt = '',
@@ -72,12 +78,18 @@ class Recommendation {
           : (contentId.isEmpty ? '' : '$source:$contentId'),
       contentId: contentId,
       title: decodeHtml(_text(json['title'])),
-      upName: decodeHtml(_text(json['up_name'])),
+      upName: decodeHtml(
+        _text(json['author_name']).isNotEmpty
+            ? _text(json['author_name'])
+            : _text(json['up_name']),
+      ),
       coverUrl: _text(json['cover_url']),
       expression: decodeHtml(_text(json['expression'])),
       topicLabel: decodeHtml(_text(json['topic_label'])),
       contentUrl: _text(json['content_url']),
       sourcePlatform: source,
+      sourceId: (json['source_id']?.toString() ?? '').trim(),
+      sourceName: decodeHtml((json['source_name']?.toString() ?? '').trim()),
       contentType: _text(json['content_type']).isNotEmpty
           ? _text(json['content_type'])
           : 'video',
@@ -97,7 +109,9 @@ class Recommendation {
   }
 
   String get displayTitle => title.isNotEmpty ? title : '这条标题还没对上号';
-  String get displayUpName => upName.isNotEmpty ? upName : '这位 UP 还没认出来';
+  String get displayUpName => upName.isNotEmpty
+      ? upName
+      : (sourcePlatform == 'bilibili' ? '这位 UP 还没认出来' : '这位作者还没认出来');
   bool get isTextCard =>
       coverUrl.isEmpty ||
       const {

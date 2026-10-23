@@ -60,34 +60,66 @@ class ChatApi {
     String subjectTitle = '',
     String replyToTurnId = '',
   }) async* {
-    String? event;
-    await for (final line in _client.streamPostLines(
-      '/chat/stream',
-      body: {
-        'turn_id': turnId,
-        'session': session,
-        'scope': scope,
-        'subject_id': subjectId,
-        'subject_title': subjectTitle,
-        'reply_to_turn_id': replyToTurnId,
-        'message': message,
-      },
-    )) {
-      final trimmed = line.trim();
-      if (trimmed.startsWith('event:')) {
-        event = trimmed.substring(6).trim();
-      } else if (trimmed.startsWith('data:')) {
-        final raw = trimmed.substring(5).trim();
-        final decoded = jsonDecode(raw);
-        if (decoded is Map) {
-          yield ChatStreamEvent(
-            type: event ?? 'message',
-            data: Map<String, dynamic>.from(decoded),
-          );
+    final body = {
+      'turn_id': turnId,
+      'session': session,
+      'scope': scope,
+      'subject_id': subjectId,
+      'subject_title': subjectTitle,
+      'reply_to_turn_id': replyToTurnId,
+      'message': message,
+    };
+    for (final path in ['/chat/agent/stream', '/chat/stream']) {
+      var received = false;
+      try {
+        String? event;
+        await for (final line in _client.streamPostLines(path, body: body)) {
+          final trimmed = line.trim();
+          if (trimmed.startsWith('event:')) {
+            event = trimmed.substring(6).trim();
+          } else if (trimmed.startsWith('data:')) {
+            final decoded = jsonDecode(trimmed.substring(5).trim());
+            if (decoded is Map) {
+              received = true;
+              yield ChatStreamEvent(
+                type: event ?? 'message',
+                data: Map<String, dynamic>.from(decoded),
+              );
+            }
+          }
         }
+        return;
+      } on ApiException catch (e) {
+        // Only an unavailable agent endpoint may fall back. Never replay a
+        // partially executed turn through a second engine.
+        if (path == '/chat/agent/stream' &&
+            !received &&
+            [404, 503].contains(e.statusCode)) {
+          continue;
+        }
+        rethrow;
       }
     }
   }
+
+  Future<List<Map<String, dynamic>>> fetchApprovals() async {
+    final result = await _client.get('/chat/approvals?limit=50');
+    if (result['items'] is! List) throw const FormatException('审批列表响应不完整');
+    return (result['items'] as List)
+        .whereType<Map>()
+        .map((r) => Map<String, dynamic>.from(r))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> decideApproval(
+    String id, {
+    required bool approve,
+    String reason = '',
+  }) => _client.post(
+    '/chat/approvals/${Uri.encodeComponent(id)}/${approve ? 'approve' : 'reject'}',
+    body: approve ? {} : {'reason': reason},
+    timeout: 30,
+  );
 
   Future<ChatTurn> fetchTurn(String turnId) async {
     final data = await _client.get(

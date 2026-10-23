@@ -1,3 +1,4 @@
+import 'dart:convert';
 import '../api/utils.dart';
 
 class ChatTurn {
@@ -73,6 +74,29 @@ class ChatTurn {
   List<String> get cardActions => _strings(payload['actions']);
   List<String> get evidence =>
       _strings(payload['evidence_refs']).take(5).toList();
+
+  /// Takeover links are accepted by the API client only for our own backend.
+  List<String> get sourceLoginLinks {
+    final links = <String>{};
+    final events = payload['agent_events'];
+    if (events is! List) return [];
+    for (final event in events.whereType<Map>()) {
+      if (event['type'] != 'tool_result') continue;
+      final data = event['data'];
+      if (data is! Map) continue;
+      try {
+        final result = jsonDecode(data['text']?.toString() ?? '');
+        if (result is Map &&
+            result['status'] == 'needs_login' &&
+            result['takeover_url'] is String) {
+          links.add(result['takeover_url'] as String);
+        }
+      } on FormatException {
+        /* A tool result can also be plain text. */
+      }
+    }
+    return links.toList();
+  }
 
   ChatTurn copyWith({
     String? status,

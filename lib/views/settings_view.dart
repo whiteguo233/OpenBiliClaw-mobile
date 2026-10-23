@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api/client.dart';
+import '../api/custom_sources_api.dart';
+import 'custom_sources_view.dart';
 import '../api/config_api.dart';
 import '../providers/recommend_provider.dart';
 import '../services/tailnet_service.dart';
@@ -533,6 +535,29 @@ class _SettingsViewState extends State<SettingsView> {
                 ),
               ],
               const SizedBox(height: 32),
+              Card(
+                child: ListTile(
+                  key: const Key('customSourcesSettings'),
+                  leading: const Icon(Icons.rss_feed),
+                  title: const Text('自定义来源'),
+                  subtitle: const Text('网站与订阅源 · 份额、频率和登录'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () async {
+                    final chat = await Navigator.push<bool>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CustomSourcesView(
+                          api: CustomSourcesApi(context.read<ApiClient>()),
+                        ),
+                      ),
+                    );
+                    if (chat == true && context.mounted) {
+                      Navigator.pop(context, true);
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(

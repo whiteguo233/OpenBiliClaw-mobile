@@ -134,7 +134,7 @@ class _HomeViewState extends State<HomeView> with WidgetsBindingObserver {
   }
 
   Future<void> _openSettings() async {
-    await Navigator.push(
+    final openChat = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => const SettingsView()),
     );
@@ -144,6 +144,11 @@ class _HomeViewState extends State<HomeView> with WidgetsBindingObserver {
     await _authProvider.checkStatus();
     if (_disposed || !mounted) return;
     _loadedTabs.clear();
+    if (openChat == true) {
+      _chatProvider.clearComposeContext();
+      _chatProvider.clearDialogueContext();
+      setState(() => _currentIndex = 3);
+    }
     await _loadTab(_currentIndex, force: true);
   }
 

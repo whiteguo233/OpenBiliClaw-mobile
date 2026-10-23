@@ -11,6 +11,10 @@ class Delight {
   final String coverUrl;
   final String contentUrl;
   final String sourcePlatform;
+  final String sourceId;
+  final String sourceName;
+  String get sourceLabel =>
+      sourceName.isNotEmpty ? sourceName : sourcePlatformLabel(sourcePlatform);
   final String contentType;
   final String bodyText;
   final String state;
@@ -25,6 +29,8 @@ class Delight {
     this.coverUrl = '',
     this.contentUrl = '',
     this.sourcePlatform = 'bilibili',
+    this.sourceId = '',
+    this.sourceName = '',
     this.contentType = 'video',
     this.bodyText = '',
     this.state = 'pending',
@@ -51,6 +57,8 @@ class Delight {
       coverUrl: json['cover_url']?.toString() ?? '',
       contentUrl: contentUrl,
       sourcePlatform: source,
+      sourceId: (json['source_id']?.toString() ?? '').trim(),
+      sourceName: decodeHtml((json['source_name']?.toString() ?? '').trim()),
       contentType: json['content_type']?.toString() ?? 'video',
       bodyText: decodeHtml(json['body_text']?.toString() ?? ''),
       state: json['state']?.toString() ?? 'pending',
@@ -67,6 +75,8 @@ class Delight {
     coverUrl: coverUrl,
     contentUrl: contentUrl,
     sourcePlatform: sourcePlatform,
+    sourceId: sourceId,
+    sourceName: sourceName,
     contentType: contentType,
     bodyText: bodyText,
     state: state ?? this.state,
@@ -83,6 +93,8 @@ class Delight {
     coverUrl: coverUrl,
     contentUrl: contentUrl,
     sourcePlatform: sourcePlatform,
+    sourceId: sourceId,
+    sourceName: sourceName,
     contentType: contentType,
     bodyText: bodyText,
   );

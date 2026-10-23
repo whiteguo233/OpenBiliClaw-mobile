@@ -14,6 +14,60 @@ class ChatProvider extends ChangeNotifier {
 
   final ChatApi _api;
   final Random _random = Random();
+  List<Map<String, dynamic>> _approvals = [];
+  final Set<String> _busyApprovals = {};
+  String approvalError = '';
+  List<Map<String, dynamic>> get approvals => List.unmodifiable(_approvals);
+  int get pendingApprovalCount => _approvals
+      .where((a) => ['pending', 'executing', 'approved'].contains(a['status']))
+      .length;
+  bool approvalBusy(String id) => _busyApprovals.contains(id);
+  Future<void> loadApprovals() async {
+    try {
+      _approvals = (await _api.fetchApprovals()).map((record) {
+        if ((record['error'] ?? '').toString().isNotEmpty &&
+            ['executed', 'approved'].contains(record['status'])) {
+          return {...record, 'status': 'failed'};
+        }
+        return record;
+      }).toList();
+      approvalError = '';
+    } on ApiException catch (e) {
+      if (![404, 503].contains(e.statusCode)) approvalError = '审批加载失败：$e';
+    } catch (e) {
+      approvalError = '审批加载失败：$e';
+    }
+    _safeNotify();
+  }
+
+  Future<void> decideApproval(
+    String id, {
+    required bool approve,
+    String reason = '',
+  }) async {
+    if (!_busyApprovals.add(id)) return;
+    _safeNotify();
+    try {
+      final result = await _api.decideApproval(
+        id,
+        approve: approve,
+        reason: reason,
+      );
+      if (result['approval'] is Map) {
+        final record = Map<String, dynamic>.from(result['approval']);
+        _approvals = [
+          ..._approvals.where((a) => a['approval_id'] != id),
+          record,
+        ];
+      }
+      await loadApprovals();
+    } catch (e) {
+      approvalError = '审批未完成：$e';
+    } finally {
+      _busyApprovals.remove(id);
+      _safeNotify();
+    }
+  }
 
   List<ChatTurn> _turns = [];
   List<PendingConfirmation> _pendingConfirmations = [];
@@ -158,6 +212,7 @@ class ChatProvider extends ChangeNotifier {
         changed = true;
       }
       changed = await _loadPendingConfirmations() || changed;
+      await loadApprovals();
     } catch (error) {
       final nextError = _message(error, '对话历史加载失败');
       if (_error != nextError) {
@@ -311,6 +366,7 @@ class ChatProvider extends ChangeNotifier {
       }
       if (generation == _responseGeneration) {
         await loadPendingConfirmations(notify: false);
+        await loadApprovals();
       }
       return !(_turnById(turnId)?.hasError ?? false);
     } catch (error) {
@@ -346,37 +402,66 @@ class ChatProvider extends ChangeNotifier {
         message: started.message,
       )) {
         if (generation != _responseGeneration) return;
-        if (event.type == 'content') {
-          final delta = event.data['delta']?.toString() ?? '';
+        if (event.type == 'content' || event.type == 'delta') {
+          final delta =
+              (event.data['delta'] ?? event.data['text'])?.toString() ?? '';
           reply += delta;
           _upsertTurn(started.copyWith(reply: reply, status: 'pending'));
           _safeNotify();
         } else if (event.type == 'tool_call') {
-          final name = event.data['name']?.toString() ?? '工具';
+          final name =
+              (event.data['tool_name'] ?? event.data['name'])?.toString() ??
+              '工具';
           if (reply.isEmpty || !reply.endsWith('\n')) {
             reply += '\n';
           }
           reply += '\n> 🔧 调用工具：`$name`\n';
           _upsertTurn(started.copyWith(reply: reply, status: 'pending'));
           _safeNotify();
+        } else if (event.type == 'final') {
+          reply = event.data['text']?.toString() ?? reply;
+          _upsertTurn(started.copyWith(reply: reply, status: 'pending'));
+          _safeNotify();
+        } else if (event.type == 'approval_request') {
+          await loadApprovals();
+        } else if (event.type == 'error') {
+          throw StateError(
+            event.data['error']?.toString() ??
+                event.data['message']?.toString() ??
+                '对话执行失败',
+          );
         } else if (event.type == 'done') {
           final finalReply = event.data['reply']?.toString() ?? reply;
           _upsertTurn(started.copyWith(reply: finalReply, status: 'done'));
           _safeNotify();
+          await _refreshTurn(started.turnId);
           return;
         }
       }
-      if (generation == _responseGeneration && reply.isNotEmpty) {
-        _upsertTurn(started.copyWith(reply: reply, status: 'done'));
-        _safeNotify();
-      }
+      await _recoverResponse(started, generation);
     } catch (error) {
       if (generation != _responseGeneration) return;
-      final message = _message(error, '流式回复失败');
-      _upsertTurn(started.copyWith(status: 'failed', error: message));
-      _error = message;
-      _safeNotify();
+      // The durable server turn may still be running after SSE disconnects.
+      // Poll its authoritative state instead of falsely finishing or resending.
+      try {
+        await _recoverResponse(started, generation);
+      } catch (_) {
+        _error = _message(error, '连接中断，可稍后从对话记录查看执行结果');
+        _safeNotify();
+      }
     }
+  }
+
+  Future<void> _recoverResponse(ChatTurn started, int generation) async {
+    for (var attempt = 0; attempt < 120; attempt++) {
+      if (_disposed || generation != _responseGeneration) return;
+      final current = await _api.fetchTurn(started.turnId);
+      _upsertTurn(current);
+      _safeNotify();
+      if (current.isDone || current.hasError) return;
+      await Future<void>.delayed(const Duration(seconds: 2));
+    }
+    throw StateError('后台仍在处理，请稍后查看对话记录');
   }
 
   Future<bool> openPendingConfirmation(PendingConfirmation item) async {

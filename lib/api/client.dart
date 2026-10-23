@@ -283,6 +283,24 @@ class ApiClient {
     }
   }
 
+  Future<Map<String, dynamic>> patch(
+    String path, {
+    required Map<String, dynamic> body,
+  }) async {
+    final lease = _openClient();
+    try {
+      final res = await lease.client
+          .patch(apiUri(path), headers: _headers(), body: jsonEncode(body))
+          .timeout(const Duration(seconds: 30));
+      _captureSession(res);
+      if (res.statusCode == 401) clearSession();
+      if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
+      return _decodeMap(res.body);
+    } finally {
+      lease.close();
+    }
+  }
+
   Stream<String> streamPostLines(
     String path, {
     Map<String, dynamic>? body,
@@ -291,7 +309,10 @@ class ApiClient {
     // Use a plain http.Client (not CupertinoClient) for SSE: CupertinoClient
     // can buffer streaming responses until the connection closes, which makes
     // chat look like "后台处理中 → 整段出现".
-    final client = http.Client();
+    final lease = usesTailscale
+        ? _openClient()
+        : _ClientLease(http.Client(), owned: true);
+    final client = lease.client;
     try {
       final request = http.Request('POST', uri)
         ..headers.addAll(_headers())
@@ -310,7 +331,7 @@ class ApiClient {
         yield line;
       }
     } finally {
-      client.close();
+      lease.close();
     }
   }
 

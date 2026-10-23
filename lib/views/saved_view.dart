@@ -272,7 +272,11 @@ class _SavedList extends StatelessWidget {
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        _sourceChip(context, item.sourcePlatform),
+                        _sourceChip(
+                          context,
+                          item.sourcePlatform,
+                          name: item.sourceName,
+                        ),
                         if (item.authorName.isNotEmpty) ...[
                           const SizedBox(width: 6),
                           Expanded(
@@ -497,15 +501,21 @@ class _SavedList extends StatelessWidget {
     }
   }
 
-  Widget _sourceChip(BuildContext context, String source) {
-    final label = sourcePlatformLabel(source);
+  Widget _sourceChip(BuildContext context, String source, {String name = ''}) {
+    final label = name.isNotEmpty ? name : sourcePlatformLabel(source);
     return Container(
+      constraints: const BoxConstraints(maxWidth: 160),
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(5),
       ),
-      child: Text(label, style: const TextStyle(fontSize: 9)),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 9),
+      ),
     );
   }
 
@@ -993,7 +1003,11 @@ class _HistoryCard extends StatelessWidget {
                         const SizedBox(height: 6),
                         Row(
                           children: [
-                            _sourceChip(context, item.sourcePlatform),
+                            _sourceChip(
+                              context,
+                              item.sourcePlatform,
+                              name: item.sourceName,
+                            ),
                             if (item.authorName.isNotEmpty) ...[
                               const SizedBox(width: 6),
                               Expanded(
@@ -1071,15 +1085,21 @@ class _HistoryCard extends StatelessWidget {
     );
   }
 
-  Widget _sourceChip(BuildContext context, String source) {
-    final label = sourcePlatformLabel(source);
+  Widget _sourceChip(BuildContext context, String source, {String name = ''}) {
+    final label = name.isNotEmpty ? name : sourcePlatformLabel(source);
     return Container(
+      constraints: const BoxConstraints(maxWidth: 160),
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(5),
       ),
-      child: Text(label, style: const TextStyle(fontSize: 9)),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 9),
+      ),
     );
   }
 

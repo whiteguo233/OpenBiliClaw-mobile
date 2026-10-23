@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- 来源登录页面退出主动释放 Ego 窗口；后台截图刷新不再禁用用户操作，旧截图结果不会覆盖后续试跑状态。后端配套分支：`fix/native-source-session-lifecycle`。
+
+- 原生对话接入 Agent SSE 与操作审批；断流后恢复持久化 turn，避免重复执行。
+- 新增自定义 Discovery 来源管理和原生 Ego 登录接管，复用认证与 Tailnet；支持网页、RSS、Atom、JSON Feed。
+- 推荐、惊喜推荐、收藏和历史卡片保留独立来源名称。接口和验证见 [原生来源文档](docs/native-custom-sources.md)。
+
 ## v0.3.159+2009 (2026-09-16)
 
 - 原生 B 站播放页新增 UP 主信息条：展示头像、名称与粉丝数，点击头像/名称先尝试唤起 B 站原生 App 的 `bilibili://space/<mid>`，失败回退网页版 `https://space.bilibili.com/<mid>`；右侧可直接关注/取消关注，取消关注前二次确认。

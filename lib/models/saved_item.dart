@@ -13,6 +13,10 @@ enum SavedListKind {
 class SavedItem {
   final String itemKey;
   final String sourcePlatform;
+  final String sourceId;
+  final String sourceName;
+  String get sourceLabel =>
+      sourceName.isNotEmpty ? sourceName : sourcePlatformLabel(sourcePlatform);
   final String contentId;
   final String contentUrl;
   final String contentType;
@@ -30,6 +34,8 @@ class SavedItem {
   const SavedItem({
     required this.itemKey,
     required this.sourcePlatform,
+    this.sourceId = '',
+    this.sourceName = '',
     required this.contentId,
     this.contentUrl = '',
     this.contentType = 'video',
@@ -62,6 +68,8 @@ class SavedItem {
           ? _text(json['item_key'])
           : '$source:$contentId',
       sourcePlatform: source,
+      sourceId: (json['source_id']?.toString() ?? '').trim(),
+      sourceName: decodeHtml((json['source_name']?.toString() ?? '').trim()),
       contentId: contentId,
       contentUrl: _text(json['content_url']),
       contentType: _text(json['content_type']).isNotEmpty
@@ -89,6 +97,8 @@ class SavedItem {
   factory SavedItem.fromRecommendation(Recommendation item) => SavedItem(
     itemKey: item.savedIdentity,
     sourcePlatform: item.sourcePlatform,
+    sourceId: item.sourceId,
+    sourceName: item.sourceName,
     contentId: item.contentId,
     contentUrl: _sanitize(item.contentUrl),
     contentType: item.contentType,
