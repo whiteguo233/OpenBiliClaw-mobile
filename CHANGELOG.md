@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 增加独立原生假设操作与 Atom 真实验收，记录重复历史下的精确回忆失败及 NGA 来源准备阻塞，详见 [复测记录](docs/native-chat-hypotheses.md)。
+
 - 原生待聊假设列表改为手机滚动面板、宽屏限制高度，选中后返回聊天；补齐后台整理期间的有界自动重试与等待/失败状态，避免尚未开始讨论就错误请求上下文。见 [聊天与假设确认](docs/native-chat-hypotheses.md)。
 
 - 来源登录页面退出主动释放 Ego 窗口；后台截图刷新不再禁用用户操作，旧截图结果不会覆盖后续试跑状态。后端配套分支：`fix/native-source-session-lifecycle`。

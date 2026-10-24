@@ -231,10 +231,39 @@ Future<ChatTurn> openHypothesis(
 ) async {
   await live.wait(
     tester,
-    () => chat.pendingConfirmations.any((p) => p.title == title),
+    () =>
+        chat.pendingConfirmations.any((p) => p.title == title) ||
+        chat.turns.any(
+          (t) =>
+              t.isCard &&
+              t.cardTitle == title &&
+              const {'pending', 'discussing'}.contains(t.cardState),
+        ),
     'pending hypothesis',
     seconds: 60,
   );
+  // Background cognition can already have placed the pending card in chat.
+  // In that case the shared pending inventory correctly no longer lists it.
+  final existing = chat.turns.where(
+    (t) =>
+        t.isCard &&
+        t.cardTitle == title &&
+        const {'pending', 'discussing'}.contains(t.cardState),
+  );
+  if (existing.isNotEmpty) {
+    await tester.scrollUntilVisible(
+      find.text(title).last,
+      350,
+      scrollable: find
+          .descendant(
+            of: find.byType(ChatView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+      maxScrolls: 60,
+    );
+    return existing.last;
+  }
   final compact = find.textContaining('条待聊确认');
   final sheet = compact.evaluate().isNotEmpty;
   if (sheet) {
