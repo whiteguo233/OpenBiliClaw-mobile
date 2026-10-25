@@ -73,6 +73,9 @@ flutter test integration_test/app_e2e_test.dart -d <device-id>   # 真实 App �
 - `integration_test/app_e2e_test.dart`：在 Android/iOS 设备或模拟器上真实启动 App，断言四个 tab 加载真实数据、画像页展示 LLM 人格素描、对话发送后收到商汤真实回复。
 - `integration_test/bilibili_webview_login_e2e_test.dart`：验证内置 WebView 首屏带上后端已有的 B 站登录态，并确认同源引导页写入的 Cookie 值不会被二次 URL 编码。
 
+原生 NGA / Atom 建源与 Ego 接管测试可通过通用 driver 运行，并在后端修复时复用同一原生包；
+隔离环境、命令和编译参数约束见 [原生真实测试 driver](docs/native-live-driver.md)。
+
 ## 验证状态
 
 Instagram（后端实验性来源）的推荐展示、封面解码、本地收藏/稍后看和外链打开已在 iOS 模拟器通过真实 API 验证；不等于 Android / 手机真机、完整启动流程或 Instagram App 唤起已通过。范围与显式启用的集成测试见 [Instagram 消费验收](docs/instagram-consumption-live-20261005.md)。
