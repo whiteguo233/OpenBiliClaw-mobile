@@ -31,5 +31,7 @@ flutter drive --no-pub --driver=test_driver/native_live.dart \
 ```
 
 也可先用 `flutter build ios --simulator --debug --no-pub --target=...` 和同一 `--dart-define`
-编译，再用该包运行 driver。`takeScreenshot` 返回的实际图片还需人工核看，文件位置由用例打印。
+编译，再用该包运行 driver。`takeScreenshot` 返回的实际图片还需人工核看。用例打印的模拟器
+临时文件可能在 driver 卸载测试 App 时消失；host 侧 `build/integration_response_data.json`
+的 `screenshots` 数组也保存原始 PNG bytes，应从该产物提取并留存。
 原始会话日志、截图和模型请求可能包含私有信息，留在本机，不随测试代码提交。
