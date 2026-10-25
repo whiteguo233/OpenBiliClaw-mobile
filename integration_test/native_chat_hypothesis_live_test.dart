@@ -12,6 +12,8 @@ import 'package:openbiliclaw_app/views/chat_view.dart';
 import 'native_custom_sources_live_test.dart' as live;
 
 // Requires two explicitly seeded hypotheses in an isolated real backend.
+// Use distinct hypothesis content, not timestamp-only variants: production
+// insight deduplication intentionally merges semantically similar fixtures.
 // UI actions and model responses are real; no production profile is used.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -252,7 +254,9 @@ Future<ChatTurn> openHypothesis(
   );
   if (existing.isNotEmpty) {
     await tester.scrollUntilVisible(
-      find.text(title).last,
+      // A lazy chat row may not exist until scrolling builds it. `.last`
+      // throws on that empty initial result before scrollUntilVisible can act.
+      find.text(title),
       350,
       scrollable: find
           .descendant(
