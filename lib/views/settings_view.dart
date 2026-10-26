@@ -1,15 +1,21 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api/client.dart';
 import '../api/config_api.dart';
+import '../models/backend_connection_link.dart';
 import '../providers/recommend_provider.dart';
 import '../services/tailnet_service.dart';
 import '../theme/app_theme.dart';
 import 'app_information_view.dart';
+import 'backend_scan_view.dart';
 
 class SettingsView extends StatefulWidget {
-  const SettingsView({super.key});
+  const SettingsView({super.key, this.scanConnection});
+
+  /// Optional scanner adapter; otherwise opens the native camera page.
+  final Future<String?> Function(BuildContext)? scanConnection;
 
   @override
   State<SettingsView> createState() => _SettingsViewState();
@@ -135,6 +141,80 @@ class _SettingsViewState extends State<SettingsView> {
       ),
     );
     Navigator.of(context).pop();
+  }
+
+  Future<void> _importConnection(String value) async {
+    try {
+      final link = BackendConnectionLink.parse(value);
+      if (link.usesEmbeddedTailnet &&
+          !context.read<TailnetService>().supported) {
+        throw const FormatException('此二维码需要 Android / iOS App 的内置 Tailscale');
+      }
+      setState(() {
+        _scheme = link.backendUri.scheme;
+        _urlController.text = link.backendUri.toString();
+        _connectionMode = link.usesEmbeddedTailnet
+            ? ConnectionMode.tailscale
+            : ConnectionMode.direct;
+      });
+      if (link.usesEmbeddedTailnet &&
+          context.read<TailnetService>().state != TailnetState.running) {
+        final connected = await _connectTailnet();
+        if (!mounted) return;
+        if (!connected) {
+          setState(() {
+            _testOk = false;
+            _testResult = context.read<TailnetService>().statusMessage;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Tailscale 未连接，地址已填入；完成登录后再保存。')),
+          );
+          return;
+        }
+      }
+      await _save();
+    } on FormatException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<void> _scanConnection() async {
+    final value = widget.scanConnection != null
+        ? await widget.scanConnection!(context)
+        : await Navigator.of(context).push<String>(
+            MaterialPageRoute(builder: (_) => const BackendScanView()),
+          );
+    if (mounted && value != null) await _importConnection(value);
+  }
+
+  Future<void> _pasteConnection() async {
+    var pasted = '';
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('粘贴连接链接'),
+        content: TextField(
+          onChanged: (value) => pasted = value,
+          autofocus: true,
+          keyboardType: TextInputType.url,
+          decoration: const InputDecoration(hintText: '粘贴电脑「手机版」中的连接链接'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, pasted),
+            child: const Text('连接'),
+          ),
+        ],
+      ),
+    );
+    if (mounted && value != null) await _importConnection(value);
   }
 
   Future<void> _testConnection() async {
@@ -310,9 +390,35 @@ class _SettingsViewState extends State<SettingsView> {
                 ),
               ),
               const SizedBox(height: 24),
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  if (widget.scanConnection != null ||
+                      (!kIsWeb &&
+                          (defaultTargetPlatform == TargetPlatform.android ||
+                              defaultTargetPlatform == TargetPlatform.iOS)))
+                    FilledButton.icon(
+                      onPressed: _saving || _tailnetBusy
+                          ? null
+                          : _scanConnection,
+                      icon: const Icon(Icons.qr_code_scanner),
+                      label: const Text('扫码连接'),
+                    ),
+                  TextButton.icon(
+                    onPressed: _saving || _tailnetBusy
+                        ? null
+                        : _pasteConnection,
+                    icon: const Icon(Icons.link),
+                    label: const Text('粘贴连接链接'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
               Consumer<TailnetService>(
                 builder: (context, tailnet, _) =>
                     DropdownButtonFormField<ConnectionMode>(
+                      key: ValueKey(_connectionMode),
                       initialValue: _connectionMode,
                       decoration: InputDecoration(
                         labelText: '连接方式',
