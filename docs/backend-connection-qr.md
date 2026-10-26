@@ -36,3 +36,9 @@ paste link ─────────────────────→ Ba
 - iOS simulator / Android debug 原生构建通过；相机 purpose string 已在编译后的 iOS `Info.plist` 中确认。
 - `flutter test integration_test/backend_qr_decode_test.dart -d macos`：原生解码测试通过。固定 PNG 来自后端 / 插件实际 JS QR 编码器，覆盖五类链接和 v5 / v10。该测试不打开相机；`mobile_scanner` 明确不支持 iOS 模拟器图片分析，应使用 macOS、Android 或 iOS 真机。
 - 未执行手机相机实拍和真实跨设备 / tailnet 网络验收；未发布新商店或安装包版本。
+
+## 连接设置预览
+
+下图为 390×844 Widget 渲染预览（2026-10-27，测试地址），使用实际设置页与应用浅色主题、本机字体。临时截图测试通过后已移除；不作为真机相机或跨设备网络验收。
+
+![连接设置中的扫码与粘贴入口](images/connection-settings-qr.png)
