@@ -9,7 +9,7 @@ import 'package:openbiliclaw_app/views/settings_view.dart';
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('home settings exposes QR scan and paste controls', (
+  testWidgets('backend URL exposes inline QR scan and paste icons', (
     tester,
   ) async {
     app.main();
@@ -17,20 +17,25 @@ void main() {
     await _screenshot(tester, binding, 'qr-home-entry');
 
     await tester.tap(find.byTooltip('连接设置'));
-    await _waitFor(tester, find.text('扫码连接'));
+    await _waitFor(tester, find.byTooltip('扫码连接'));
     expect(find.byType(SettingsView), findsOneWidget);
-    expect(find.text('粘贴连接链接'), findsOneWidget);
-    expect(find.text('扫码连接').hitTestable(), findsOneWidget);
+    expect(find.byTooltip('粘贴连接链接'), findsOneWidget);
+    expect(find.byTooltip('扫码连接').hitTestable(), findsOneWidget);
     await _screenshot(tester, binding, 'qr-settings-simulator');
 
-    await tester.tap(find.text('扫码连接'));
+    await tester.tap(find.byTooltip('粘贴连接链接'));
+    await _waitFor(tester, find.text('粘贴连接链接'));
+    await tester.tap(find.text('取消'));
+    await _waitFor(tester, find.byTooltip('扫码连接'));
+
+    await tester.tap(find.byTooltip('扫码连接'));
     await _waitFor(tester, find.text('扫码连接后端'));
     expect(find.byType(BackendScanView), findsOneWidget);
     await tester.pump(const Duration(seconds: 2));
     await _screenshot(tester, binding, 'qr-camera-simulator');
 
     await tester.pageBack();
-    await _waitFor(tester, find.text('扫码连接'));
+    await _waitFor(tester, find.byTooltip('扫码连接'));
     expect(find.byType(BackendScanView), findsNothing);
     expect(tester.takeException(), isNull);
   });

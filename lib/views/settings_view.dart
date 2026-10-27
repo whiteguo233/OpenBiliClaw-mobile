@@ -326,6 +326,11 @@ class _SettingsViewState extends State<SettingsView> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final canScan =
+        widget.scanConnection != null ||
+        (!kIsWeb &&
+            (defaultTargetPlatform == TargetPlatform.android ||
+                defaultTargetPlatform == TargetPlatform.iOS));
     return Scaffold(
       appBar: AppBar(
         title: const Text('连接设置'),
@@ -390,36 +395,12 @@ class _SettingsViewState extends State<SettingsView> {
                 ),
               ),
               const SizedBox(height: 24),
-              Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  if (widget.scanConnection != null ||
-                      (!kIsWeb &&
-                          (defaultTargetPlatform == TargetPlatform.android ||
-                              defaultTargetPlatform == TargetPlatform.iOS)))
-                    FilledButton.icon(
-                      onPressed: _saving || _tailnetBusy
-                          ? null
-                          : _scanConnection,
-                      icon: const Icon(Icons.qr_code_scanner),
-                      label: const Text('扫码连接'),
-                    ),
-                  TextButton.icon(
-                    onPressed: _saving || _tailnetBusy
-                        ? null
-                        : _pasteConnection,
-                    icon: const Icon(Icons.link),
-                    label: const Text('粘贴连接链接'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
               Consumer<TailnetService>(
                 builder: (context, tailnet, _) =>
                     DropdownButtonFormField<ConnectionMode>(
                       key: ValueKey(_connectionMode),
                       initialValue: _connectionMode,
+                      isExpanded: true,
                       decoration: InputDecoration(
                         labelText: '连接方式',
                         border: OutlineInputBorder(
@@ -432,12 +413,18 @@ class _SettingsViewState extends State<SettingsView> {
                       items: [
                         const DropdownMenuItem(
                           value: ConnectionMode.direct,
-                          child: Text('直接连接（局域网 / 公网）'),
+                          child: Text(
+                            '直接连接（局域网 / 公网）',
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         if (tailnet.supported)
                           const DropdownMenuItem(
                             value: ConnectionMode.tailscale,
-                            child: Text('内置 Tailscale（Android / iOS）'),
+                            child: Text(
+                              '内置 Tailscale（Android / iOS）',
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                       ],
                       onChanged: (value) => setState(
@@ -445,7 +432,6 @@ class _SettingsViewState extends State<SettingsView> {
                       ),
                     ),
               ),
-              const SizedBox(height: 16),
               const SizedBox(height: 16),
               TextField(
                 controller: _urlController,
@@ -462,6 +448,28 @@ class _SettingsViewState extends State<SettingsView> {
                   filled: true,
                   fillColor: context.appColors.surface,
                   prefixIcon: const Icon(Icons.link),
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: '粘贴连接链接',
+                        onPressed: _saving || _tailnetBusy
+                            ? null
+                            : _pasteConnection,
+                        icon: const Icon(Icons.content_paste_outlined),
+                      ),
+                      if (canScan)
+                        IconButton(
+                          tooltip: '扫码连接',
+                          color: theme.colorScheme.primary,
+                          onPressed: _saving || _tailnetBusy
+                              ? null
+                              : _scanConnection,
+                          icon: const Icon(Icons.qr_code_scanner),
+                        ),
+                      const SizedBox(width: 4),
+                    ],
+                  ),
                 ),
                 keyboardType: TextInputType.url,
               ),

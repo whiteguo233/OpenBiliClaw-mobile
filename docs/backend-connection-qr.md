@@ -1,6 +1,6 @@
 # 后端扫码连接
 
-连接流程：电脑 Web / 插件「手机版」→ 选择局域网、Tailscale 或公网地址 → App 连接设置「扫码连接」→ 自动保存并重连。二维码也可用手机相机打开 Mobile Web。
+连接流程：电脑 Web / 插件「手机版」→ 选择局域网、Tailscale 或公网地址 → App 连接设置中后端 URL 右侧的扫码图标 → 自动保存并重连。二维码也可用手机相机打开 Mobile Web。
 
 | 二维码 | App 保存的后端 | 连接方式 |
 | --- | --- | --- |
@@ -75,29 +75,30 @@ flutter test integration_test/mobile_web_connection_live_test.dart -d <device-id
 
 修复后相关 API / 设置 / 扫码回归 **30 passed**，`test_e2e/settings_backend_url_live_test.dart` 对同一真实后端复跑 **1 passed**，实际请求保存地址前后的连通性并恢复客户端配置。该轻量脚本的 HTTP 为真实网络，持久化使用隔离替身；不把它当作实体设备存储或 SettingsView UI 通过。最终完整 `flutter analyze` 无问题。此前原生构建成功记录属于二维码功能阶段，本轮 liveness 修复后没有完成新的原生构建。
 
-最终 `flutter test --concurrency=1 --no-pub`：**184 passed**，4 分 22 秒，退出码 0。包含新冷依赖 / 旧后端回退回归；不包含需要显式设备、实际二维码和用户权限的 `integration_test/` 验收。
+此前完整 `flutter test --concurrency=1 --no-pub`：**184 passed**，4 分 22 秒，退出码 0。包含新冷依赖 / 旧后端回退回归；不包含需要显式设备、实际二维码和用户权限的 `integration_test/` 验收。
 
 ## iOS 模拟器入口验收（2026-10-27）
 
-入口为 **首页右上角齿轮 → 连接设置 → 后端地址下方的「扫码连接」**；右侧是「粘贴连接链接」，无需滚动即可看到。
+入口为 **首页右上角齿轮 → 连接设置 → 后端 URL 输入框最右侧的扫码图标**。旁边的剪贴板图标保留「粘贴连接链接」；两者均收进输入框，不再单独占一排。图标使用标准触控范围，并提供 Tooltip / 无障碍名称。连接方式在窄屏可伸缩，长文字省略，避免撑出屏幕。
 
-`integration_test/backend_qr_ui_test.dart` 在 iPhone 17 Pro / iOS 26.5 模拟器启动实际 `app.main()`，点击首页齿轮，检查真实设置页两个入口可见，再点击扫码按钮打开 `BackendScanView` 并返回。没有替换设置页、扫描回调、HTTP 或存储，也不改连接地址。默认后端未运行时首页离线，仍可进入连接设置。本次只操作模拟器；这项入口验收不等于光学扫码、联网保存或推荐加载通过。
+`integration_test/backend_qr_ui_test.dart` 在 iPhone 17 Pro / iOS 26.5 模拟器启动实际 `app.main()`，点击首页齿轮，检查真实 URL 输入框内两个图标可见，验证粘贴图标打开对话框并可取消，再点击扫码图标打开 `BackendScanView` 并返回。没有替换设置页、扫描回调、HTTP 或存储，也不改连接地址。默认后端未运行时首页离线，仍可进入连接设置。本次只操作模拟器；这项入口验收不等于光学扫码、联网保存或推荐加载通过。
+
+本次布局调整：`flutter analyze --no-pub` 无问题；设置扫码 / 手动 URL 回归 **15 passed**，扫码用例按 390×844 窄屏运行。上述模拟器 UI 流程分别在浅色 / 深色模式完成（16 秒 / 15 秒），并检查实际截图中的图标位置与对比度。
 
 ```bash
 flutter build ios --simulator --debug --no-pub \
   --target=integration_test/backend_qr_ui_test.dart
+xcrun simctl install <ios-simulator-id> build/ios/Debug-iphonesimulator/Runner.app
+xcrun simctl privacy <ios-simulator-id> grant camera com.openbiliclaw.openbiliclawApp
+xcrun simctl launch <ios-simulator-id> com.openbiliclaw.openbiliclawApp \
+  --enable-dart-profiling --enable-checked-mode --verify-entry-points \
+  --vm-service-port=49982 --disable-service-auth-codes --start-paused
 flutter drive --no-pub --driver=test_driver/backend_qr_live.dart \
   --target=integration_test/backend_qr_ui_test.dart \
-  --use-application-binary=build/ios/Debug-iphonesimulator/Runner.app \
+  --use-existing-app=http://127.0.0.1:49982/ \
   -d <ios-simulator-id>
 ```
 
-显式指定新生成的 App 包，避免 `flutter drive` 命中旧的 `build/ios/iphonesimulator/Runner.app` 缓存。模拟器相机权限可在测试环境通过 `xcrun simctl privacy <ios-simulator-id> grant camera com.openbiliclaw.openbiliclawApp` 预授予，不能据此认定真实摄像头识别通过。截图由 native screenshot 通道保存，先等待系统显示 Flutter 新帧，避免截到转场前的旧页面。
+显式安装新生成的 App 包，避免 `flutter drive` 命中旧的 `build/ios/iphonesimulator/Runner.app` 缓存。先安装再授予模拟器相机权限，随后通过本机 VM service 驱动已启动的测试包，避免再次安装重置权限；端口需空闲。不能据此认定真实摄像头识别通过。截图由 native screenshot 通道保存，先等待系统显示 Flutter 新帧，避免截到转场前的旧页面。
 
-![iOS 模拟器实际运行的连接设置与扫码按钮](images/connection-settings-ios-simulator.png)
-
-## Widget 连接设置预览
-
-下图为 390×844 Widget 渲染预览（2026-10-27，测试地址），使用实际设置页与应用浅色主题、本机字体。临时截图测试通过后已移除；不作为真机相机或跨设备网络验收。
-
-![连接设置中的扫码与粘贴入口](images/connection-settings-qr.png)
+![iOS 模拟器实际运行的后端 URL 输入框与扫码图标](images/connection-settings-inline-qr-ios-simulator.png)

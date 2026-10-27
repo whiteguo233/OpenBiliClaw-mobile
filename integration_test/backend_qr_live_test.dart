@@ -164,11 +164,11 @@ void main() {
           );
           await tester.tap(find.text('打开连接设置'));
           await tester.pump(const Duration(milliseconds: 400));
-          await tester.ensureVisible(find.text('扫码连接'));
+          await tester.ensureVisible(find.byTooltip('扫码连接'));
           if (Platform.isIOS) {
             await binding.takeScreenshot('qr-settings-$label');
           }
-          await tester.tap(find.text('扫码连接'));
+          await tester.tap(find.byTooltip('扫码连接'));
           await _until(
             tester,
             () => find.text('打开连接设置').hitTestable().evaluate().isNotEmpty,

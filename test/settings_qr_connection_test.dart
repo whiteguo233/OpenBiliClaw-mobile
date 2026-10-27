@@ -72,7 +72,7 @@ void main() {
     testWidgets('scan saves and reconnects ${entry.key}', (tester) async {
       SharedPreferences.setMockInitialValues({});
       FlutterSecureStorage.setMockInitialValues({});
-      tester.view.physicalSize = const Size(1000, 1800);
+      tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -116,7 +116,7 @@ void main() {
       );
       await tester.tap(find.text('连接设置'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('扫码连接'));
+      await tester.tap(find.byTooltip('扫码连接'));
       await tester.pumpAndSettle();
       expect(client.baseUrl, entry.value);
       expect(
@@ -131,7 +131,7 @@ void main() {
       final imported =
           canConnect && entry.key != null && !entry.key!.contains('127.0.0.1');
       expect(recommendations.restarts, imported ? 1 : 0);
-      expect(find.text('扫码连接'), imported ? findsNothing : findsOneWidget);
+      expect(find.byTooltip('扫码连接'), imported ? findsNothing : findsOneWidget);
       final restored = ApiClient(tailnetService: tailnet);
       await restored.loadSettings();
       expect(restored.baseUrl, client.baseUrl);
