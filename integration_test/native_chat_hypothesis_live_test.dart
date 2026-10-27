@@ -22,8 +22,13 @@ void main() {
   ) async {
     const confirmTitle = String.fromEnvironment('CONFIRM_HYPOTHESIS');
     const discussTitle = String.fromEnvironment('DISCUSS_HYPOTHESIS');
+    const discussAnchor = String.fromEnvironment(
+      'DISCUSS_HYPOTHESIS_ANCHOR',
+      defaultValue: '通勤',
+    );
     expect(confirmTitle, isNotEmpty);
     expect(discussTitle, isNotEmpty);
+    expect(discussAnchor, isNotEmpty);
     final prefs = await SharedPreferences.getInstance();
     final before = {for (final k in prefs.getKeys()) k: prefs.get(k)};
     await prefs.setString('api_host', 'localhost');
@@ -107,7 +112,7 @@ void main() {
       expect(response.replyToTurnId, discussion.turnId);
       expect(
         response.reply,
-        contains('通勤'),
+        contains(discussAnchor),
         reason:
             'Model must receive the selected hypothesis, not the prior confirmed card',
       );
