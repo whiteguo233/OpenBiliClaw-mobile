@@ -18,11 +18,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Opt-in device acceptance against real servers. Each case supplies a PNG
 /// captured from the real QR panel, its expected URL, and a non-sensitive label.
 /// No API, HTTP client, persistence, or Tailnet service is replaced.
-/// Image analysis exercises the native decoder, not optical camera capture.
+/// PNG mode exercises the native decoder; camera mode opens the production
+/// scanner. Simulator camera frames do not prove physical optical capture.
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  // Native decoding and real HTTP can finish between explicit pumps. Keep the
+  // production frame cadence instead of dropping those asynchronous frames.
+  binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
   const casesJson = String.fromEnvironment('OBC_LIVE_QR_CASES');
   const camera = bool.fromEnvironment('OBC_LIVE_QR_CAMERA');
+  const scanTimeoutSeconds = int.fromEnvironment(
+    'OBC_LIVE_QR_SCAN_TIMEOUT_SECONDS',
+    defaultValue: 180,
+  );
   // macOS CI may have native plugins but no foreground window. This mode
   // exercises decoder, persistence and transport, and explicitly excludes UI.
   const transportOnly = bool.fromEnvironment('OBC_LIVE_QR_TRANSPORT_ONLY');
@@ -30,6 +38,17 @@ void main() {
   testWidgets(
     'live QR → native import → recommendations → saved reconnect',
     (tester) async {
+      if (!transportOnly) {
+        debugPrint('LIVE QR: preparing first device frame');
+        await tester
+            .pumpWidget(
+              const MaterialApp(
+                home: Scaffold(body: Center(child: Text('准备真实扫码验收…'))),
+              ),
+            )
+            .timeout(const Duration(seconds: 30));
+        debugPrint('LIVE QR: first device frame ready');
+      }
       final cases = (jsonDecode(casesJson) as List)
           .cast<Map<String, dynamic>>();
       expect(cases, isNotEmpty);
@@ -48,7 +67,9 @@ void main() {
         key: 'backend_url_config',
       );
       final directory = await Directory.systemTemp.createTemp('obc-live-qr-');
-      final scanner = MobileScannerController(autoStart: false);
+      // The production camera owns the plugin while scanning. Do not create a
+      // second controller for image analysis in the same camera acceptance run.
+      final scanner = camera ? null : MobileScannerController(autoStart: false);
       final tailnet = createTailnetService();
       RecommendProvider? recommendations;
       addTearDown(() async {
@@ -56,7 +77,7 @@ void main() {
         recommendations?.dispose();
         // Preserve any existing enrollment; never log out or delete node keys.
         tailnet.dispose();
-        await scanner.dispose();
+        await scanner?.dispose();
         await directory.delete(recursive: true);
         for (final entry in previous.entries) {
           final value = entry.value;
@@ -83,21 +104,22 @@ void main() {
         final label = entry['label'] as String;
         final expected = entry['url'] as String;
         final endpoint = BackendConnectionLink.parse(expected);
-        final image = File('${directory.path}/connection-$i.png');
-        await image.writeAsBytes(base64Decode(entry['png'] as String));
-        final capture = await scanner.analyzeImage(image.path);
-        final decoded = capture?.barcodes
-            .map((barcode) => barcode.rawValue)
-            .whereType<String>()
-            .firstWhere((value) => value == expected);
-        expect(decoded, expected, reason: '$label: native QR decoding');
-        debugPrint('LIVE QR $label: native image decoded');
+        String? decoded;
+        if (!camera) {
+          final image = File('${directory.path}/connection-$i.png');
+          await image.writeAsBytes(base64Decode(entry['png'] as String));
+          final capture = await scanner!.analyzeImage(image.path);
+          decoded = capture?.barcodes
+              .map((barcode) => barcode.rawValue)
+              .whereType<String>()
+              .firstWhere((value) => value == expected);
+          expect(decoded, expected, reason: '$label: native QR decoding');
+          debugPrint('LIVE QR $label: native image decoded');
+        }
 
         final client = ApiClient(
-          host: endpoint.backendUri.host,
-          port: endpoint.backendUri.port,
-          scheme: endpoint.backendUri.scheme,
-          basePath: endpoint.backendUri.path,
+          host: '127.0.0.1',
+          port: 9,
           tailnetService: tailnet,
         );
         recommendations?.dispose();
@@ -130,49 +152,57 @@ void main() {
           );
           await currentRecommendations.load();
         } else {
-          await tester.pumpWidget(
-            MultiProvider(
-              providers: [
-                Provider<ApiClient>.value(value: client),
-                ChangeNotifierProvider<TailnetService>.value(value: tailnet),
-                ChangeNotifierProvider<RecommendProvider>.value(
-                  value: currentRecommendations,
-                ),
-              ],
-              child: MaterialApp(
-                theme: AppTheme.light(),
-                home: Builder(
-                  builder: (context) => Scaffold(
-                    body: Center(
-                      child: TextButton(
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => SettingsView(
-                              scanConnection: camera
-                                  ? null
-                                  : (_) async => decoded,
+          debugPrint('LIVE QR $label: opening real settings shell');
+          await tester
+              .pumpWidget(
+                MultiProvider(
+                  providers: [
+                    Provider<ApiClient>.value(value: client),
+                    ChangeNotifierProvider<TailnetService>.value(
+                      value: tailnet,
+                    ),
+                    ChangeNotifierProvider<RecommendProvider>.value(
+                      value: currentRecommendations,
+                    ),
+                  ],
+                  child: MaterialApp(
+                    theme: AppTheme.light(),
+                    home: Builder(
+                      builder: (context) => Scaffold(
+                        body: Center(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => SettingsView(
+                                  scanConnection: camera
+                                      ? null
+                                      : (_) async => decoded,
+                                ),
+                              ),
                             ),
+                            child: const Text('打开连接设置'),
                           ),
                         ),
-                        child: const Text('打开连接设置'),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ),
-          );
+              )
+              .timeout(const Duration(seconds: 30));
+          debugPrint('LIVE QR $label: settings shell ready');
           await tester.tap(find.text('打开连接设置'));
           await tester.pump(const Duration(milliseconds: 400));
+          debugPrint('LIVE QR $label: settings route ready');
           await tester.ensureVisible(find.byTooltip('扫码连接'));
           if (Platform.isIOS) {
             await binding.takeScreenshot('qr-settings-$label');
           }
           await tester.tap(find.byTooltip('扫码连接'));
+          debugPrint('LIVE QR $label: scanner opened');
           await _until(
             tester,
             () => find.text('打开连接设置').hitTestable().evaluate().isNotEmpty,
-            const Duration(minutes: 3),
+            const Duration(seconds: scanTimeoutSeconds),
             '$label: scan import did not complete',
           );
         }
@@ -192,6 +222,7 @@ void main() {
           isTrue,
           reason: '$label: real liveness request',
         );
+        await prefs.reload();
         final restored = ApiClient(tailnetService: tailnet);
         await restored.loadSettings();
         expect(restored.baseUrl, client.baseUrl);
@@ -220,7 +251,9 @@ Future<void> _until(
 ) async {
   final deadline = DateTime.now().add(timeout);
   while (!ready() && DateTime.now().isBefore(deadline)) {
-    await tester.pump(const Duration(milliseconds: 200));
+    await tester
+        .pump(const Duration(milliseconds: 200))
+        .timeout(const Duration(seconds: 30));
   }
   expect(ready(), isTrue, reason: message);
 }

@@ -65,7 +65,11 @@ flutter test integration_test/mobile_web_connection_live_test.dart -d <device-id
   --dart-define-from-file=/private/path/qr-defines.json
 ```
 
-`OBC_LIVE_QR_CAMERA=true` 切换真实相机页面，需要用户实际对准二维码并允许相机权限；不能用于无人值守通过。iOS 截图由专用 driver 保存到忽略的 `build/qr-live-acceptance/`。PNG / 私有地址 / 日志不提交仓库。模拟器 WebView 不等于实体手机浏览器；同机两个 Tailscale 节点也不等于跨蜂窝网络。
+`OBC_LIVE_QR_CAMERA=true` 使用生产相机页面和实际扫描回调，不创建预分析图片的第二个控制器。实体设备需要实际对准二维码；Android 模拟器可以使用 SDK 软件相机 `-camera-back imagefile:/private/path/frame.png` 输入同一 Web 二维码画面，并显式授予测试 App 相机权限。后者验证模拟器相机帧 → 原生解码 → 生产扫描回调，不代表实体摄像头光学拍摄。必须通过实际预览确认三个定位角及静区完整可见，不能只检查原始 PNG。
+
+相机等待默认 180 秒，可用 `OBC_LIVE_QR_SCAN_TIMEOUT_SECONDS` 显式缩短本轮验收时间。UI 模式使用实时帧策略，记录各阶段并限制单次首帧 / pump 等待；transport-only 模式不创建首帧 UI。客户端从不可达的旧地址开始，扫码后的主机、端口、连接方式必须变化到目标值；恢复阶段先重新读取磁盘偏好再创建客户端，不能把同一进程的新客户端等同于进程重启。
+
+iOS 截图由专用 driver 保存到忽略的 `build/qr-live-acceptance/`。PNG / 私有地址 / 日志不提交仓库。模拟器 WebView 不等于实体手机浏览器；同机两个 Tailscale 节点也不等于跨蜂窝网络。
 
 本轮实体 iPhone（iOS 18.5）已签名构建并安装，但无线调试未发现 Dart VM；Flutter 提示本地网络权限 / Xcode 自动化授权。已请求用户处理系统权限，不能记为真机通过。macOS 自动测试原生解码已成功，但前台窗口未激活，完整 UI 步骤未判为通过；使用上述 transport-only 模式分别记录链路能力。完整网络实测见后端 `docs/verification/2026-10-27-mobile-connection-live.md`。
 
@@ -102,3 +106,17 @@ flutter drive --no-pub --driver=test_driver/backend_qr_live.dart \
 显式安装新生成的 App 包，避免 `flutter drive` 命中旧的 `build/ios/iphonesimulator/Runner.app` 缓存。先安装再授予模拟器相机权限，随后通过本机 VM service 驱动已启动的测试包，避免再次安装重置权限；端口需空闲。不能据此认定真实摄像头识别通过。截图由 native screenshot 通道保存，先等待系统显示 Flutter 新帧，避免截到转场前的旧页面。
 
 ![iOS 模拟器实际运行的后端 URL 输入框与扫码图标](images/connection-settings-inline-qr-ios-simulator.png)
+
+## 仅模拟器的真实环境复测（2026-10-28）
+
+本轮没有使用实体手机。桌面 Web 实际切换 LAN / 系统 Tailscale，并在自定义地址中填写已有 Tailscale 对端，取得三个真实二维码矩阵；离线栅格化前逐项校验与页面矩阵一致。自定义中的私网地址不算公网验收。
+
+正常 CLI 在隔离的约 217 MiB 真实数据库快照上监听 `0.0.0.0:18422`，保留原有服务。LAN、系统 Tailscale IPv4、系统节点到既有应用内节点三条真实路径均得到 `/api/ping` 200 / ok、推荐接口 200 / 20 条。后端独立真实资源 / API 验收 **1 passed，6.50 秒**。两个节点位于同一台 Mac，没有验证蜂窝网络或 App 新身份的内嵌 Tailscale 首次登录。
+
+Android API 35 ATD 的真实 LAN PNG 原生解码成功。实际相机扫描页的一轮 **未通过**：软件相机预览把二维码裁掉半边，45 秒后报 `lan: scan import did not complete`；截图可以看见定位角不完整。另一次安装后相机权限被重置，启动停在系统权限页；均不算扫码成功。随后缩小、移动软件相机输入的二维码，但模拟器冷启动超过四分钟仍未 ready，`sys.boot_completed` 为空；调整后的相机运行和三地址 transport-only 运行未执行，不能记为通过。没有为了通过而替换生产扫描回调。
+
+最终验收脚本 `flutter analyze --no-pub` 无问题（9.7 秒）；解析 / 设置 / 轻量连通性回归 **45 passed，37 秒**。Android x64 debug 构建通过（28.0 秒），PNG transport-only 参数构建通过（47.4 秒）。单元 / widget 回归、构建与原生图片解码成功不能代替相机完整连接通过。手机网页 HTML / 资源 / API 已返回成功，但浏览器 DOM 采集超时，没有实际卡片渲染通过证据。
+
+当前无可用公网后端 URL、Serve 或 Funnel 配置；没有创建公网暴露。「Vibe」尚未明确是否指本项目 Web，不能宣称兼容未提供的外部二维码。本轮详细网络、失败截图与验收边界见后端 `docs/verification/2026-10-28-mobile-qr-e2e.md`。
+
+测试后系统 Tailscale 恢复为原来的 Stopped，实际地址发现不再返回系统节点；临时后端 / 图片服务、模拟器和显示唤醒断言已停止，临时独立 AVD 已移除。用户原有服务与节点身份保留。
