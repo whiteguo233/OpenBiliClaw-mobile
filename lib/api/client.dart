@@ -366,6 +366,8 @@ class ApiClient {
     return res.bodyBytes;
   }
 
+  /// Check connectivity without waiting for backend model readiness probes.
+  /// Backends predating /ping retain the existing /health compatibility path.
   Future<bool> checkHealth({
     String? overrideScheme,
     String? overrideHost,
@@ -399,17 +401,26 @@ class ApiClient {
         scheme: nextScheme,
         host: h,
         port: p,
-        path: '$prefix/health',
+        path: '$prefix/ping',
       );
       final selectedMode = overrideConnectionMode ?? _connectionMode;
-      final res = await _getWithRetry(
+      final timeout = Duration(
+        seconds: selectedMode == ConnectionMode.tailscale ? 30 : 5,
+      );
+      var res = await _getWithRetry(
         uri,
         headers: const {'X-OBC-Auth': '1'},
-        timeout: Duration(
-          seconds: selectedMode == ConnectionMode.tailscale ? 30 : 5,
-        ),
+        timeout: timeout,
         mode: selectedMode,
       );
+      if (res.statusCode == 404) {
+        res = await _getWithRetry(
+          uri.replace(path: '$prefix/health'),
+          headers: const {'X-OBC-Auth': '1'},
+          timeout: timeout,
+          mode: selectedMode,
+        );
+      }
       return res.statusCode == 200;
     } catch (_) {
       return false;

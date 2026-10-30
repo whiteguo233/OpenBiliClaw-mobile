@@ -81,7 +81,7 @@ void main() {
       await tester.enterText(find.byType(TextField).first, entry.key);
       await tester.tap(find.text('测试连接'));
       await tester.pumpAndSettle();
-      expect(requests.last.toString(), '${entry.value}/api/health');
+      expect(requests.last.toString(), '${entry.value}/api/ping');
       await tester.tap(find.text('保存'));
       await tester.pumpAndSettle();
       expect(client.baseUrl, '${entry.value}/api');

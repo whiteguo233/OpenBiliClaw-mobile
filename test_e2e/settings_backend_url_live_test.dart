@@ -13,7 +13,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const url = String.fromEnvironment('LIVE_BACKEND_URL');
   test(
-    'real backend health before and after persisting the endpoint',
+    'real backend liveness before and after persisting the endpoint',
     () async {
       expect(url, isNotEmpty, reason: 'Provide LIVE_BACKEND_URL');
       final endpoint = Uri.parse(url);
@@ -38,7 +38,7 @@ void main() {
           overrideBasePath: endpoint.path,
         ),
         isTrue,
-        reason: 'Real /api/health request must return HTTP 200',
+        reason: 'Real provider-independent /api/ping must return HTTP 200',
       );
       await client.saveSettings(
         endpoint.host,
@@ -50,12 +50,12 @@ void main() {
       await restored.loadSettings();
       expect(restored.baseUrl, client.baseUrl);
       expect(await restored.checkHealth(), isTrue);
-      final health = await restored.get('/health');
-      expect(health['status'], 'ok');
+      final ping = await restored.get('/ping');
+      expect(ping['status'], 'ok');
       // Log no hostnames, response bodies, cookies or credentials.
       debugPrint(
         'LIVE PASS: ${endpoint.scheme} port=${endpoint.port}; '
-        'health HTTP 200 before/after save; backend status=ok',
+        'liveness HTTP 200 before/after save; backend status=ok',
       );
     },
   );
