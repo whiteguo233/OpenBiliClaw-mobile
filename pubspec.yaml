@@ -38,6 +38,7 @@ dependencies:
   share_plus: ^13.3.0
   screen_brightness: ^2.1.5
   volume_controller: ^3.7.1
+  image_picker: ^1.2.4
 
 dev_dependencies:
   flutter_test:
@@ -45,6 +46,7 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  image_picker_platform_interface: ^2.11.2
 
 flutter:
   uses-material-design: true

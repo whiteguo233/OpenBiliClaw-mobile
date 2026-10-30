@@ -27,6 +27,9 @@ void main() {
   binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
   const casesJson = String.fromEnvironment('OBC_LIVE_QR_CASES');
   const camera = bool.fromEnvironment('OBC_LIVE_QR_CAMERA');
+  // The host selects the fixture in the real OS picker. No picker result,
+  // native image decoder, scanner callback or storage is replaced.
+  const gallery = bool.fromEnvironment('OBC_LIVE_QR_GALLERY');
   const scanTimeoutSeconds = int.fromEnvironment(
     'OBC_LIVE_QR_SCAN_TIMEOUT_SECONDS',
     defaultValue: 180,
@@ -52,6 +55,12 @@ void main() {
       final cases = (jsonDecode(casesJson) as List)
           .cast<Map<String, dynamic>>();
       expect(cases, isNotEmpty);
+      expect(
+        camera && gallery,
+        isFalse,
+        reason: 'Choose one native input mode',
+      );
+      expect(transportOnly && gallery, isFalse, reason: 'Gallery requires UI');
       final prefs = await SharedPreferences.getInstance();
       const keys = [
         'api_scheme',
@@ -69,7 +78,9 @@ void main() {
       final directory = await Directory.systemTemp.createTemp('obc-live-qr-');
       // The production camera owns the plugin while scanning. Do not create a
       // second controller for image analysis in the same camera acceptance run.
-      final scanner = camera ? null : MobileScannerController(autoStart: false);
+      final scanner = camera || gallery
+          ? null
+          : MobileScannerController(autoStart: false);
       final tailnet = createTailnetService();
       RecommendProvider? recommendations;
       addTearDown(() async {
@@ -105,7 +116,7 @@ void main() {
         final expected = entry['url'] as String;
         final endpoint = BackendConnectionLink.parse(expected);
         String? decoded;
-        if (!camera) {
+        if (!camera && !gallery) {
           final image = File('${directory.path}/connection-$i.png');
           await image.writeAsBytes(base64Decode(entry['png'] as String));
           final capture = await scanner!.analyzeImage(image.path);
@@ -166,7 +177,9 @@ void main() {
                     ),
                   ],
                   child: MaterialApp(
-                    theme: AppTheme.light(),
+                    theme: entry['dark'] == true
+                        ? AppTheme.dark()
+                        : AppTheme.light(),
                     home: Builder(
                       builder: (context) => Scaffold(
                         body: Center(
@@ -174,7 +187,7 @@ void main() {
                             onPressed: () => Navigator.of(context).push(
                               MaterialPageRoute<void>(
                                 builder: (_) => SettingsView(
-                                  scanConnection: camera
+                                  scanConnection: camera || gallery
                                       ? null
                                       : (_) async => decoded,
                                 ),
@@ -199,6 +212,18 @@ void main() {
           }
           await tester.tap(find.byTooltip('扫码连接'));
           debugPrint('LIVE QR $label: scanner opened');
+          if (gallery) {
+            await _until(
+              tester,
+              () => find.text('选择图片').hitTestable().evaluate().isNotEmpty,
+              const Duration(seconds: 30),
+              '$label: image action was not visible',
+            );
+            // Capture the production page before opening the platform picker.
+            await Future<void>.delayed(const Duration(seconds: 2));
+            await tester.tap(find.text('选择图片'));
+            debugPrint('LIVE QR $label: waiting for system image selection');
+          }
           await _until(
             tester,
             () => find.text('打开连接设置').hitTestable().evaluate().isNotEmpty,
@@ -249,11 +274,12 @@ Future<void> _until(
   Duration timeout,
   String message,
 ) async {
-  final deadline = DateTime.now().add(timeout);
-  while (!ready() && DateTime.now().isBefore(deadline)) {
-    await tester
-        .pump(const Duration(milliseconds: 200))
-        .timeout(const Duration(seconds: 30));
+  final elapsed = Stopwatch()..start();
+  while (!ready() && elapsed.elapsed < timeout) {
+    // A native picker pauses Flutter's frame delivery. Waiting for pump() here
+    // deadlocks until the picker closes. fullyLive renders foreground updates;
+    // keep the real event loop running while the OS owns the screen.
+    await Future<void>.delayed(const Duration(milliseconds: 200));
   }
   expect(ready(), isTrue, reason: message);
 }

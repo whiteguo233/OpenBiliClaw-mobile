@@ -14,7 +14,7 @@ import 'backend_scan_view.dart';
 class SettingsView extends StatefulWidget {
   const SettingsView({super.key, this.scanConnection});
 
-  /// Optional scanner adapter; otherwise opens the native camera page.
+  /// Optional scanner adapter; otherwise opens native camera / image scanning.
   final Future<String?> Function(BuildContext)? scanConnection;
 
   @override
