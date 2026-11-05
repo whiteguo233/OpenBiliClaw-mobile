@@ -13,7 +13,7 @@
 version: 0.4.0+2
 ```
 
-Release 标签必须与版本名一致，例如 `v0.4.0`。Android 安装器用 `BUILD`（即 versionCode）判断能否覆盖安装，因此 **每次发版的 `BUILD` 必须严格大于上一个已发布版本的 `BUILD`**，不能只递增 `X.Y.Z` 而把构建号回退。CI 会校验当前 `BUILD` 是否比最近一个 `vX.Y.Z` 标签里的构建号更大，发现回退会直接拒绝发版。
+Release 标签必须与版本名一致，例如 `v0.4.0`。Android 的基础 versionCode 来自 `BUILD`；Flutter 的 split-per-ABI APK 会额外加上 ABI 偏移（例如本次 ARM64 APK 为 `2010 + 2000 = 4010`），AAB 使用基础值。安装器用实际 versionCode 判断能否覆盖安装，因此 **每次发版的 `BUILD` 必须严格大于上一个已发布版本的 `BUILD`**，不能只递增 `X.Y.Z` 而把构建号回退。CI 会校验当前 `BUILD` 是否比最近一个 `vX.Y.Z` 标签里的构建号更大，发现回退会直接拒绝发版。
 
 推荐使用连续递增大整数作为构建号，并在每次发版时同时提升 `X.Y.Z`，例如：
 
