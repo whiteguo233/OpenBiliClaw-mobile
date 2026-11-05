@@ -166,3 +166,32 @@ flutter test integration_test/backend_qr_live_test.dart -d <android-emulator-id>
 验证结果：新选图 widget 回归 **9 passed**；解析 / 设置 / 轻量连通性回归 **45 passed**；完整 `flutter analyze --no-pub` 和最终改动文件的 `dart analyze` 无问题；最终 Android x64 debug 构建通过；iOS `Info.plist` 语法检查通过。本轮没有重复完整 App 单元套件或完成新的 iOS 原生构建。后端真实资源 / HTTP 验收另为 **1 passed，14.29 秒**，不能单独替代上述设备 UI 证据。
 
 当前锁定的 `image_picker_ios` 需要 Flutter 3.47+ / Dart 3.13+，与仓库已有 CI 的 Flutter 3.47.2 一致；本次没有调整 CI 或 App 版本号。测试后系统 Tailscale 恢复为原来的 Stopped，临时服务和模拟器已停止，原 ATD 的分辨率 / 密度恢复默认值；临时 AVD 已删除，原有服务和节点身份保留。
+
+## 完整扫码复测入口（2026-11-05）
+
+`integration_test/backend_qr_full_live_test.dart` 把实际图库扫码和手机 WebView 验收放入同一二进制。只在一次性模拟器启用 `OBC_LIVE_QR_KEEP_SETTINGS=true`：第一进程保留最后扫码连接，宿主结束进程，在日志 `LIVE QR FULL TEMP` 指示的 App 缓存目录创建 `obc-qr-verify-restart`，再启动同一二进制。第二进程调用生产 `app.main()`，不写连接设置，检查协议、主机、端口、代理路径和连接方式，等待主页出现真实推荐并 ping，然后打开实际连接设置检查扫码图标。此项区分于同一进程内创建新客户端。
+
+```bash
+flutter drive --driver=test_driver/backend_qr_live.dart \
+  --target=integration_test/backend_qr_full_live_test.dart \
+  -d <disposable-android-emulator-id> \
+  --dart-define=OBC_LIVE_QR_GALLERY=true \
+  --dart-define=OBC_LIVE_QR_GALLERY_FAILURES=true \
+  --dart-define=OBC_LIVE_QR_DENY_CAMERA=true \
+  --dart-define=OBC_LIVE_QR_KEEP_SETTINGS=true \
+  --dart-define-from-file=/private/path/qr-defines.json
+```
+
+宿主必须配合实际系统操作：导入对应 `label` 的 Web / 插件原始截图，真正拒绝 Android 相机权限，并在 PackageManager 确认拒绝后，创建缓存目录中的 `obc-qr-camera-denied-<label>` 阶段标记；它只同步测试阶段，不代替权限结果。图库负例依次取消、选择空白截图、选择回环地址二维码，每次都检查旧设置保持，之后再选有效截图。用实际前后台事件等待图库返回，用真实 resumed Activity 判断取消结束，避免 UI 树采集错过中间帧、误取消下一轮图库。图库选择、原生解码、扫描回调、磁盘和 HTTP 均不注入结果。
+
+WebView 逐项加载同一真实 QR URL，要求实际推荐卡片和至少一张成功解码的封面，校验当前主机、端口及推荐路由。HTTPS、代理前缀、认证或网络失败应保留失败，不能用 HTTP 200 或有页面外壳替代渲染结果。代理前缀对应的配套后端修复及详细记录见 [2026-11-05 后端联测](https://github.com/whiteguo233/OpenBiliClaw/blob/codex/mobile-network-qr/docs/verification/2026-11-05-mobile-qr-full-e2e.md)。
+
+本轮 iPhone 17 Pro / iOS 26.5 独立模拟器已安装原生 x86_64 debug 构建。浅色和深色各自通过生产主页 → 连接设置 → URL 内扫码 / 粘贴图标 → 取消粘贴 → 生产扫码页右下角「选择图片」→ 返回设置，driver 退出码均为 0（约 26 / 21 秒），编译产物包含图片用途说明。仅属于构建与导航验收，组件不支持 iOS 模拟器图片分析；未操作实体手机。独立 iOS 模拟器用后已关闭并删除。
+
+本轮 Android 八张实际 Web / 插件面板截图覆盖两种 LAN、两种系统 Tailscale、两种既有节点、两种长路径 v10，全部完成真实图库识别、保存、20 条推荐、ping 和重读偏好后连接；同组 WebView 每项 20 张卡片及解码封面通过，两组一次运行 7 分 28 秒、driver 退出码 0。实际拒绝相机权限后的取消、空图、回环 QR 均保留旧设置。
+
+软件相机另外通过生产相机入口：保留实际 LAN QR 截图的 188×189 像素，放入 640×480 白色输入帧。原居中画面被模拟器预览裁掉右侧，调整输入中 QR 位置为 `(80,145)` 后实际预览三个定位角和静区完整可见；原生相机识别 → 保存 → 20 条真实推荐 / ping / 重读偏好重连通过，约 18 秒、driver 退出码 0。该项没有选图或预注入扫描结果，修正的是测试帧布局，不能算实体光学拍摄验收。
+
+最终完整进程重启另用同一二进制、插件长路径 v10 验证：第一进程通过真实图库扫码、保存、20 条推荐和 WebView（52 秒）；宿主结束进程，第二进程从生产入口加载已保存的实际 API URL，保留路径前缀，加载 20 条推荐，将首卡滚动到可见位置，ping 和设置扫码入口通过（10 秒）。两个 driver 均退出 0。断言校验公开请求路径，等待数据通知后的 SliverList 实际绘制，不将内部路径是否带前导斜杠或还没出帧误算为产品连接失败。
+
+本轮结束已关闭并删除两个独立模拟器、关闭两个测试浏览器会话，停止本轮后端 / 图片服务 / 反代 / TCP 转发；临时端口均关闭，原服务两个端口仍监听。系统 Tailscale 恢复原来的 Stopped，重新打开插件二维码实际回退 LAN；没有注销或删除既有节点。公网未提供地址，跨物理 / 蜂窝网络、内嵌 Tailnet 新身份首次入网和实体光学扫码仍未验收。完整 App 196 项、完整分析、最终改动目标分析、Android 和 iOS simulator 构建均已通过。

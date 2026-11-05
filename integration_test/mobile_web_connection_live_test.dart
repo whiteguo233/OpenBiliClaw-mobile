@@ -42,7 +42,8 @@ void main() {
         var cards = 0;
         var decodedCovers = 0;
         final deadline = DateTime.now().add(const Duration(seconds: 60));
-        while (cards == 0 && DateTime.now().isBefore(deadline)) {
+        while ((cards == 0 || decodedCovers == 0) &&
+            DateTime.now().isBefore(deadline)) {
           await tester.pump(const Duration(milliseconds: 250));
           try {
             final result = await controller.runJavaScriptReturningResult('''
@@ -65,6 +66,11 @@ void main() {
           cards,
           greaterThan(0),
           reason: '$label: real recommendation API → rendered mobile cards',
+        );
+        expect(
+          decodedCovers,
+          greaterThan(0),
+          reason: '$label: real cover images decoded',
         );
         final current = Uri.parse((await controller.currentUrl())!);
         expect(current.host, uri.host);

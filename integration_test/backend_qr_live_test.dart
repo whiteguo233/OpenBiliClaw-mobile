@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -30,6 +31,11 @@ void main() {
   // The host selects the fixture in the real OS picker. No picker result,
   // native image decoder, scanner callback or storage is replaced.
   const gallery = bool.fromEnvironment('OBC_LIVE_QR_GALLERY');
+  const galleryFailures = bool.fromEnvironment('OBC_LIVE_QR_GALLERY_FAILURES');
+  const denyCamera = bool.fromEnvironment('OBC_LIVE_QR_DENY_CAMERA');
+  // Only enable in a disposable emulator: the host then stops the process and
+  // the full-app verifier checks the actual persisted connection on cold start.
+  const keepSettings = bool.fromEnvironment('OBC_LIVE_QR_KEEP_SETTINGS');
   const scanTimeoutSeconds = int.fromEnvironment(
     'OBC_LIVE_QR_SCAN_TIMEOUT_SECONDS',
     defaultValue: 180,
@@ -90,6 +96,7 @@ void main() {
         tailnet.dispose();
         await scanner?.dispose();
         await directory.delete(recursive: true);
+        if (keepSettings) return;
         for (final entry in previous.entries) {
           final value = entry.value;
           if (value == null) {
@@ -207,18 +214,84 @@ void main() {
           await tester.pump(const Duration(milliseconds: 400));
           debugPrint('LIVE QR $label: settings route ready');
           await tester.ensureVisible(find.byTooltip('扫码连接'));
+          final deniedMarker = File(
+            '${Directory.systemTemp.path}/obc-qr-camera-denied-$label',
+          );
+          if (denyCamera && deniedMarker.existsSync()) {
+            await deniedMarker.delete();
+          }
           if (Platform.isIOS) {
             await binding.takeScreenshot('qr-settings-$label');
           }
           await tester.tap(find.byTooltip('扫码连接'));
           debugPrint('LIVE QR $label: scanner opened');
           if (gallery) {
+            if (denyCamera) {
+              await _until(
+                tester,
+                // The host writes only after denying the real OS prompt or
+                // verifying the persisted denial in Android PackageManager.
+                // This signal coordinates phases; no permission/decoder API
+                // or scan result is replaced by the test.
+                deniedMarker.existsSync,
+                const Duration(seconds: 30),
+                '$label: host must deny the actual Android camera permission',
+              );
+              debugPrint('LIVE QR $label: actual OS camera denial confirmed');
+            }
             await _until(
               tester,
               () => find.text('选择图片').hitTestable().evaluate().isNotEmpty,
               const Duration(seconds: 30),
               '$label: image action was not visible',
             );
+            if (galleryFailures && i == 0) {
+              final before = client.baseUrl;
+              final saved = {for (final key in keys) key: prefs.get(key)};
+              for (final failure in ['cancel', 'blank-image', 'loopback-qr']) {
+                debugPrint('LIVE QR FAILURE $failure: prepare screenshot');
+                await Future<void>.delayed(const Duration(seconds: 2));
+                final pickerReturn = _PickerReturnObserver();
+                WidgetsBinding.instance.addObserver(pickerReturn);
+                try {
+                  await tester.tap(find.text('选择图片'));
+                  debugPrint(
+                    'LIVE QR FAILURE $failure: waiting for system picker',
+                  );
+                  await pickerReturn.returned.future.timeout(
+                    Duration(seconds: scanTimeoutSeconds),
+                  );
+                } finally {
+                  WidgetsBinding.instance.removeObserver(pickerReturn);
+                }
+                // The OS picker has really returned; pumping here is safe.
+                // Waiting for the old button label while Flutter was paused
+                // could inspect the stale pre-picker frame and pass too early.
+                await tester.pump().timeout(const Duration(seconds: 30));
+                await _until(
+                  tester,
+                  () =>
+                      find.text('选择图片').hitTestable().evaluate().isNotEmpty &&
+                      (failure == 'cancel' ||
+                          find
+                              .textContaining('图片中未找到可用的后端二维码')
+                              .evaluate()
+                              .isNotEmpty),
+                  const Duration(seconds: scanTimeoutSeconds),
+                  '$failure: image picker did not finish',
+                );
+                if (failure != 'cancel') {
+                  expect(find.textContaining('图片中未找到可用的后端二维码'), findsOneWidget);
+                }
+                expect(client.baseUrl, before);
+                await prefs.reload();
+                expect({for (final key in keys) key: prefs.get(key)}, saved);
+                expect(find.text('扫码连接后端'), findsOneWidget);
+                debugPrint(
+                  'LIVE QR FAILURE $failure: original settings preserved PASS',
+                );
+              }
+            }
             // Capture the production page before opening the platform picker.
             await Future<void>.delayed(const Duration(seconds: 2));
             await tester.tap(find.text('选择图片'));
@@ -266,6 +339,20 @@ void main() {
     skip: casesJson.isEmpty,
     timeout: const Timeout(Duration(minutes: 10)),
   );
+}
+
+class _PickerReturnObserver extends WidgetsBindingObserver {
+  final returned = Completer<void>();
+  bool _leftForeground = false;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) {
+      _leftForeground = true;
+    } else if (_leftForeground && !returned.isCompleted) {
+      returned.complete();
+    }
+  }
 }
 
 Future<void> _until(

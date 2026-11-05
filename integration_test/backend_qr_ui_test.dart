@@ -31,6 +31,7 @@ void main() {
     await tester.tap(find.byTooltip('扫码连接'));
     await _waitFor(tester, find.text('扫码连接后端'));
     expect(find.byType(BackendScanView), findsOneWidget);
+    expect(find.text('选择图片').hitTestable(), findsOneWidget);
     await tester.pump(const Duration(seconds: 2));
     await _screenshot(tester, binding, 'qr-camera-simulator');
 
