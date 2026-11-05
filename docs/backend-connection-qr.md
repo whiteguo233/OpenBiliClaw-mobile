@@ -127,6 +127,10 @@ Android API 35 ATD 的真实 LAN PNG 原生解码成功。实际相机扫描页�
 
 ## 从图片识别的设备验收
 
+相机生命周期只恢复后台切换前实际运行的实例。权限弹窗、启动失败也会改变前后台状态，不能仅凭 `hasCameraPermission` 就重新启动；inactive / hidden / paused 共用一次恢复标记。图片在后台完成时保存原运行相机的恢复意图，回到前台才恢复；启动失败或拒绝权限不会因此再次请求相机。新增三项 widget 回归覆盖失败后返回、连续后台状态和图片在后台完成；失败后返回先复现 2 次启动，再修正为 1 次。
+
+本轮生命周期和选图 widget 共 **12 passed**，完整 App 单元 / widget 回归 **196 passed（1 分 27 秒）**；改动源文件与测试的 `dart analyze` 无问题。设备验收结果单独记录，不用这些回归替代真实图库或网络结果。
+
 `OBC_LIVE_QR_GALLERY=true` 打开真实 `BackendScanView`，点击右下角「选择图片」，由设备系统界面选择截图。该模式不预先解码 PNG、不注入 `ImagePicker` 结果，也不替换扫描回调、存储、HTTP 或 Tailnet 服务。不能与 `OBC_LIVE_QR_CAMERA` / `OBC_LIVE_QR_TRANSPORT_ONLY` 同时启用。
 
 图库模式的 `OBC_LIVE_QR_CASES` 每项需要 `label`、实际 `url`，可用 `dark: true` 验证深色界面；`png` 只在原来的 PNG 分析模式必需。宿主在相册导入同一二维码的实际截图，日志出现 `waiting for system image selection` 后在系统界面选择对应图片。成功条件仍包括从不可达旧地址切到目标、实际推荐非空、轻量探测、重新读取偏好和新客户端 ping。完成后还原原连接设置，不注销节点。

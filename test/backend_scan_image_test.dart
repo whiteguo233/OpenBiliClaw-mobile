@@ -30,6 +30,7 @@ class _Decoder extends MobileScannerPlatform {
     barcodes: [Barcode(rawValue: 'http://192.168.1.7:8420/m/')],
   );
   bool cameraDenied = false;
+  bool cameraUnavailable = false;
   bool imageFails = false;
   int starts = 0;
   int stops = 0;
@@ -49,6 +50,11 @@ class _Decoder extends MobileScannerPlatform {
     if (cameraDenied) {
       throw const MobileScannerException(
         errorCode: MobileScannerErrorCode.permissionDenied,
+      );
+    }
+    if (cameraUnavailable) {
+      throw const MobileScannerException(
+        errorCode: MobileScannerErrorCode.genericError,
       );
     }
     return const MobileScannerViewAttributes(
@@ -200,6 +206,57 @@ void main() {
     expect(decoder.starts, 1);
     expect(find.text('选择图片'), findsOneWidget);
   });
+
+  testWidgets('foregrounding a failed camera does not request it again', (
+    tester,
+  ) async {
+    decoder.cameraUnavailable = true;
+    await open(tester);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(decoder.starts, 1);
+    expect(find.text('选择图片'), findsOneWidget);
+    await tester.tap(find.text('选择图片'));
+    await tester.pumpAndSettle();
+    expect(imported.value, 'http://192.168.1.7:8420/m/');
+  });
+
+  testWidgets('a running camera resumes once after all background states', (
+    tester,
+  ) async {
+    await open(tester);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(decoder.starts, 2);
+    expect(decoder.stops, 1);
+  });
+
+  testWidgets(
+    'an image finishing in the background restores the active camera on return',
+    (tester) async {
+      final selection = Completer<XFile?>();
+      images.select = () => selection.future;
+      decoder.result = null;
+      await open(tester);
+      await tester.tap(find.text('选择图片'));
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      selection.complete(XFile('/cache/qr.png'));
+      await tester.pumpAndSettle();
+      expect(decoder.starts, 1);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(decoder.starts, 2);
+      expect(imported.value, isNull);
+    },
+  );
 
   testWidgets('picker and decoder failures leave a usable retry action', (
     tester,

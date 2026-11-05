@@ -22,6 +22,7 @@ class _BackendScanViewState extends State<BackendScanView>
   );
   bool _completed = false;
   bool _readingImage = false;
+  bool _resumeCameraOnForeground = false;
   String? _error;
 
   @override
@@ -36,7 +37,14 @@ class _BackendScanViewState extends State<BackendScanView>
     try {
       await _controller.start();
       // Permission prompts can finish after the image picker has opened.
-      if (!mounted || _readingImage || _completed) await _controller.stop();
+      if (!mounted || _readingImage || _completed) {
+        await _controller.stop();
+      } else if (WidgetsBinding.instance.lifecycleState !=
+              AppLifecycleState.resumed &&
+          _controller.value.isRunning) {
+        _resumeCameraOnForeground = true;
+        await _controller.stop();
+      }
     } catch (_) {
       if (mounted && _error == null) {
         setState(() => _error = '无法打开相机。可以选择二维码图片，或返回后粘贴连接链接。');
@@ -46,10 +54,14 @@ class _BackendScanViewState extends State<BackendScanView>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (!_controller.value.hasCameraPermission) return;
     if (state == AppLifecycleState.resumed) {
-      unawaited(_start());
-    } else {
+      final resume = _resumeCameraOnForeground;
+      _resumeCameraOnForeground = false;
+      if (resume) unawaited(_start());
+    } else if (_controller.value.isRunning) {
+      // Permission dialogs also change lifecycle state. Only restore a camera
+      // that really ran; retrying a failed start can open another prompt.
+      _resumeCameraOnForeground = true;
       unawaited(_controller.stop());
     }
   }
@@ -107,11 +119,13 @@ class _BackendScanViewState extends State<BackendScanView>
     } finally {
       if (mounted) {
         setState(() => _readingImage = false);
-        if (resumeCamera &&
-            !_completed &&
-            WidgetsBinding.instance.lifecycleState ==
-                AppLifecycleState.resumed) {
-          unawaited(_start());
+        if (resumeCamera && !_completed) {
+          if (WidgetsBinding.instance.lifecycleState ==
+              AppLifecycleState.resumed) {
+            unawaited(_start());
+          } else {
+            _resumeCameraOnForeground = true;
+          }
         }
       }
     }
