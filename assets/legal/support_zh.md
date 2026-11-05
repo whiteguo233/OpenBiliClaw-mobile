@@ -41,3 +41,7 @@ App Store 版本采用一次性付费下载，客户端不另行收取 AI 调用
 ## 开源许可
 
 客户端项目使用 MIT 许可证。源代码及许可见 [OpenBiliClaw-mobile](https://github.com/whiteguo233/OpenBiliClaw-mobile)。第三方组件适用各自的开源许可。
+
+## 扫码连接后端
+
+在电脑桌面 Web 或插件中点「手机版」，选择局域网、Tailscale 或公网地址；在 App 连接设置中点「扫码连接」。识别后自动保存地址并重连，也可复制链接后用「粘贴连接链接」。相机不可用时可检查系统相机权限。应用内 Tailscale 首次仍需登录同一 tailnet；后端密码登录不因扫码而跳过。
