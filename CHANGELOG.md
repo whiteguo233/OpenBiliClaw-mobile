@@ -3,6 +3,7 @@
 ## v0.3.160+2010 (2026-11-05)
 
 - 发布扫码连接版本：后端 URL 右侧扫码图标、相机识别、右下角系统选图识别二维码截图，自动保存后端地址和连接方式并重连。
+- 保留 App Store 1.0.1 的简体中文语言标识修复：iOS 工程开发语言和应用声明均使用 `zh-Hans`，避免新版商店语言退回英文。
 - iOS 应用与内置 Tailscale 标识统一为 App Store 的 `com.openbiliclaw.mobile`；GitHub 构建号升至 2010。App Store 分发使用独立签名和审核流程，不将 unsigned IPA 的发布视为送审完成。
 - 联测文档使用主分支的长期链接，完整验收范围见 [扫码连接](docs/backend-connection-qr.md)；发布与 Apple 提交状态见 [本次发布记录](docs/releases/v0.3.160.md)。
 
