@@ -83,9 +83,11 @@ class ChatTurn {
     for (final event in events.whereType<Map>()) {
       if (event['type'] != 'tool_result') continue;
       final data = event['data'];
-      if (data is! Map) continue;
+      // Persisted AgentEvent payloads are flat; older clients wrapped data.
+      final text = event['text'] ?? (data is Map ? data['text'] : null);
+      if (text is! String) continue;
       try {
-        final result = jsonDecode(data['text']?.toString() ?? '');
+        final result = jsonDecode(text);
         if (result is Map &&
             result['status'] == 'needs_login' &&
             result['takeover_url'] is String) {
