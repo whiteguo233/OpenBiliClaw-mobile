@@ -3,6 +3,14 @@
 OpenBiliClaw 的 Flutter 移动客户端（多平台内容推荐与认知客户端），连接自建的
 [OpenBiliClaw](https://github.com/whiteguo233/OpenBiliClaw) 后端服务（提供 B 站数据 + AI 能力）。
 
+## 📌 v0.3.160
+
+- 后端 URL 旁的扫码图标可扫描电脑 Web / 插件的连接二维码并自动重连。
+- 扫码页右下角支持选择手机里的二维码截图，相机不可用时也能导入连接。
+- 支持局域网、Tailscale 与公网 HTTP(S) 连接地址，并保留反向代理路径。
+
+完整变更详见 [CHANGELOG.md](CHANGELOG.md)，下载与 Apple 提交状态见 [发布记录](docs/releases/v0.3.160.md)。
+
 ## 使用逻辑
 
 App 采用「客户端 + 后端」架构，使用流程：
