@@ -13,7 +13,7 @@ dependencies:
   provider: ^6.1.0
   qr_flutter: ^4.1.0
   mobile_scanner: ^7.4.2
-  cupertino_icons: ^1.0.8
+  cupertino_icons: ^2.0.0
   cached_network_image: ^4.0.0
   shared_preferences: ^2.2.0
   url_launcher: ^6.2.0
