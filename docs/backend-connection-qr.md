@@ -184,7 +184,7 @@ flutter drive --driver=test_driver/backend_qr_live.dart \
 
 宿主必须配合实际系统操作：导入对应 `label` 的 Web / 插件原始截图，真正拒绝 Android 相机权限，并在 PackageManager 确认拒绝后，创建缓存目录中的 `obc-qr-camera-denied-<label>` 阶段标记；它只同步测试阶段，不代替权限结果。图库负例依次取消、选择空白截图、选择回环地址二维码，每次都检查旧设置保持，之后再选有效截图。用实际前后台事件等待图库返回，用真实 resumed Activity 判断取消结束，避免 UI 树采集错过中间帧、误取消下一轮图库。图库选择、原生解码、扫描回调、磁盘和 HTTP 均不注入结果。
 
-WebView 逐项加载同一真实 QR URL，要求实际推荐卡片和至少一张成功解码的封面，校验当前主机、端口及推荐路由。HTTPS、代理前缀、认证或网络失败应保留失败，不能用 HTTP 200 或有页面外壳替代渲染结果。代理前缀对应的配套后端修复及详细记录见 [2026-11-05 后端联测](https://github.com/whiteguo233/OpenBiliClaw/blob/codex/mobile-network-qr/docs/verification/2026-11-05-mobile-qr-full-e2e.md)。
+WebView 逐项加载同一真实 QR URL，要求实际推荐卡片和至少一张成功解码的封面，校验当前主机、端口及推荐路由。HTTPS、代理前缀、认证或网络失败应保留失败，不能用 HTTP 200 或有页面外壳替代渲染结果。代理前缀对应的配套后端修复及详细记录见 [2026-11-05 后端联测](https://github.com/whiteguo233/OpenBiliClaw/blob/main/docs/verification/2026-11-05-mobile-qr-full-e2e.md)。链接指向主分支，合入后清理功能分支不影响查阅。
 
 本轮 iPhone 17 Pro / iOS 26.5 独立模拟器已安装原生 x86_64 debug 构建。浅色和深色各自通过生产主页 → 连接设置 → URL 内扫码 / 粘贴图标 → 取消粘贴 → 生产扫码页右下角「选择图片」→ 返回设置，driver 退出码均为 0（约 26 / 21 秒），编译产物包含图片用途说明。仅属于构建与导航验收，组件不支持 iOS 模拟器图片分析；未操作实体手机。独立 iOS 模拟器用后已关闭并删除。
 
