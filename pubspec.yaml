@@ -15,7 +15,7 @@ dependencies:
   mobile_scanner: ^7.4.2
   cupertino_icons: ^1.0.8
   cached_network_image: ^4.0.0
-  shared_preferences: ^2.2.0
+  shared_preferences: ^2.5.6
   url_launcher: ^6.2.0
   webview_flutter: ^4.14.1
   flutter_markdown: ^0.7.4
