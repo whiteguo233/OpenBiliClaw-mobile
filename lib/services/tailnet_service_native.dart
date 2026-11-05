@@ -73,7 +73,7 @@ class NativeTailnetService extends TailnetService {
       Tailscale.init(
         stateDir: stateDirectory.path,
         appId: Platform.isIOS
-            ? 'com.openbiliclaw.openbiliclawApp'
+            ? 'com.openbiliclaw.mobile'
             : 'com.openbiliclaw.openbiliclaw_app',
         logLevel: _enableDiagnosticLogs
             ? TailscaleLogLevel.info
