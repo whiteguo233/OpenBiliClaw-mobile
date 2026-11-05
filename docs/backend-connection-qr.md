@@ -1,5 +1,7 @@
 # 后端扫码连接
 
+**安装包状态（2026-11-05）**：扫码与截图识别已随 [GitHub v0.3.160](https://github.com/whiteguo233/OpenBiliClaw-mobile/releases/tag/v0.3.160) 发布。Apple 1.0.2（2010）仅完成候选归档，尚未由本次代理完成上传或送审；详情见 [发布记录](releases/v0.3.160.md)。
+
 连接流程：电脑 Web / 插件「手机版」→ 选择局域网、Tailscale 或公网地址 → App 连接设置中后端 URL 右侧的扫码图标 → 相机扫描，或右下角「选择图片」读取二维码截图 → 自动保存并重连。二维码也可用手机相机打开 Mobile Web。
 
 | 二维码 | App 保存的后端 | 连接方式 |
@@ -28,7 +30,7 @@ paste link ─────────────────────→ Ba
   → existing backend authentication
 ```
 
-验证：`flutter analyze`、`flutter test`；新增 `backend_connection_link_test.dart` 覆盖地址与非法输入，`settings_qr_connection_test.dart` 覆盖扫描回执 → 保存 → 重连 → 重启恢复；原有 `settings_backend_url_test.dart` 继续验证手动输入。相机实拍和真实跨设备 Tailnet 连通性需要设备验收，不能由 widget mock 替代。后端 / 插件需使用配套新版本，源代码分支完成不代表商店或安装包已更新。
+验证：`flutter analyze`、`flutter test`；新增 `backend_connection_link_test.dart` 覆盖地址与非法输入，`settings_qr_connection_test.dart` 覆盖扫描回执 → 保存 → 重连 → 重启恢复；原有 `settings_backend_url_test.dart` 继续验证手动输入。相机实拍和真实跨设备 Tailnet 连通性需要设备验收，不能由 widget mock 替代。后端 / 插件需使用配套新版本；安装包与 Apple 提交状态以本文顶部的发布记录为准。
 
 官方组件说明：[mobile_scanner](https://pub.dev/packages/mobile_scanner)。
 
