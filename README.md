@@ -11,6 +11,8 @@ OpenBiliClaw 的 Flutter 移动客户端（多平台内容推荐与认知客户�
 
 完整变更详见 [CHANGELOG.md](CHANGELOG.md)，下载与 Apple 提交状态见 [发布记录](docs/releases/v0.3.160.md)。
 
+App Store 当前可分发版本为 1.0.1（2012）；包含上述扫码功能的 iOS 1.0.2 正在准备，实际上传与提审结果见 [iOS 发布记录](docs/releases/ios-1.0.2.md)。
+
 ## 使用逻辑
 
 App 采用「客户端 + 后端」架构，使用流程：
