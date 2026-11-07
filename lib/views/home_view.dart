@@ -10,6 +10,7 @@ import '../providers/chat_provider.dart';
 import '../providers/profile_provider.dart';
 import '../providers/recommend_provider.dart';
 import '../providers/saved_provider.dart';
+import '../providers/source_attention_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_chrome.dart';
 import '../widgets/cover_image.dart';
@@ -39,6 +40,7 @@ class _HomeViewState extends State<HomeView> with WidgetsBindingObserver {
   late ProfileProvider _profileProvider;
   late SavedProvider _savedProvider;
   late AuthProvider _authProvider;
+  SourceAttentionProvider? _sourceAttention;
 
   @override
   void initState() {
@@ -49,7 +51,9 @@ class _HomeViewState extends State<HomeView> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) _sourceAttention?.stop();
     if (state != AppLifecycleState.resumed || !_providersReady) return;
+    _sourceAttention?.start();
     // 后台挂起可能中断 WebSocket / 定时器；回前台立即重连。
     _recommendProvider.resume();
     // 让被后台挂起的图片请求重新走一遍直连/队列。
@@ -67,6 +71,8 @@ class _HomeViewState extends State<HomeView> with WidgetsBindingObserver {
     _profileProvider = context.read<ProfileProvider>();
     _savedProvider = context.read<SavedProvider>();
     _authProvider = context.read<AuthProvider>();
+    _sourceAttention = context.read<SourceAttentionProvider?>();
+    _sourceAttention?.start();
     _providersReady = true;
   }
 
@@ -74,6 +80,7 @@ class _HomeViewState extends State<HomeView> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _disposed = true;
+    _sourceAttention?.stop(clear: true);
     if (_providersReady) {
       _recommendProvider.stopPolling();
       _chatProvider.stopHistorySync();
@@ -142,6 +149,7 @@ class _HomeViewState extends State<HomeView> with WidgetsBindingObserver {
     _recommendProvider.stopPolling();
     _chatProvider.stopHistorySync();
     await _authProvider.checkStatus();
+    unawaited(_sourceAttention?.refresh());
     if (_disposed || !mounted) return;
     _loadedTabs.clear();
     if (openChat == true) {
@@ -170,7 +178,10 @@ class _HomeViewState extends State<HomeView> with WidgetsBindingObserver {
             profile.probes.length +
             profile.avoidanceProbes.length +
             profile.cognitionNotifications.length;
-        final inboxCount = profilePending + chat.pendingCount;
+        final inboxCount =
+            profilePending +
+            chat.pendingCount +
+            (context.watch<SourceAttentionProvider?>()?.items.length ?? 0);
         return Scaffold(
           backgroundColor: palette.background,
           appBar: AppBar(
@@ -197,8 +208,14 @@ class _HomeViewState extends State<HomeView> with WidgetsBindingObserver {
               IconButton(
                 tooltip: inboxCount > 0 ? '$inboxCount 条待处理消息' : '暂无待处理消息',
                 onPressed: () async {
-                  await MessageInbox.show(context);
+                  final openChat = await MessageInbox.show(context);
                   if (!_disposed && mounted && context.mounted) {
+                    if (openChat == true) {
+                      _chatProvider.clearComposeContext();
+                      _chatProvider.clearDialogueContext();
+                      _selectTab(3);
+                      return;
+                    }
                     // A probe "多聊聊" or a pending "打开" may have started
                     // a contextual chat / dialogue context.
                     final chat = context.read<ChatProvider>();

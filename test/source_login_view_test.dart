@@ -9,6 +9,50 @@ import 'package:openbiliclaw_app/views/source_login_view.dart';
 
 void main() {
   testWidgets(
+    'verification frame scope requires a click and clears after consent',
+    (tester) async {
+      const origin = 'https://challenges.cloudflare.com';
+      final api = _LoginApi();
+      api.snapshot['suggested_login_origins'] = [origin];
+      api.snapshot['blocked_navigation_origins'] = <String>[];
+      api.snapshot['blocked_frame_origins'] = [origin];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SourceLoginView(api: api, draftId: 'draft'),
+        ),
+      );
+      await settle(tester);
+      expect(api.takeoverOrigins, ['']);
+      final button = find.text('允许此登录或验证页面：$origin');
+      expect(button, findsOneWidget);
+      await tester.ensureVisible(button);
+      await tester.tap(button);
+      await settle(tester);
+      expect(api.takeoverOrigins, ['', origin]);
+      expect(button, findsNothing);
+      expect(api.resumes, 0);
+      await tester.pumpWidget(const SizedBox.shrink());
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('ordinary blocked frames are not consent choices', (
+    tester,
+  ) async {
+    final api = _LoginApi();
+    api.snapshot['suggested_login_origins'] = <String>[];
+    api.snapshot['blocked_frame_origins'] = ['https://ads.example.com'];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SourceLoginView(api: api, draftId: 'draft'),
+      ),
+    );
+    await settle(tester);
+    expect(find.textContaining('允许此登录'), findsNothing);
+    expect(api.takeoverOrigins, ['']);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+  testWidgets(
     'native login deduplicates fields, clears secrets and resumes explicitly',
     (tester) async {
       tester.view.physicalSize = const Size(375, 812);
@@ -135,7 +179,8 @@ class _LoginApi extends CustomSourcesApi {
   Completer<Uint8List>? pendingScreenshot;
   Completer<Map<String, dynamic>>? pendingTakeover;
   final List<Map<String, dynamic>> actions = [];
-  final snapshot = {
+  final takeoverOrigins = <String>[];
+  final Map<String, dynamic> snapshot = {
     'elements': [
       {'tag': 'input', 'type': 'password', 'selector': '#password', 'text': ''},
       {'tag': 'input', 'type': 'password', 'selector': '#password', 'text': ''},
@@ -153,8 +198,15 @@ class _LoginApi extends CustomSourcesApi {
   Future<Map<String, dynamic>> takeover(
     String draftId, {
     String origin = '',
-  }) async =>
-      pendingTakeover != null ? await pendingTakeover!.future : snapshot;
+  }) async {
+    takeoverOrigins.add(origin);
+    if (origin.isNotEmpty) {
+      snapshot['suggested_login_origins'] = <String>[];
+      snapshot['blocked_navigation_origins'] = [origin];
+    }
+    return pendingTakeover != null ? await pendingTakeover!.future : snapshot;
+  }
+
   @override
   Future<Uint8List> screenshot(String draftId) async {
     shots++;

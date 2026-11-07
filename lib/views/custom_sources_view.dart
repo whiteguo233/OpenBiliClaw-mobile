@@ -1,12 +1,25 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../api/custom_sources_api.dart';
+
+import 'package:provider/provider.dart';
+
+import '../providers/source_attention_provider.dart';
 import 'source_login_view.dart';
+import '../api/diagnostics_api.dart';
+import 'diagnostics_view.dart';
 
 class CustomSourcesView extends StatefulWidget {
-  const CustomSourcesView({super.key, required this.api});
+  const CustomSourcesView({
+    super.key,
+    required this.api,
+    this.initialSourceId = '',
+  });
   final CustomSourcesApi api;
+  final String initialSourceId;
   @override
   State<CustomSourcesView> createState() => _CustomSourcesViewState();
 }
@@ -17,9 +30,11 @@ class _CustomSourcesViewState extends State<CustomSourcesView> {
   bool _loading = false;
   final Set<String> _busy = {};
   Timer? _timer;
+  late String _focusedSourceId;
   @override
   void initState() {
     super.initState();
+    _focusedSourceId = widget.initialSourceId;
     unawaited(_load());
   }
 
@@ -57,6 +72,7 @@ class _CustomSourcesViewState extends State<CustomSourcesView> {
     try {
       await action();
       if (mounted) await _load();
+      if (mounted) await context.read<SourceAttentionProvider?>()?.refresh();
     } catch (e) {
       if (mounted) setState(() => _error = '操作未完成：$e');
     } finally {
@@ -230,6 +246,22 @@ class _CustomSourcesViewState extends State<CustomSourcesView> {
       title: const Text('自定义来源'),
       actions: [
         IconButton(
+          tooltip: '查看异常记录',
+          onPressed: () async {
+            final chat = await Navigator.push<bool>(
+              context,
+              MaterialPageRoute(
+                builder: (_) => DiagnosticsView(
+                  api: DiagnosticsApi(widget.api.client),
+                  sourceId: _focusedSourceId,
+                ),
+              ),
+            );
+            if (chat == true && context.mounted) Navigator.pop(context, true);
+          },
+          icon: const Icon(Icons.history),
+        ),
+        IconButton(
           tooltip: '刷新来源',
           onPressed: _loading ? null : _load,
           icon: const Icon(Icons.refresh),
@@ -252,6 +284,15 @@ class _CustomSourcesViewState extends State<CustomSourcesView> {
             label: const Text('去聊一聊添加来源'),
           ),
           if (_loading) const LinearProgressIndicator(),
+          if (_focusedSourceId.isNotEmpty)
+            TextButton(
+              onPressed: () => setState(() => _focusedSourceId = ''),
+              child: const Text('显示全部来源'),
+            ),
+          if (!_loading &&
+              _focusedSourceId.isNotEmpty &&
+              !_items.any((s) => s['source_id'] == _focusedSourceId))
+            const Text('该来源已归档或暂时不可用。'),
           if (_error.isNotEmpty)
             Semantics(
               liveRegion: true,
@@ -297,7 +338,11 @@ class _CustomSourcesViewState extends State<CustomSourcesView> {
               padding: EdgeInsets.all(24),
               child: Text('还没有自定义来源，先去聊一聊添加。'),
             ),
-          for (final source in _items) _card(source),
+          for (final source in _items.where(
+            (s) =>
+                _focusedSourceId.isEmpty || s['source_id'] == _focusedSourceId,
+          ))
+            _card(source),
         ],
       ),
     ),
@@ -333,9 +378,17 @@ class _CustomSourcesViewState extends State<CustomSourcesView> {
             ),
             if (health['last_success_at'] != null)
               Text('最近成功：${_time(health['last_success_at'])}'),
-            if (health['next_run_at'] != null)
+            if (health['next_run_at'] is num && health['next_run_at'] > 0)
               Text('下次发现：${_time(health['next_run_at'])}'),
-            if ((health['last_error'] ?? '').toString().isNotEmpty)
+            if ((health['message'] ?? '').toString().isNotEmpty)
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  health['message']?.toString() ?? '采集已暂停，请处理登录或验证。',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              )
+            else if ((health['last_error'] ?? '').toString().isNotEmpty)
               Text(health['last_error'].toString()),
             if (flows.isNotEmpty)
               ExpansionTile(
@@ -371,7 +424,12 @@ class _CustomSourcesViewState extends State<CustomSourcesView> {
                     onPressed: busy
                         ? null
                         : () => _perform(id, () => _login(id)),
-                    child: const Text('重新登录'),
+                    child: Text(
+                      health['attention_required'] == true &&
+                              health['attention_action'] != 'source_settings'
+                          ? '处理登录或验证'
+                          : '重新登录',
+                    ),
                   ),
                 OutlinedButton(
                   onPressed: busy ? null : () => _perform(id, () => _runs(id)),

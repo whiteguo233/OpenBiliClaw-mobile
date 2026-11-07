@@ -77,8 +77,13 @@ class _SourceLoginViewState extends State<SourceLoginView>
     if (!_fields.any((f) => f['selector'] == _selector)) {
       _selector = _fields.firstOrNull?['selector']?.toString();
     }
-    final origins = data['blocked_navigation_origins'];
-    if (origins is List) _origins.addAll(origins.whereType<String>());
+    final origins =
+        data['suggested_login_origins'] ?? data['blocked_navigation_origins'];
+    if (origins is List) {
+      _origins
+        ..clear()
+        ..addAll(origins.whereType<String>());
+    }
   }
 
   // A passive screenshot must never swallow the user's next action.
@@ -232,7 +237,7 @@ class _SourceLoginViewState extends State<SourceLoginView>
             onPressed: _busy
                 ? null
                 : () => _operate(() => _openSession(origin)),
-            child: Text('允许此登录页面：$origin'),
+            child: Text('允许此登录或验证页面：$origin'),
           ),
         const SizedBox(height: 12),
         if (_image != null)

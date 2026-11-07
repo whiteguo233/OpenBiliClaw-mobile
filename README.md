@@ -75,6 +75,7 @@ flutter test integration_test/app_e2e_test.dart -d <device-id>   # 真实 App �
 
 原生 NGA / Atom 建源与 Ego 接管测试可通过通用 driver 运行，并在后端修复时复用同一原生包；
 隔离环境、命令和编译参数约束见 [原生真实测试 driver](docs/native-live-driver.md)。
+原生请求的超时、取消及共享连接约定见 [HTTP 请求生命周期](docs/native-http-lifecycle.md)。
 
 ## 验证状态
 
@@ -139,3 +140,5 @@ output_dimensionality = 768          # 需匹配 embedding 模型实际维度
 推荐真实环境回归入口和设备限制见 [推荐一致性验收](docs/recommendation-consistency.md#真实请求验收2026-09-07)。测试会消费真实推荐池。
 
 原生聊天、假设确认与真实请求验收见 [聊天与假设确认](docs/native-chat-hypotheses.md)。
+
+最新原生动态来源真实验证：网页／RSS 聊天、Ego 后台接管、自然采集及聊天假设通过，具体环境与限制见 [2026-11-08 驱动记录](docs/native-live-driver.md#2026-11-08-后台-ego-组合复验)。

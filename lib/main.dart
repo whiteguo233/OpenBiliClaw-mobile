@@ -11,6 +11,8 @@ import 'providers/recommend_provider.dart';
 import 'providers/chat_provider.dart';
 import 'providers/profile_provider.dart';
 import 'providers/saved_provider.dart';
+import 'providers/source_attention_provider.dart';
+import 'api/custom_sources_api.dart';
 import 'services/tailnet_service.dart';
 import 'theme/app_theme.dart';
 import 'views/login_view.dart';
@@ -54,6 +56,9 @@ class _OpenBiliClawAppState extends State<OpenBiliClawApp> {
         ChangeNotifierProvider(create: (_) => ChatProvider(_client)),
         ChangeNotifierProvider(create: (_) => ProfileProvider(_client)),
         ChangeNotifierProvider(create: (_) => SavedProvider(_client)),
+        ChangeNotifierProvider(
+          create: (_) => SourceAttentionProvider(CustomSourcesApi(_client)),
+        ),
       ],
       child: MaterialApp(
         title: 'OpenBiliClaw',

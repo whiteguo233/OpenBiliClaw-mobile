@@ -6,6 +6,9 @@ import 'package:provider/provider.dart';
 import '../models/chat.dart';
 import '../providers/chat_provider.dart';
 import '../providers/profile_provider.dart';
+import '../providers/source_attention_provider.dart';
+import '../views/source_login_view.dart';
+import '../views/custom_sources_view.dart';
 import '../theme/app_theme.dart';
 
 /// Unified message inbox aligned with the web / extension clients: interest
@@ -15,8 +18,8 @@ class MessageInbox extends StatefulWidget {
   const MessageInbox({super.key});
 
   /// Open the inbox as a modal bottom sheet. Returns once dismissed.
-  static Future<void> show(BuildContext context) {
-    return showModalBottomSheet<void>(
+  static Future<bool?> show(BuildContext context) {
+    return showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -42,6 +45,7 @@ class _MessageInboxState extends State<MessageInbox> {
       final chat = context.read<ChatProvider>();
       unawaited(profile.loadNotifications());
       unawaited(chat.loadPendingConfirmations());
+      unawaited(context.read<SourceAttentionProvider?>()?.refresh());
     });
   }
 
@@ -64,11 +68,13 @@ class _MessageInboxState extends State<MessageInbox> {
             final avoidanceProbes = profile.avoidanceProbes;
             final cognitions = profile.cognitionNotifications;
             final pending = chat.pendingConfirmations;
+            final attention = context.watch<SourceAttentionProvider?>();
             final hasAny =
                 probes.isNotEmpty ||
                 avoidanceProbes.isNotEmpty ||
                 cognitions.isNotEmpty ||
-                pending.isNotEmpty;
+                pending.isNotEmpty ||
+                (attention?.items.isNotEmpty ?? false);
             return Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -93,6 +99,8 @@ class _MessageInboxState extends State<MessageInbox> {
                           shrinkWrap: true,
                           padding: const EdgeInsets.fromLTRB(14, 0, 14, 24),
                           children: [
+                            if (attention != null && attention.items.isNotEmpty)
+                              _SourceAttentionSection(provider: attention),
                             if (probes.isNotEmpty)
                               _ProbeSection(
                                 title: '兴趣探测',
@@ -142,6 +150,105 @@ class _MessageInboxState extends State<MessageInbox> {
     // The chat tab is selected by HomeView via a callback; the provider
     // change notifies listeners so the tab switch can observe it.
   }
+}
+
+class _SourceAttentionSection extends StatefulWidget {
+  const _SourceAttentionSection({required this.provider});
+  final SourceAttentionProvider provider;
+  @override
+  State<_SourceAttentionSection> createState() =>
+      _SourceAttentionSectionState();
+}
+
+class _SourceAttentionSectionState extends State<_SourceAttentionSection> {
+  String _busy = '', _error = '';
+
+  Future<void> _open(Map<String, dynamic> item) async {
+    if (_busy.isNotEmpty) return;
+    setState(() {
+      _busy = item['id'].toString();
+      _error = '';
+    });
+    try {
+      final api = widget.provider.api;
+      if (item['action'] == 'source_settings') {
+        final chat = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CustomSourcesView(
+              api: api,
+              initialSourceId: item['source_id'].toString(),
+            ),
+          ),
+        );
+        await widget.provider.refresh();
+        if (chat == true && mounted) Navigator.pop(context, true);
+        return;
+      }
+      final draft = item['action'] == 'source_login'
+          ? await api.login(item['source_id'].toString())
+          : await api.draft(item['draft_id'].toString());
+      if (!mounted) return;
+      final id = draft['draft_id']?.toString() ?? '';
+      if (id.isEmpty) throw const FormatException('来源处理入口不可用');
+      if (draft['status'] != 'needs_login') {
+        await widget.provider.refresh();
+        return;
+      }
+      final chat = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => SourceLoginView(api: api, draftId: id),
+        ),
+      );
+      await widget.provider.refresh();
+      if (chat == true && mounted) Navigator.pop(context, true);
+    } catch (_) {
+      if (mounted) setState(() => _error = '暂时无法打开来源，请刷新后重试。');
+    } finally {
+      if (mounted) setState(() => _busy = '');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _SectionHeader(
+        icon: Icons.warning_amber_rounded,
+        title: '来源需要处理',
+        color: Theme.of(context).colorScheme.error,
+        count: '${widget.provider.items.length}',
+      ),
+      if (_error.isNotEmpty) Text(_error),
+      for (final item in widget.provider.items)
+        Semantics(
+          liveRegion: true,
+          child: Card(
+            key: ValueKey('source-attention-${item['id']}'),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item['name']?.toString() ?? '自定义来源',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(item['message']?.toString() ?? '来源需要登录或验证'),
+                  TextButton(
+                    onPressed: _busy.isNotEmpty ? null : () => _open(item),
+                    child: Text(item['action_label']?.toString() ?? '处理来源'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      const SizedBox(height: 12),
+    ],
+  );
 }
 
 class _ProbeSection extends StatelessWidget {

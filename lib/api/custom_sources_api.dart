@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+
 import 'client.dart';
 
 /// Native access to the same source policy and Ego session used by web clients.
@@ -8,6 +9,14 @@ class CustomSourcesApi {
   final ApiClient client;
   static String id(String value) => Uri.encodeComponent(value);
   String draftPath(String draftId) => '/custom-sources/drafts/${id(draftId)}';
+  Future<List<Map<String, dynamic>>> attention() async {
+    final data = await client.get('/custom-sources/attention', timeout: 15);
+    if (data['items'] is! List) {
+      throw const FormatException('来源提醒响应不完整');
+    }
+    return sourceMaps(data['items']);
+  }
+
   Future<Map<String, dynamic>> list() async {
     final data = await client.get('/custom-sources', timeout: 30);
     if (data['items'] is! List || data['executors'] is! List) {
@@ -95,10 +104,12 @@ String sourceStatus(dynamic value) =>
       'ok': '正常',
       'ready': '已就绪',
       'disabled': '已停用',
-      'needs_login': '需要登录',
-      'login_required': '需要登录',
+      'needs_login': '需要登录或验证',
+      'login_required': '需要登录或验证',
       'failed': '失败',
       'degraded': '异常',
+      'rate_limited': '网站限流，等待重试',
+      'running': '正在采集',
       'empty': '暂无内容',
       'not_modified': '内容未变化',
       'preparing': '准备中',

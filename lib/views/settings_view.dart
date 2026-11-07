@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import '../api/client.dart';
 import '../api/custom_sources_api.dart';
 import 'custom_sources_view.dart';
+import '../api/diagnostics_api.dart';
+import 'diagnostics_view.dart';
 import '../api/config_api.dart';
 import '../providers/recommend_provider.dart';
 import '../services/tailnet_service.dart';
@@ -548,6 +551,29 @@ class _SettingsViewState extends State<SettingsView> {
                       MaterialPageRoute(
                         builder: (_) => CustomSourcesView(
                           api: CustomSourcesApi(context.read<ApiClient>()),
+                        ),
+                      ),
+                    );
+                    if (chat == true && context.mounted) {
+                      Navigator.pop(context, true);
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: ListTile(
+                  key: const Key('diagnosticsSettings'),
+                  leading: const Icon(Icons.report_outlined),
+                  title: const Text('异常记录'),
+                  subtitle: const Text('采集、模型服务的异常及恢复记录'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () async {
+                    final chat = await Navigator.push<bool>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => DiagnosticsView(
+                          api: DiagnosticsApi(context.read<ApiClient>()),
                         ),
                       ),
                     );

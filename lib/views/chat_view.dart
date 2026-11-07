@@ -79,7 +79,7 @@ class _ChatViewState extends State<ChatView> {
                   child: _buildMessages(context, provider, theme, turns),
                 ),
                 if (provider.responding) _thinkingBar(context, provider),
-                _buildInputBar(context, provider),
+                _buildInputBar(context, provider, compact: compactViewport),
               ],
             );
           },
@@ -803,7 +803,115 @@ class _ChatViewState extends State<ChatView> {
     );
   }
 
-  Widget _buildInputBar(BuildContext context, ChatProvider provider) {
+  Widget _sourceGuideButton(BuildContext context, {bool compact = false}) {
+    const label = '添加来源 · 说明与示例';
+    if (compact) {
+      return IconButton(
+        key: const Key('chatSourceGuide'),
+        tooltip: label,
+        onPressed: () => _showSourceGuide(context),
+        icon: const Icon(Icons.add_link_rounded),
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+      );
+    }
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        key: const Key('chatSourceGuide'),
+        onPressed: () => _showSourceGuide(context),
+        style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+        icon: const Icon(Icons.add_link_rounded, size: 20),
+        label: const Text(label),
+      ),
+    );
+  }
+
+  void _showSourceGuide(BuildContext context) {
+    FocusScope.of(context).unfocus();
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Flexible(
+              child: SingleChildScrollView(
+                key: const Key('chatSourceGuideBody'),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '添加网站 / RSS 来源',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      '把网站或 RSS 地址发给阿B，说明想看什么。试跑确认后，就会定期采集，通过筛选的内容会进入推荐。',
+                    ),
+                    const SizedBox(height: 16),
+                    _sourceGuideExample(
+                      context,
+                      '网站示例',
+                      '“帮我添加这个网站：[网址]，只看轻小说相关内容。”',
+                    ),
+                    const SizedBox(height: 12),
+                    _sourceGuideExample(
+                      context,
+                      'RSS 示例',
+                      '“订阅这个 RSS：[订阅地址]，每天采集一次。”',
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('需要登录或验证时，阿B会引导你操作。频率、占比和启停在「设置 → 自定义来源」管理。'),
+                    const SizedBox(height: 12),
+                    const Text('采集问题会在来源卡提示，需要处理时也会提醒到消息铃铛；历史见「设置 → 异常记录」。'),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              key: const Key('chatSourceGuideClose'),
+              style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('知道了'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _sourceGuideExample(BuildContext context, String title, String text) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: context.appColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppRadius.medium),
+        border: Border.all(color: context.appColors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 4),
+          Text(text),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInputBar(
+    BuildContext context,
+    ChatProvider provider, {
+    required bool compact,
+  }) {
     final subject =
         provider.dialogueContext?.title ??
         (provider.composeContext.active
@@ -817,36 +925,45 @@ class _ChatViewState extends State<ChatView> {
       ),
       child: MediaQuery.withClampedTextScaling(
         maxScaleFactor: 1.8,
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: TextField(
-                key: const Key('chatMessageInput'),
-                controller: _controller,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _send(provider),
-                decoration: InputDecoration(
-                  hintText: subject.isEmpty ? '说说你最近想看什么…' : '聊聊「$subject」…',
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
+            if (!compact) _sourceGuideButton(context),
+            Row(
+              children: [
+                if (compact) _sourceGuideButton(context, compact: true),
+                Expanded(
+                  child: TextField(
+                    key: const Key('chatMessageInput'),
+                    controller: _controller,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _send(provider),
+                    decoration: InputDecoration(
+                      hintText: subject.isEmpty
+                          ? '说说你最近想看什么…'
+                          : '聊聊「$subject」…',
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      fillColor: context.appColors.surfaceMuted,
+                    ),
                   ),
-                  fillColor: context.appColors.surfaceMuted,
                 ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconButton.filled(
-              tooltip: '发送',
-              style: IconButton.styleFrom(
-                minimumSize: const Size(48, 48),
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                disabledBackgroundColor: context.appColors.brandSoft,
-              ),
-              icon: const Icon(Icons.arrow_upward_rounded, size: 22),
-              key: const Key('chatSend'),
-              onPressed: provider.responding ? null : () => _send(provider),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  tooltip: '发送',
+                  style: IconButton.styleFrom(
+                    minimumSize: const Size(48, 48),
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                    disabledBackgroundColor: context.appColors.brandSoft,
+                  ),
+                  icon: const Icon(Icons.arrow_upward_rounded, size: 22),
+                  key: const Key('chatSend'),
+                  onPressed: provider.responding ? null : () => _send(provider),
+                ),
+              ],
             ),
           ],
         ),

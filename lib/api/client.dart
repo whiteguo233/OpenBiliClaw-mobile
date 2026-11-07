@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:cupertino_http/cupertino_http.dart';
@@ -265,40 +266,34 @@ class ApiClient {
     int? timeout,
   }) async {
     final uri = apiUri(path);
-    final lease = _openClient();
-    try {
-      final res = await lease.client
-          .post(
-            uri,
-            headers: _headers(),
-            body: body != null ? jsonEncode(body) : null,
-          )
-          .timeout(Duration(seconds: timeout ?? 10));
-      _captureSession(res);
-      if (res.statusCode == 401) clearSession();
-      if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
-      return _decodeMap(res.body);
-    } finally {
-      lease.close();
-    }
+    final res = await _request(
+      'POST',
+      uri,
+      headers: _headers(),
+      body: body != null ? jsonEncode(body) : null,
+      timeout: Duration(seconds: timeout ?? 10),
+    );
+    _captureSession(res);
+    if (res.statusCode == 401) clearSession();
+    if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
+    return _decodeMap(res.body);
   }
 
   Future<Map<String, dynamic>> patch(
     String path, {
     required Map<String, dynamic> body,
   }) async {
-    final lease = _openClient();
-    try {
-      final res = await lease.client
-          .patch(apiUri(path), headers: _headers(), body: jsonEncode(body))
-          .timeout(const Duration(seconds: 30));
-      _captureSession(res);
-      if (res.statusCode == 401) clearSession();
-      if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
-      return _decodeMap(res.body);
-    } finally {
-      lease.close();
-    }
+    final res = await _request(
+      'PATCH',
+      apiUri(path),
+      headers: _headers(),
+      body: jsonEncode(body),
+      timeout: const Duration(seconds: 30),
+    );
+    _captureSession(res);
+    if (res.statusCode == 401) clearSession();
+    if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
+    return _decodeMap(res.body);
   }
 
   Stream<String> streamPostLines(
@@ -341,38 +336,31 @@ class ApiClient {
     int? timeout,
   }) async {
     final uri = apiUri(path);
-    final lease = _openClient();
-    try {
-      final res = await lease.client
-          .put(
-            uri,
-            headers: _headers(),
-            body: body != null ? jsonEncode(body) : null,
-          )
-          .timeout(Duration(seconds: timeout ?? 60));
-      _captureSession(res);
-      if (res.statusCode == 401) clearSession();
-      if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
-      return _decodeMap(res.body);
-    } finally {
-      lease.close();
-    }
+    final res = await _request(
+      'PUT',
+      uri,
+      headers: _headers(),
+      body: body != null ? jsonEncode(body) : null,
+      timeout: Duration(seconds: timeout ?? 60),
+    );
+    _captureSession(res);
+    if (res.statusCode == 401) clearSession();
+    if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
+    return _decodeMap(res.body);
   }
 
   Future<Map<String, dynamic>> delete(String path) async {
     final uri = apiUri(path);
-    final lease = _openClient();
-    try {
-      final res = await lease.client
-          .delete(uri, headers: _headers())
-          .timeout(const Duration(seconds: 10));
-      _captureSession(res);
-      if (res.statusCode == 401) clearSession();
-      if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
-      return _decodeMap(res.body);
-    } finally {
-      lease.close();
-    }
+    final res = await _request(
+      'DELETE',
+      uri,
+      headers: _headers(),
+      timeout: const Duration(seconds: 10),
+    );
+    _captureSession(res);
+    if (res.statusCode == 401) clearSession();
+    if (res.statusCode >= 400) throw ApiException(res.statusCode, res.body);
+    return _decodeMap(res.body);
   }
 
   Future<Uint8List> getBytes(Uri uri, {Map<String, String>? headers}) async {
@@ -456,20 +444,61 @@ class ApiClient {
     ];
 
     for (var attempt = 0; ; attempt += 1) {
-      final lease = _openClient(mode: selectedMode);
       try {
-        return await lease.client.get(uri, headers: headers).timeout(timeout);
+        return await _request(
+          'GET',
+          uri,
+          headers: headers,
+          timeout: timeout,
+          mode: selectedMode,
+        );
       } catch (error) {
         final canRetry =
             selectedMode == ConnectionMode.tailscale &&
             attempt < retryDelays.length &&
             _isTransientTailnetGetError(error);
         if (!canRetry) rethrow;
-      } finally {
-        lease.close();
       }
       await Future<void>.delayed(retryDelays[attempt]);
     }
+  }
+
+  Future<http.Response> _request(
+    String method,
+    Uri uri, {
+    required Map<String, String> headers,
+    required Duration timeout,
+    String? body,
+    ConnectionMode? mode,
+  }) {
+    final lease = _openClient(mode: mode);
+    final abort = Completer<void>();
+
+    Future<http.Response> perform() async {
+      try {
+        final request = http.AbortableRequest(
+          method,
+          uri,
+          abortTrigger: abort.future,
+        )..headers.addAll(headers);
+        if (body != null) request.body = body;
+        final response = await lease.client.send(request);
+        return await http.Response.fromStream(response);
+      } finally {
+        // CupertinoClient cannot close while NSURLSession is still active.
+        // Keep cleanup on the real operation, including its response body,
+        // rather than on the timeout future that stops waiting for it.
+        lease.close();
+      }
+    }
+
+    return perform().timeout(
+      timeout,
+      onTimeout: () {
+        abort.complete();
+        throw TimeoutException('API request timed out', timeout);
+      },
+    );
   }
 
   static bool _isTransientTailnetGetError(Object error) {

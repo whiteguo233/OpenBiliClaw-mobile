@@ -52,7 +52,15 @@ void main() {
       await tester.tap(find.byKey(const Key('chatMessageInput')));
       await tester.pump(const Duration(milliseconds: 300));
       await tester.enterText(find.byKey(const Key('chatMessageInput')), prompt);
-      await tester.tap(find.byKey(const Key('chatSend')));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('chatMessageInput')))
+            .controller
+            ?.text,
+        prompt,
+      );
+      await tapVisible(tester, find.byKey(const Key('chatSend')));
       FocusManager.instance.primaryFocus?.unfocus();
       await wait(
         tester,
@@ -187,10 +195,20 @@ void main() {
             find.byType(CustomSourcesView).evaluate().isEmpty,
         'return chat',
       );
+      await addFeed(tester, api, chat);
+      const cadenceRuns = int.fromEnvironment(
+        'NATIVE_CADENCE_RUNS',
+        defaultValue: 1,
+      );
+      final naturalRuns = await waitNaturalRuns(
+        tester,
+        api,
+        id,
+        minimum: cadenceRuns,
+      );
       // Stop only this newly created test source; preserve source history as evidence.
       await api.update(id, {'enabled': false});
-      debugPrint('NATIVE_LIVE PASS source=$id');
-      await addFeed(tester, api, chat);
+      debugPrint('NATIVE_LIVE PASS source=$id cadence_runs=$naturalRuns');
       expect(tester.takeException(), isNull);
     } finally {
       await tester.pumpWidget(const SizedBox.shrink());
@@ -236,8 +254,12 @@ Future<void> addFeed(
   ChatProvider chat,
 ) async {
   final name = 'RSS 原生验收 ${DateTime.now().millisecondsSinceEpoch}';
+  const feedUrl = String.fromEnvironment(
+    'NATIVE_FEED_URL',
+    defaultValue: 'https://www.ruanyifeng.com/blog/atom.xml',
+  );
   final prompt =
-      '新建一个独立订阅来源，名称“$name”，使用 https://www.ruanyifeng.com/blog/atom.xml ，收最新文章标题、链接、作者和摘要，每轮最多3条，每5分钟一次，候选池份额1。无需登录。用 HTTP 订阅源执行器真实试跑后提交激活审批，不修改已有来源。';
+      '新建一个独立订阅来源，名称“$name”，使用 $feedUrl ，收最新文章标题、链接、作者和摘要，每轮最多3条，每5分钟一次，候选池份额1。无需登录。用 HTTP 订阅源执行器真实试跑后提交激活审批，不修改已有来源。';
   await wait(
     tester,
     () => !chat.responding,
@@ -247,7 +269,15 @@ Future<void> addFeed(
   await tester.tap(find.byKey(const Key('chatMessageInput')));
   await tester.pump(const Duration(milliseconds: 300));
   await tester.enterText(find.byKey(const Key('chatMessageInput')), prompt);
-  await tester.tap(find.byKey(const Key('chatSend')));
+  await tester.pump(const Duration(milliseconds: 400));
+  expect(
+    tester
+        .widget<TextField>(find.byKey(const Key('chatMessageInput')))
+        .controller
+        ?.text,
+    prompt,
+  );
+  await tapVisible(tester, find.byKey(const Key('chatSend')));
   FocusManager.instance.primaryFocus?.unfocus();
   await wait(
     tester,
@@ -339,4 +369,47 @@ Future<void> tapVisible(WidgetTester tester, Finder finder) async {
     reason: 'Target must be physically tappable',
   );
   await tester.tap(finder.hitTestable());
+}
+
+/// Count only the active workflow version; re-login publishes a new version
+/// and must not be mistaken for a second interval-based collection.
+Future<int> waitNaturalRuns(
+  WidgetTester tester,
+  CustomSourcesApi api,
+  String sourceId, {
+  int minimum = 2,
+}) async {
+  final source = sourceMaps(
+    (await api.list())['items'],
+  ).firstWhere((s) => s['source_id'] == sourceId);
+  final workflow = sourceMaps(source['workflows']).single;
+  final deadline = DateTime.now().add(const Duration(minutes: 12));
+  while (DateTime.now().isBefore(deadline)) {
+    final runs =
+        sourceMaps((await api.runs(sourceId))['items'])
+            .where(
+              (r) =>
+                  r['workflow_id'] == workflow['workflow_id'] &&
+                  r['version'] == workflow['version'] &&
+                  (r['status'] == 'ok' || r['status'] == 'not_modified'),
+            )
+            .toList()
+          ..sort(
+            (a, b) =>
+                (a['started_at'] as num).compareTo(b['started_at'] as num),
+          );
+    if (runs.length >= minimum) {
+      for (var i = 1; i < runs.length; i++) {
+        expect(
+          (runs[i]['started_at'] as num) - (runs[i - 1]['completed_at'] as num),
+          greaterThanOrEqualTo((source['interval_minutes'] as num) * 60),
+          reason: 'The active version must honor its real collection interval',
+        );
+      }
+      debugPrint('NATIVE_LIVE NATURAL source=$sourceId ${jsonEncode(runs)}');
+      return runs.length;
+    }
+    await tester.pump(const Duration(seconds: 5));
+  }
+  fail('Active workflow did not complete $minimum natural runs');
 }
