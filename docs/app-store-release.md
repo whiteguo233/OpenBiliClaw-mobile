@@ -1,6 +1,6 @@
-# App Store 首次发布准备
+# App Store 发布准备与历史记录
 
-更新日期：2026-09-14。当前尚未上传 App Store Connect，也未提交审核。
+2026-11-05 核实 [Apple 公开商店页](https://apps.apple.com/us/app/openbiliclaw/id6812025289) 当前版本为 1.0.1（10 月 4 日）。发布 `v0.3.160+2010` 的执行状态见 [本次发布记录](releases/v0.3.160.md)。正式应用标识为 `com.openbiliclaw.mobile`，App ID `6812025289`。下文为 2026-09-14 的历史准备记录，其中“尚未上传”等描述仅代表当时状态，不能据此判断当前 Apple 审核状态。
 
 ## 本次付费发布决定与阻塞项
 

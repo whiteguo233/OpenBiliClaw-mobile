@@ -6,6 +6,10 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>zh-Hans</string>
+	</array>
 	<key>CFBundleDisplayName</key>
 	<string>OpenBiliClaw</string>
 	<key>CFBundleExecutable</key>
@@ -33,6 +37,10 @@
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>OpenBiliClaw 需要访问本地网络，以连接您电脑上的后端服务。</string>
+	<key>NSCameraUsageDescription</key>
+	<string>用于扫描电脑上的 OpenBiliClaw 连接二维码，自动填入后端地址。画面仅在设备本地识别。</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>用于选择后端连接二维码截图并在本机识别，自动填入后端地址。</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

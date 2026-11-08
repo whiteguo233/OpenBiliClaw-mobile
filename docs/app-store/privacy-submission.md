@@ -24,6 +24,10 @@
 - 根据实际使用的 Tailscale 原生加密库填写出口合规，不自动标为无加密或豁免。
 - 签名归档后检查 Xcode 隐私报告及 SDK 清单；不能仅凭存在 `PrivacyInfo.xcprivacy` 就认定合规。
 
+## 本机二维码截图
+
+扫码页的可选截图识别使用系统选图界面，设置 `requestFullMetadata: false`；`NSPhotoLibraryUsageDescription` 说明仅用于选择后端连接二维码截图。所选图片在设备本机解码，不发送给后端或模型，不能把后端连接请求误报为上传照片。相机不可用时仍能选择图片；图库入口不要求用户先允许相机权限。
+
 ## 审核说明英文草稿
 
 OpenBiliClaw is a mobile client for an OpenBiliClaw backend. It provides content recommendations, saved items, an interest profile, and AI chat using the backend's configured services.

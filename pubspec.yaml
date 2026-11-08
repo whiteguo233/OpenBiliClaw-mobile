@@ -1,7 +1,7 @@
 name: openbiliclaw_app
 description: "OpenBiliClaw mobile app — personalized content discovery agent"
 publish_to: 'none'
-version: 0.3.159+2009
+version: 0.3.160+2010
 
 environment:
   sdk: ^3.12.0
@@ -12,10 +12,11 @@ dependencies:
   http: ^1.2.0
   provider: ^6.1.0
   qr_flutter: ^4.1.0
-  cupertino_icons: ^1.0.8
-  cached_network_image: ^4.0.0
-  shared_preferences: ^2.2.0
-  url_launcher: ^6.2.0
+  mobile_scanner: ^7.4.2
+  cupertino_icons: ^2.0.0
+  cached_network_image: ^4.0.6
+  shared_preferences: ^2.5.6
+  url_launcher: ^6.3.3
   webview_flutter: ^4.14.1
   flutter_markdown: ^0.7.4
   media_kit: ^1.1.11
@@ -34,9 +35,10 @@ dependencies:
   cupertino_http: ^3.1.0
   web_socket_channel: ^3.0.3
   flutter_secure_storage: ^11.2.0
-  share_plus: ^13.3.0
+  share_plus: ^13.3.1
   screen_brightness: ^2.1.5
   volume_controller: ^3.7.1
+  image_picker: ^1.2.4
 
 dev_dependencies:
   flutter_test:
@@ -44,6 +46,7 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  image_picker_platform_interface: ^2.11.2
 
 flutter:
   uses-material-design: true
