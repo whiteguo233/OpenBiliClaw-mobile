@@ -68,7 +68,7 @@ GitHub Release 的未签名 IPA 面向自行签名用户。提交 App Store 必�
 
 本次版本为 `0.3.160+2010`，执行状态与验证范围见 [发布记录](../docs/releases/v0.3.160.md)。证书、账户凭据、审核后端凭据和签名输出应保存在仓库外。
 
-App Store 1.0.2 的独立分发执行与实际构建号见 [iOS 发布记录](../docs/releases/ios-1.0.2.md)。本轮归档使用 `--build-name 1.0.2 --build-number 2013`，已核实 TestFlight 最新构建为 2012；不得上传构建号更低的旧候选归档。未签名归档成功不代表 App Store 分发导出、上传或提审成功。
+App Store 1.0.2 的独立分发执行与实际构建号见 [iOS 发布记录](../docs/releases/ios-1.0.2.md)。Apple 构建号为 `1.0.2 (2013)`。该归档已通过 Xcode 分发签名、Apple 验证与上传。提审进度以 iOS 发布记录中的 App Store Connect 状态为准。
 
 ## 4. 发版
 

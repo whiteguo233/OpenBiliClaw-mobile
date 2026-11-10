@@ -6,13 +6,13 @@
 
 Apple 当前可分发版本在 2026-11-08 实际核实为 **1.0.1（2012）**，其更新仅为简体中文语言标识修复。GitHub 的 **v0.3.160** 已发布，不能将未签名 IPA 或 Android 发布当作 iOS 上传或提审完成。
 
-本轮实际读取 TestFlight，仅列出 1.0.1（2012）及更旧的 1.0.0；新候选为 **1.0.2（2013）**，通过 Flutter `--build-name 1.0.2 --build-number 2013` 指定。GitHub 的 `pubspec.yaml` 版本和既有发布标签不因此重写。
+签名前核实 TestFlight 的最新构建为 1.0.1（2012）。本次上传 **1.0.2（2013）**，归档通过 Flutter `--build-name 1.0.2 --build-number 2013` 指定。GitHub 的 `pubspec.yaml` 版本和既有发布标签不因此重写。
 
 功能范围包括后端 URL 输入框内的扫码图标、相机识码、系统选图识别二维码截图、合法地址校验、保存与重连、端口和反代路径保留，以及轻量连接检测和相机生命周期修复。安装包中的隐私与帮助说明同步补充选图数据流和实际入口位置。
 
 ## 验证与 Apple 状态
 
-当前为**未签名候选归档完成，待分发签名与上传**，尚未提交新版审核。
+build 2013 **已签名并上传 Apple**，已加入审核草稿。
 
 - `flutter pub get --enforce-lockfile` 成功，依赖锁文件未变。
 - `flutter analyze --no-pub` 无问题；格式检查 115 个文件、0 改动；完整 `flutter test --no-pub` **196 项通过**；`git diff --check` 通过。
@@ -24,13 +24,13 @@ Apple 当前可分发版本在 2026-11-08 实际核实为 **1.0.1（2012）**，
 
 既有完整扫码验收范围见 [扫码连接](../backend-connection-qr.md#完整扫码复测入口2026-11-05)；iOS 模拟器不支持图片分析，本轮未将 UI 导航记为截图解码、真机光学扫描或跨公网验收。
 
-## 签名与后续操作
+## 2026-11-10 分发签名与上传
 
-本地有有效 Apple Distribution 身份，但它于 2026-11-06 签发，与本机旧 iOS Store 描述文件中的证书不同。Apple Developer 后台另有 `OpenBiliClaw App Store Local Distribution`、ID `AZW8UVWJUR`、2027-09-30 到期的 iOS Store 描述文件；仍需更新并核对其中证书，不能仅凭状态 Active 当作已匹配。
+早先的自动导出因 `No Accounts` 和分发描述文件证书不匹配失败。2026-11-10 为同一个 iOS App ID 生成了与现有 Apple Distribution 身份匹配的 App Store 分发描述文件。Xcode 手动指定该描述文件后导出成功。对实际 IPA 解包检查了版本、相机与相册用途说明、ARM64、嵌套签名及分发权限。
 
-本轮标准 `xcodebuild -exportArchive -allowProvisioningUpdates` 的实际结果为 **退出 70**：`No Accounts`，以及描述文件不包含当前 Apple Distribution 证书。没有生成可上传的正式签名 IPA，不能将未签名归档或 Flutter 退出 0 当作上传成功。
+Apple 官方命令行验证成功，App Store Connect 记录上传时间为 2026-11-10 22:27:47（北京时间）。上传包为 44,718,957 字节，SHA-256 为 `6dc927631d9fc6ad2c57f64c1fbab94b05761e0710ba5dc83963a9244b23cc0f`，交付 ID 为 `77f91e7b-70b7-4d68-859a-f21908302b67`。Apple 返回 `VALID_BINARY` 和 `APP_STORE_ELIGIBLE`。
 
-Apple 页面可以间歇读取，已完成版本、TestFlight 与描述文件事实核对；Chrome AppleScript 后续多次返回连接无效，电脑仍锁屏，当前无法可靠完成描述文件更新或操作 Xcode 分发窗口。需解锁会话后继续更新描述文件、签名导出、上传并在 Apple 处理后选择 build 2013、补齐资料及最终提交审核。旧审核备注中的 Tailscale Key 有效期为 2026-10-24，本次不得原样复用；需刷新同一受限审核访问并实测，凭据只写入 Apple 审核信息及本机私有位置。
+App Store Connect 已保存扫码更新说明和 build 2013。构建按包内 TLS 与 WireGuard 标准算法填写出口合规问卷，现有 iOS 发行设置中法国为「未供应」。Apple 清除出口合规缺项后，版本通过「添加以供审核」检查，状态为「可供审核」。原审核后端的连接密钥已过期，需更新限于该审核后端的连接并验证首次入网，才能最终提交。
 
 本机未签名归档保存在 `~/Library/Developer/Xcode/Archives/2026-11-08/OpenBiliClaw-iOS-1.0.2-2013-Unsigned.xcarchive`。本轮日志、元数据、TestFlight 核对、UI 截图及校验清单保存在同目录的 `OpenBiliClaw-iOS-1.0.2-evidence/`；这些材料不提交到公共仓库。证书、描述文件、审核凭据和签名输出均保存在仓库外。
 
