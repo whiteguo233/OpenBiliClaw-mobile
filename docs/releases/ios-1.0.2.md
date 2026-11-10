@@ -12,7 +12,7 @@ Apple 当前可分发版本在 2026-11-08 实际核实为 **1.0.1（2012）**，
 
 ## 验证与 Apple 状态
 
-build 2013 **已签名并上传 Apple**，已加入审核草稿。
+build 2013 **已提交 Apple 审核**。2026-11-11 03:06（北京时间）的回执显示「等待审核」。
 
 - `flutter pub get --enforce-lockfile` 成功，依赖锁文件未变。
 - `flutter analyze --no-pub` 无问题；格式检查 115 个文件、0 改动；完整 `flutter test --no-pub` **196 项通过**；`git diff --check` 通过。
@@ -30,9 +30,17 @@ build 2013 **已签名并上传 Apple**，已加入审核草稿。
 
 Apple 官方命令行验证成功，App Store Connect 记录上传时间为 2026-11-10 22:27:47（北京时间）。上传包为 44,718,957 字节，SHA-256 为 `6dc927631d9fc6ad2c57f64c1fbab94b05761e0710ba5dc83963a9244b23cc0f`，交付 ID 为 `77f91e7b-70b7-4d68-859a-f21908302b67`。Apple 返回 `VALID_BINARY` 和 `APP_STORE_ELIGIBLE`。
 
-App Store Connect 已保存扫码更新说明和 build 2013。构建按包内 TLS 与 WireGuard 标准算法填写出口合规问卷，现有 iOS 发行设置中法国为「未供应」。Apple 清除出口合规缺项后，版本通过「添加以供审核」检查，状态为「可供审核」。原审核后端的连接密钥已过期，需更新限于该审核后端的连接并验证首次入网，才能最终提交。
+App Store Connect 已保存扫码更新说明和 build 2013。构建按包内 TLS 与 WireGuard 标准算法填写出口合规问卷，现有 iOS 发行设置中法国为「未供应」。Apple 清除出口合规缺项后，版本通过「添加以供审核」检查，状态为「可供审核」。审核草稿在更新原审核后端的连接密钥前保留。
 
 本机未签名归档保存在 `~/Library/Developer/Xcode/Archives/2026-11-08/OpenBiliClaw-iOS-1.0.2-2013-Unsigned.xcarchive`。本轮日志、元数据、TestFlight 核对、UI 截图及校验清单保存在同目录的 `OpenBiliClaw-iOS-1.0.2-evidence/`；这些材料不提交到公共仓库。证书、描述文件、审核凭据和签名输出均保存在仓库外。
+
+## 2026-11-11 审核连接验证与提审
+
+独立审核后端由 LaunchAgent 运行，通过已入网的 Tailscale 服务端节点提供 TCP 18420。管理台确认审核客户端标签只允许访问该端口。新建 30 天有效的临时设备入网密钥，用全新节点首次加入网络并实际请求手机网页、ping、健康检查、画像、推荐和收藏，六项均返回 HTTP 200。示例二维码经 Vision 实际解码，确认指向运行中的审核后端。
+
+已在 App Store Connect 的私有审核备注保存连接步骤和新密钥，并附上扫码样例。Apple 接收了唯一审核项目 iOS App 1.0.2（2013），回执时间为 **2026-11-11 03:06（北京时间）**，状态为「等待审核」。[App Store Connect 审核回执](https://appstoreconnect.apple.com/apps/6812025289/distribution/reviewsubmissions/details/d8a9d4fd-982e-4af0-826c-71ff47a7a3fb)
+
+本机发布证据中保留了 `reviewer-network-check/fresh-client-20261111.json`、`asc-ios-review-submitted.json` 和 `asc-ios-1.0.2-submitted.jpg`。
 
 ## 中文更新说明
 
